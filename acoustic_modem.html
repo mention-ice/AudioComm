@@ -68,6 +68,11 @@ details{margin-top:12px}summary{cursor:pointer;color:var(--muted)}
 .hidden{display:none!important}
 figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 .pad,#txCanvas{user-select:none;-webkit-user-select:none;touch-action:none}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px;cursor:pointer}
+.qrbox{background:#fff;color:#111;border-radius:16px;padding:20px;text-align:center;max-width:100%}
+.qrbox canvas{width:min(78vmin,560px);height:auto;image-rendering:pixelated;margin:0 auto}
+.qrbox p{margin:8px 0 0;color:#444;font-size:14px;word-break:break-all}
+.rawtext{font-size:15px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-word;margin-top:4px}
 </style>
 </head>
 <body>
@@ -78,14 +83,17 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     <div><label>Tones</label><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button></span></div>
     <div><label>Rate</label><span class="seg" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button></span> <span class="muted">bit/s</span></div>
     <span class="muted">Transmitter and receivers must use the same settings.</span>
+    <button class="btn" id="qrBtn">QR code for phones</button>
   </div>
 </header>
+<div id="qrOverlay" class="overlay hidden"><div class="qrbox"><canvas id="qrCanvas"></canvas><p id="qrUrl"></p><p>Scan to open the receiver with the same tones and rate. Click to close.</p></div></div>
 <div class="roles"><span class="seg" id="roleSeg"><button data-v="tx">Transmit</button><button data-v="rx">Receive</button></span></div>
 
 <main id="main" data-role="rx">
 <section class="card" id="txCard">
   <h2>Transmit</h2>
   <span class="seg" id="msgSeg"><button data-v="text">Text</button><button data-v="demo">Demo image</button><button data-v="draw">Draw</button><button data-v="photo">Photo</button></span>
+  <div class="row"><span class="muted">Error correction</span><span class="seg" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="rs">Reed–Solomon</button></span></div>
   <div id="txText" class="row"><textarea id="txtIn" maxlength="1023">Hello CentraleSupélec!</textarea></div>
   <div id="txImg" class="row hidden">
     <div class="imgbox">
@@ -109,7 +117,12 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   <p class="muted" id="txStatus">Start listening on the receiver first, then press Send.</p>
   <details>
     <summary>What is being sent</summary>
-    <p class="muted">Frame: 0.1 s warm-up · 127-bit MLS preamble · 24-bit header (type and size, each bit sent 3 times) · scrambled message · 127-bit MLS postamble. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone. The same frame is produced by <code>audioComm_tx.m</code> and <code>audiocomm.py</code>.</p>
+    <p class="muted">Frame: 0.1 s warm-up · 127-bit MLS preamble · 24-bit header (type, size and code, each bit sent 3 times) · coded and scrambled message · 127-bit MLS postamble. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone. The same frame is produced by <code>audiocomm.py</code>, and by <code>audioComm_tx.m</code> without a code.</p>
+    <p class="muted">The receivers read the code from the header, so only the transmitter chooses it.
+    <b>Hamming (7,4)</b>: 3 parity bits per 4 bits, corrects 1 wrong bit in each block of 7 (hard decisions).
+    <b>Convolutional</b>: rate 1/2, constraint length 7 (generators 171, 133 octal), decoded by the Viterbi algorithm on the soft outputs.
+    <b>Reed–Solomon (255,223)</b>: works on bytes, corrects up to 16 wrong bytes in each block of 255, good against bursts.
+    Hamming and convolutional bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.</p>
   </details>
 </section>
 
@@ -126,8 +139,10 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   <div style="margin-top:14px">
     <div class="progress"><div id="rxProg"></div></div>
     <div id="rxOutText" class="rxtext" style="margin-top:10px"></div>
+    <div id="rxRawText" class="rawtext hidden"></div>
     <div class="imgbox" style="margin-top:10px">
       <figure id="rxFig" class="hidden"><canvas id="rxCanvas" class="pix" width="1" height="1"></canvas><figcaption>received</figcaption></figure>
+      <figure id="rawFig" class="hidden"><canvas id="rawCanvas" class="pix" width="1" height="1"></canvas><figcaption>same channel errors, without the code</figcaption></figure>
       <figure id="refFig" class="hidden"><canvas id="refCanvas" class="pix" width="1" height="1"></canvas><figcaption>sent (demo image)</figcaption></figure>
     </div>
   </div>
@@ -153,16 +168,267 @@ function prbs(n) {            // LFSR x^15 + x^14 + 1, all-ones seed
 function msb(v, nb) { const o = []; for (let i = nb - 1; i >= 0; i--) o.push((v >> i) & 1); return o; }
 function textCodes(text) { return Array.from(text).slice(0, 1023).map(ch => { const c = ch.codePointAt(0); return c < 256 ? c : 63; }); }
 
+// ---- channel coding: bits are arrays of 0/1, LLRs are > 0 for a 1 ----
+// The code is announced in the header (top 2 bits of the 11-bit field b), so receivers pick it up automatically.
+const CODES = ['none', 'hamming', 'conv', 'rs'];
+const CODE_INFO = {
+  none:    { name: 'no code', short: 'no code', rate: '1' },
+  hamming: { name: 'Hamming (7,4) + interleaver', short: 'Hamming (7,4)', rate: '4/7' },
+  conv:    { name: 'convolutional (171,133), K = 7, soft Viterbi + interleaver', short: 'convolutional code', rate: '1/2' },
+  rs:      { name: 'Reed–Solomon (255,223) over bytes', short: 'Reed–Solomon', rate: '≈ 7/8' }
+};
+const RS_K = 223, RS_P = 32;
+
+function codedLength(code, n0) {
+  if (code === 'hamming') return 7 * Math.ceil(n0 / 4);
+  if (code === 'conv') return 2 * (n0 + 6);
+  if (code === 'rs') { const K = Math.ceil(n0 / 8), B = Math.ceil(K / RS_K); return 8 * (K + RS_P * B); }
+  return n0;
+}
+
+// Rectangular interleaver: write row by row into ceil(sqrt(n)) columns, read column by column.
+function ilvPerm(n) {
+  const C = Math.max(1, Math.ceil(Math.sqrt(n))), R = Math.ceil(n / C), p = [];
+  for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) { const i = r * C + c; if (i < n) p.push(i); }
+  return p;
+}
+const interleave = x => ilvPerm(x.length).map(i => x[i]);
+function deinterleave(y) { const p = ilvPerm(y.length), x = new Array(y.length); p.forEach((i, k) => { x[i] = y[k]; }); return x; }
+
+// Hamming (7,4), systematic: [d0 d1 d2 d3 p0 p1 p2]
+const HAM_P = [[1, 1, 0], [1, 0, 1], [0, 1, 1], [1, 1, 1]];          // parity bits each data bit enters
+const HAM_COL = [...HAM_P, [1, 0, 0], [0, 1, 0], [0, 0, 1]];          // columns of H
+function hamEncode(d) {
+  const out = [];
+  for (let i = 0; i < d.length; i += 4) {
+    const u = [0, 1, 2, 3].map(j => d[i + j] || 0), p = [0, 0, 0];
+    u.forEach((b, j) => { if (b) for (let k = 0; k < 3; k++) p[k] ^= HAM_P[j][k]; });
+    out.push(...u, ...p);
+  }
+  return out;
+}
+function hamDecode(c, n0) {
+  const out = [];
+  for (let i = 0; i < c.length; i += 7) {
+    const w = c.slice(i, i + 7), s = [0, 0, 0];
+    w.forEach((b, j) => { if (b) for (let k = 0; k < 3; k++) s[k] ^= HAM_COL[j][k]; });
+    const e = HAM_COL.findIndex(col => col[0] === s[0] && col[1] === s[1] && col[2] === s[2]);
+    if (e >= 0) w[e] ^= 1;
+    out.push(...w.slice(0, 4));
+  }
+  return out.slice(0, n0);
+}
+
+// Convolutional code, rate 1/2, K = 7, generators 171 and 133 (octal), 6 zero tail bits
+const CC_G = [0o171, 0o133];
+const parity = v => { v ^= v >> 4; v ^= v >> 2; v ^= v >> 1; return v & 1; };
+function convEncode(d) {
+  let s = 0; const out = [];
+  for (const b of [...d, 0, 0, 0, 0, 0, 0]) { const reg = (b << 6) | s; out.push(parity(reg & CC_G[0]), parity(reg & CC_G[1])); s = reg >> 1; }
+  return out;
+}
+function convDecode(llr, n0) {
+  const T = llr.length / 2, NS = 64, clip = v => Math.max(-4, Math.min(4, v));
+  let pm = new Float64Array(NS).fill(-1e18); pm[0] = 0;
+  const dec = new Uint8Array(T * NS), o0 = new Int8Array(128), o1 = new Int8Array(128);
+  for (let reg = 0; reg < 128; reg++) { o0[reg] = 2 * parity(reg & CC_G[0]) - 1; o1[reg] = 2 * parity(reg & CC_G[1]) - 1; }
+  for (let t = 0; t < T; t++) {
+    const l0 = clip(llr[2 * t]), l1 = clip(llr[2 * t + 1]), nm = new Float64Array(NS);
+    for (let ns = 0; ns < NS; ns++) {
+      const b = ns >> 5, sa = (ns & 31) << 1, ra = (b << 6) | sa, rb = ra | 1;
+      const ma = pm[sa] + o0[ra] * l0 + o1[ra] * l1, mb = pm[sa | 1] + o0[rb] * l0 + o1[rb] * l1;
+      if (mb > ma) { nm[ns] = mb; dec[t * NS + ns] = 1; } else nm[ns] = ma;
+    }
+    pm = nm;
+  }
+  const out = new Array(T); let ns = 0;
+  for (let t = T - 1; t >= 0; t--) { out[t] = ns >> 5; ns = ((ns & 31) << 1) | dec[t * NS + ns]; }
+  return out.slice(0, n0);
+}
+
+// Reed–Solomon over GF(256) (primitive polynomial 0x11d), 32 parity bytes: corrects up to 16 wrong bytes per codeword
+const GF_EXP = new Uint8Array(512), GF_LOG = new Uint8Array(256);
+(() => { let x = 1; for (let i = 0; i < 255; i++) { GF_EXP[i] = x; GF_LOG[x] = i; x <<= 1; if (x & 256) x ^= 0x11d; } for (let i = 255; i < 512; i++) GF_EXP[i] = GF_EXP[i - 255]; })();
+const gmul = (a, b) => (a && b) ? GF_EXP[GF_LOG[a] + GF_LOG[b]] : 0;
+const gdiv = (a, b) => a ? GF_EXP[(GF_LOG[a] + 255 - GF_LOG[b]) % 255] : 0;
+const gpow = e => GF_EXP[((e % 255) + 255) % 255];
+const RS_GEN = (() => { let g = [1]; for (let i = 0; i < RS_P; i++) { const r = gpow(i), h = new Array(g.length + 1).fill(0); g.forEach((c, j) => { h[j] ^= c; h[j + 1] ^= gmul(c, r); }); g = h; } return g; })();
+function rsEncodeBlock(msg) {                       // systematic: message bytes, then 32 parity bytes
+  const r = new Array(RS_P).fill(0);
+  for (const m of msg) { const f = m ^ r[0]; r.shift(); r.push(0); if (f) for (let j = 0; j < RS_P; j++) r[j] ^= gmul(RS_GEN[j + 1], f); }
+  return [...msg, ...r];
+}
+const polyEval = (p, x) => p.reduce((acc, c) => gmul(acc, x) ^ c, 0);          // p[0] = highest degree
+function rsDecodeBlock(cw) {                        // returns { msg, nerr } or { msg (uncorrected), fail: true }
+  const n = cw.length, S = []; let any = 0;
+  for (let j = 0; j < RS_P; j++) { S.push(polyEval(cw, gpow(j))); any |= S[j]; }
+  const k = n - RS_P;
+  if (!any) return { msg: cw.slice(0, k), nerr: 0 };
+  let C = [1], B = [1], L = 0, m = 1, b = 1;          // Berlekamp–Massey, C[0] = 1 (ascending powers)
+  for (let i = 0; i < RS_P; i++) {
+    let d = S[i]; for (let j = 1; j <= L; j++) d ^= gmul(C[j] || 0, S[i - j]);
+    if (!d) { m++; continue; }
+    const T = C.slice(), coef = gdiv(d, b), need = B.length + m;
+    while (C.length < need) C.push(0);
+    B.forEach((v, j) => { C[j + m] ^= gmul(coef, v); });
+    if (2 * L <= i) { L = i + 1 - L; B = T; b = d; m = 1; } else m++;
+  }
+  const lam = C.slice(0, L + 1), lamEval = x => lam.reduce((acc, c, j) => acc ^ gmul(c, gpow(GF_LOG[x] * j)), 0);
+  const omega = new Array(RS_P).fill(0);              // Omega = S(x) Lambda(x) mod x^32
+  for (let i = 0; i < RS_P; i++) for (let j = 0; j <= L && j <= i; j++) omega[i] ^= gmul(lam[j], S[i - j]);
+  const out = cw.slice(); let found = 0;
+  for (let p = 0; p < n; p++) {
+    const X = gpow(p), Xi = gpow(-p);
+    if (lamEval(Xi)) continue;
+    let om = 0, dl = 0;
+    for (let i = 0; i < RS_P; i++) om ^= gmul(omega[i], gpow(-p * i));
+    for (let j = 1; j <= L; j += 2) dl ^= gmul(lam[j], gpow(-p * (j - 1)));
+    if (!dl) return { msg: cw.slice(0, k), fail: true };
+    out[n - 1 - p] ^= gmul(X, gdiv(om, dl)); found++;
+  }
+  if (found !== L) return { msg: cw.slice(0, k), fail: true };
+  for (let j = 0; j < RS_P; j++) if (polyEval(out, gpow(j))) return { msg: cw.slice(0, k), fail: true };
+  return { msg: out.slice(0, k), nerr: L };
+}
+// Bytes are split over B codewords and sent byte-interleaved, so a long burst is shared between codewords.
+function rsLayout(K) { const B = Math.ceil(K / RS_K), ks = []; for (let i = 0; i < B; i++) ks.push(Math.floor(K / B) + (i < K % B ? 1 : 0)); return ks; }
+function rsOrder(lens) { const o = [], mx = Math.max(...lens); for (let j = 0; j < mx; j++) lens.forEach((n, i) => { if (j < n) o.push([i, j]); }); return o; }
+const toBytes = bits => { const o = []; for (let i = 0; i < bits.length; i += 8) { let v = 0; for (let j = 0; j < 8; j++) v = 2 * v + (bits[i + j] || 0); o.push(v); } return o; };
+const toBits = bytes => bytes.flatMap(v => msb(v, 8));
+function rsEncode(d) {
+  const by = toBytes(d), ks = rsLayout(by.length); let s = 0;
+  const cws = ks.map(k => rsEncodeBlock(by.slice(s, s += k)));
+  return toBits(rsOrder(cws.map(c => c.length)).map(([i, j]) => cws[i][j]));
+}
+function rsDecode(c, n0) {
+  const ks = rsLayout(Math.ceil(n0 / 8)), lens = ks.map(k => k + RS_P), cws = lens.map(n => new Array(n)), by = toBytes(c);
+  rsOrder(lens).forEach(([i, j], q) => { cws[i][j] = by[q]; });
+  const res = cws.map(rsDecodeBlock);
+  return { bits: toBits(res.flatMap(r => r.msg)).slice(0, n0), fails: res.filter(r => r.fail).length, blocks: res.length };
+}
+
+function encodeFEC(code, d) {
+  if (code === 'hamming') return interleave(hamEncode(d));
+  if (code === 'conv') return interleave(convEncode(d));
+  if (code === 'rs') return rsEncode(d);
+  return Array.from(d);
+}
+// llr: channel LLRs after descrambling (> 0 means 1). Returns the n0 message bits.
+function decodeFEC(code, n0, llr) {
+  const hard = a => a.map(r => r > 0 ? 1 : 0);
+  if (code === 'hamming') return { bits: hamDecode(hard(deinterleave(llr)), n0) };
+  if (code === 'conv') return { bits: convDecode(deinterleave(llr), n0) };
+  if (code === 'rs') return rsDecode(hard(llr), n0);
+  return { bits: hard(llr) };
+}
+
+// ---- QR code (byte mode, error level M, versions 1-9), built here so the page needs no network ----
+function qrMatrix(text) {
+  const data = Array.from(new TextEncoder().encode(text));
+  const EC = [null, [10, 1, 16, 0, 0], [16, 1, 28, 0, 0], [26, 1, 44, 0, 0], [18, 2, 32, 0, 0], [24, 2, 43, 0, 0],
+              [16, 4, 27, 0, 0], [18, 4, 31, 0, 0], [22, 2, 38, 2, 39], [22, 3, 36, 2, 37]];   // ec bytes per block, blocks x data bytes
+  const ALIGN = [null, [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46]];
+  let ver = 1; while (ver < 10 && EC[ver][1] * EC[ver][2] + EC[ver][3] * EC[ver][4] < data.length + 2) ver++;
+  if (ver > 9) throw new Error('text too long for the QR code');
+  const [ecLen, n1, k1, n2, k2] = EC[ver], cap = n1 * k1 + n2 * k2, size = 17 + 4 * ver;
+  // data codewords: mode 0100, 8-bit length, bytes, terminator, pad bytes
+  const bits = [0, 1, 0, 0, ...msb(data.length, 8), ...data.flatMap(b => msb(b, 8))];
+  for (let i = 0; i < 4 && bits.length < 8 * cap; i++) bits.push(0);
+  while (bits.length % 8) bits.push(0);
+  const cw = []; for (let i = 0; i < bits.length; i += 8) cw.push(bits.slice(i, i + 8).reduce((v, b) => 2 * v + b, 0));
+  for (let p = 0; cw.length < cap; p ^= 1) cw.push(p ? 0x11 : 0xec);
+  // Reed–Solomon parity per block (same GF(256) as the modem), then interleave the blocks
+  let gen = [1]; for (let i = 0; i < ecLen; i++) { const h = new Array(gen.length + 1).fill(0); gen.forEach((c, j) => { h[j] ^= c; h[j + 1] ^= gmul(c, gpow(i)); }); gen = h; }
+  const blocks = []; let s = 0;
+  for (let i = 0; i < n1 + n2; i++) {
+    const d = cw.slice(s, s += i < n1 ? k1 : k2), r = new Array(ecLen).fill(0);
+    for (const m of d) { const f = m ^ r.shift(); r.push(0); for (let j = 0; j < ecLen; j++) r[j] ^= gmul(gen[j + 1], f); }
+    blocks.push([d, r]);
+  }
+  const all = [];
+  for (let i = 0; i < Math.max(k1, k2); i++) blocks.forEach(([d]) => { if (i < d.length) all.push(d[i]); });
+  for (let i = 0; i < ecLen; i++) blocks.forEach(([, r]) => all.push(r[i]));
+  // function patterns
+  const M = Array.from({ length: size }, () => new Array(size).fill(false)), F = M.map(r => r.map(() => false));
+  const set = (x, y, v) => { M[y][x] = v; F[y][x] = true; };
+  for (let i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+  for (const [cx, cy] of [[3, 3], [size - 4, 3], [3, size - 4]])
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+      const x = cx + dx, y = cy + dy, dist = Math.max(Math.abs(dx), Math.abs(dy));
+      if (x >= 0 && y >= 0 && x < size && y < size) set(x, y, dist !== 2 && dist !== 4);
+    }
+  const al = ALIGN[ver];
+  al.forEach((ax, i) => al.forEach((ay, j) => {
+    if ((i === 0 && j === 0) || (i === 0 && j === al.length - 1) || (i === al.length - 1 && j === 0)) return;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) set(ax + dx, ay + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+  }));
+  const formatBits = mask => {                       // level M = 00
+    let r = mask; for (let i = 0; i < 10; i++) r = (r << 1) ^ ((r >> 9) * 0x537);
+    const b = ((mask << 10) | r) ^ 0x5412, bit = i => ((b >> i) & 1) === 1;
+    for (let i = 0; i <= 5; i++) set(8, i, bit(i));
+    set(8, 7, bit(6)); set(8, 8, bit(7)); set(7, 8, bit(8));
+    for (let i = 9; i < 15; i++) set(14 - i, 8, bit(i));
+    for (let i = 0; i < 8; i++) set(size - 1 - i, 8, bit(i));
+    for (let i = 8; i < 15; i++) set(8, size - 15 + i, bit(i));
+    set(8, size - 8, true);
+  };
+  formatBits(0);
+  if (ver >= 7) {
+    let r = ver; for (let i = 0; i < 12; i++) r = (r << 1) ^ ((r >> 11) * 0x1f25);
+    const b = (ver << 12) | r;
+    for (let i = 0; i < 18; i++) { const v = ((b >> i) & 1) === 1, a = size - 11 + i % 3, c = Math.floor(i / 3); set(a, c, v); set(c, a, v); }
+  }
+  // data in the zigzag order
+  let i = 0;
+  for (let right = size - 1; right >= 1; right -= 2) {
+    if (right === 6) right = 5;
+    for (let v = 0; v < size; v++) for (let j = 0; j < 2; j++) {
+      const x = right - j, y = ((right + 1) & 2) === 0 ? size - 1 - v : v;
+      if (!F[y][x] && i < all.length * 8) { M[y][x] = ((all[i >> 3] >> (7 - (i & 7))) & 1) === 1; i++; }
+    }
+  }
+  // pick the mask with the lowest penalty
+  const MASKS = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, x => x % 3 === 0, (x, y) => (x + y) % 3 === 0,
+    (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => x * y % 2 + x * y % 3 === 0,
+    (x, y) => (x * y % 2 + x * y % 3) % 2 === 0, (x, y) => ((x + y) % 2 + x * y % 3) % 2 === 0];
+  const applyMask = k => { for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!F[y][x] && MASKS[k](x, y)) M[y][x] = !M[y][x]; };
+  const penalty = () => {
+    let p = 0, dark = 0;
+    const line = get => { let run = 1; for (let k = 1; k < size; k++) { if (get(k) === get(k - 1)) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } };
+    for (let y = 0; y < size; y++) { line(k => M[y][k]); line(k => M[k][y]); }
+    for (let y = 0; y < size - 1; y++) for (let x = 0; x < size - 1; x++) { const c = M[y][x]; if (c === M[y][x + 1] && c === M[y + 1][x] && c === M[y + 1][x + 1]) p += 3; }
+    const pat = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0], tap = [...pat].reverse();
+    for (let y = 0; y < size; y++) for (let x = 0; x + 11 <= size; x++) for (const q of [pat, tap]) {
+      if (q.every((b, k) => M[y][x + k] === !!b)) p += 40;
+      if (q.every((b, k) => M[x + k][y] === !!b)) p += 40;
+    }
+    M.forEach(r => r.forEach(v => { dark += v; }));
+    return p + 10 * Math.floor(Math.abs(20 * dark / (size * size) - 10));
+  };
+  let best = 0, bestP = Infinity;
+  for (let k = 0; k < 8; k++) { applyMask(k); formatBits(k); const p = penalty(); if (p < bestP) { bestP = p; best = k; } applyMask(k); }
+  applyMask(best); formatBits(best);
+  return M;
+}
+function drawQR(cv, text, px = 8) {
+  const M = qrMatrix(text), q = 4, n = M.length + 2 * q;
+  cv.width = cv.height = n * px; const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = '#000';
+  M.forEach((row, y) => row.forEach((v, x) => { if (v) g.fillRect((x + q) * px, (y + q) * px, px, px); }));
+}
+
+
 // msg = {type:'text', text} | {type:'image', h, w, pixels (col-major, 1 = white)}
 function buildFrame(msg, cfg) {
+  const code = cfg.code || 'none';
   let type, a, b, data;
   if (msg.type === 'text') { const c = textCodes(msg.text); type = 0; a = c.length; b = 0; data = c.flatMap(v => msb(v, 8)); }
   else { type = 1; a = msg.h; b = msg.w; data = Array.from(msg.pixels); }
-  const hdr = [...msb(type, 2), ...msb(a, 11), ...msb(b, 11)];
-  const key = prbs(data.length);
+  const hdr = [...msb(type, 2), ...msb(a, 11), ...msb(CODES.indexOf(code), 2), ...msb(b, 9)];   // code: top 2 bits of b
+  const ch = encodeFEC(code, data), key = prbs(ch.length);
   const warm = Array.from({ length: Math.round(0.1 * cfg.rate) }, (_, i) => (i + 1) % 2);
-  const bits = [...warm, ...PILOT, ...hdr.flatMap(x => [x, x, x]), ...data.map((x, i) => x ^ key[i]), ...PILOT];
-  return { bits, data, n0: data.length, warm: warm.length };
+  const bits = [...warm, ...PILOT, ...hdr.flatMap(x => [x, x, x]), ...ch.map((x, i) => x ^ key[i]), ...PILOT];
+  return { bits, data, n0: data.length, nc: ch.length, warm: warm.length };
 }
 function modulate(bits, cfg, fs = FS_TX) {
   const [F0, F1] = TONES[cfg.tones], L = Math.round(fs / cfg.rate), pad = Math.round(0.2 * fs);
@@ -174,10 +440,12 @@ function modulate(bits, cfg, fs = FS_TX) {
 }
 function parseHeader(hb) {
   const val = (s, n) => hb.slice(s, s + n).reduce((v, x) => 2 * v + x, 0);
-  const type = val(0, 2), a = val(2, 11), b = val(13, 11);
-  if (type === 0 && a >= 1 && b === 0) return { type: 'text', len: a, n0: 8 * a };
-  if (type === 1 && a >= 1 && b >= 1 && a <= 256 && b <= 256 && a * b <= 20000) return { type: 'image', h: a, w: b, n0: a * b };
-  return null;
+  const type = val(0, 2), a = val(2, 11), code = CODES[val(13, 2)], b = val(15, 9);
+  let h = null;
+  if (type === 0 && a >= 1 && b === 0) h = { type: 'text', len: a, n0: 8 * a };
+  if (type === 1 && a >= 1 && b >= 1 && a <= 256 && b <= 256 && a * b <= 20000) h = { type: 'image', h: a, w: b, n0: a * b };
+  if (h) { h.code = code; h.nc = codedLength(code, h.n0); }
+  return h;
 }
 
 // Streaming receiver. push() Float32 chunks; callbacks: onState(s, info), onProgress(info), onDone(res)
@@ -259,7 +527,7 @@ class Receiver {
   track() {
     const delta = Math.max(1, Math.round(this.Lw / 4)), mu = 0.05, eps = 1e-9;
     while (true) {
-      const total = NP + NH + (this.hdr ? this.hdr.n0 + NP : 0);
+      const total = NP + NH + (this.hdr ? this.hdr.nc + NP : 0);
       if (this.k >= total) { this.state = 'final'; return; }
       const m = Math.round(this.pos);
       if (m + delta >= this.nz) return;
@@ -272,42 +540,47 @@ class Receiver {
         if (k === NP + NH - 1) {
           const hb = []; for (let i = 0; i < HBITS; i++) hb.push(this.hdrLLR[3 * i] + this.hdrLLR[3 * i + 1] + this.hdrLLR[3 * i + 2] > 0 ? 1 : 0);
           const hdr = parseHeader(hb);
-          const need = (this.p1 - this.base) + (NP * 2 + NH + (hdr ? hdr.n0 : 0) + 4) * this.Lr * 1.01;
+          const need = (this.p1 - this.base) + (NP * 2 + NH + (hdr ? hdr.nc : 0) + 4) * this.Lr * 1.01;
           if (!hdr || need >= this.cap) {
             this.cb.onState && this.cb.onState('lost', { reason: hdr ? 'message too long' : 'unreadable header' });
             this.state = 'search'; this.sp = this.p1 + this.Lw; return;
           }
-          this.hdr = hdr; this.key = prbs(hdr.n0); this.bits = new Uint8Array(hdr.n0);
+          this.hdr = hdr; this.key = prbs(hdr.nc); this.bits = new Uint8Array(hdr.n0);
           this.cb.onState && this.cb.onState('header', hdr);
         }
-      } else if (this.hdr && k >= NP + NH && k < NP + NH + this.hdr.n0) {
-        const j = k - NP - NH; this.llr.push(r); this.bits[j] = (r > 0 ? 1 : 0) ^ this.key[j];
-        if (j % 32 === 31 || j === this.hdr.n0 - 1) this.cb.onProgress && this.cb.onProgress({ hdr: this.hdr, bits: this.bits, done: j + 1 });
+      } else if (this.hdr && k >= NP + NH && k < NP + NH + this.hdr.nc) {
+        const j = k - NP - NH, plain = this.hdr.code === 'none'; this.llr.push(r);
+        if (plain) this.bits[j] = (r > 0 ? 1 : 0) ^ this.key[j];   // coded frames are decoded at the end
+        if (j % 32 === 31 || j === this.hdr.nc - 1) this.cb.onProgress && this.cb.onProgress({ hdr: this.hdr, bits: plain ? this.bits : null, done: j + 1 });
       }
       this.pos += this.Lr; this.k++;
     }
   }
   finalize() {
     const { hdr, Lr, p1, eps = 1e-9 } = this;
-    const Delta = (NP + NH + hdr.n0) * Lr, tol = Math.round(0.005 * Delta) + this.Lw;
+    const Delta = (NP + NH + hdr.nc) * Lr, tol = Math.round(0.005 * Delta) + this.Lw;
     const hi = Math.round(p1 + Delta) + tol;
     if (hi + this.offs[NP - 1] >= this.nz) return;   // wait for more samples
     let best = -2, p2 = 0;
     for (let m = Math.round(p1 + Delta) - tol; m <= hi; m++) { const c = this.corrAt(m); if (c > best) { best = c; p2 = m; } }
     const found = best >= 0.5 * this.cmax;
     const rho = found ? (p2 - p1) / Delta : 1;
-    let llr = this.llr, bits = this.bits, pilotErr = null;
+    let llr = this.llr, pilotErr = null;
     if (found) {
-      llr = []; bits = new Uint8Array(hdr.n0);
-      for (let j = 0; j < hdr.n0; j++) {
+      llr = [];
+      for (let j = 0; j < hdr.nc; j++) {
         const b = Math.round(p1 + (NP + NH + j) * Lr * rho) - this.base;
-        const r = Math.log((this.z1[b] + eps) / (this.z0[b] + eps)); llr.push(r); bits[j] = (r > 0 ? 1 : 0) ^ this.key[j];
+        llr.push(Math.log((this.z1[b] + eps) / (this.z0[b] + eps)));
       }
       pilotErr = 0;
       for (let j = 0; j < NP; j++) { const b = Math.round(p2 + j * Lr * rho) - this.base; if ((this.z1[b] > this.z0[b] ? 1 : 0) !== PILOT[j]) pilotErr++; }
     }
+    // descramble, decode, then re-encode the decision to count the channel errors the code removed
+    const dec = decodeFEC(hdr.code, hdr.n0, llr.map((r, j) => this.key[j] ? -r : r)), bits = Uint8Array.from(dec.bits);
+    const sent = Uint8Array.from(encodeFEC(hdr.code, bits), (x, j) => x ^ this.key[j]);
+    const chErr = llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0);
     const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(p1 + Delta + NP * Lr + 0.3 * this.fs));
-    const res = { hdr, bits, llr, scrambledHat: llr.map(r => r > 0 ? 1 : 0), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
+    const res = { hdr, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks, key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
                   t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
     this.state = 'search'; this.sp = Math.round(p1 + Delta + NP * Lr);
     this.cb.onDone && this.cb.onDone(res);
@@ -328,7 +601,7 @@ function demoPixels() {
   for (let i = 0; i < n; i++) p[i] = (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
   return { type: 'image', h: DEMO.h, w: DEMO.w, pixels: p };
 }
-if (typeof module !== 'undefined') module.exports = { PILOT, NP, NH, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader };
+if (typeof module !== 'undefined') module.exports = { PILOT, NP, NH, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix };
 </script>
 
 <script>
@@ -336,7 +609,9 @@ if (typeof module !== 'undefined') module.exports = { PILOT, NP, NH, TONES, prbs
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const params = new URLSearchParams(location.search);
-const cfg = { tones: TONES[params.get('tones')] ? params.get('tones') : 'low', rate: [200, 400, 800, 1600].includes(+params.get('rate')) ? +params.get('rate') : 400 };
+const cfg = { tones: TONES[params.get('tones')] ? params.get('tones') : 'low', rate: [200, 400, 800, 1600].includes(+params.get('rate')) ? +params.get('rate') : 400,
+              code: CODES.includes(params.get('code')) ? params.get('code') : 'none' };
+const PAGE_URL = 'https://sheng-yang-cs.github.io/AudioComm/acoustic_modem.html';
 let msgMode = 'text', pen = 0, actx = null;
 
 function seg(el, value, onPick) {
@@ -345,7 +620,12 @@ function seg(el, value, onPick) {
   el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); onPick(b.dataset.v); });
 }
 function ctx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }
-function syncUrl() { const u = new URL(location.href); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); history.replaceState(null, '', u); }
+function syncUrl() { const u = new URL(location.href); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('code', cfg.code); history.replaceState(null, '', u); }
+// QR code: the online copy of this page (also when the laptop runs it from a local file), with the current tones and rate
+function phoneUrl() { const base = location.protocol === 'https:' ? location.origin + location.pathname : PAGE_URL; return `${base}?tones=${cfg.tones}&rate=${cfg.rate}`; }
+$('qrBtn').onclick = () => { const u = phoneUrl(); drawQR($('qrCanvas'), u); $('qrUrl').textContent = u; $('qrOverlay').classList.remove('hidden'); };
+$('qrOverlay').onclick = () => $('qrOverlay').classList.add('hidden');
+addEventListener('keydown', e => { if (e.key === 'Escape') $('qrOverlay').classList.add('hidden'); });
 
 seg($('tonesSeg'), cfg.tones, v => { cfg.tones = v; syncUrl(); txInfo(); restartRx(); });
 seg($('rateSeg'), cfg.rate, v => { cfg.rate = +v; syncUrl(); txInfo(); restartRx(); });
@@ -385,9 +665,11 @@ function showTx() {
 function txInfo() {
   const f = buildFrame(currentMsg(), cfg);
   const desc = msgMode === 'text' ? `${textCodes($('txtIn').value).length} characters` : (() => { const m = currentMsg(); return `${m.w}×${m.h} image`; })();
-  $('txInfo').textContent = `${desc} · ${f.n0} message bits · ${(f.bits.length / cfg.rate + 0.4).toFixed(1)} s of sound at ${cfg.rate} bit/s`;
+  const coded = cfg.code === 'none' ? '' : ` → ${f.nc} coded bits`;
+  $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.bits.length / cfg.rate + 0.4).toFixed(1)} s of sound at ${cfg.rate} bit/s`;
 }
 seg($('msgSeg'), msgMode, v => { msgMode = v; showTx(); });
+seg($('codeSeg'), cfg.code, v => { cfg.code = v; syncUrl(); txInfo(); });
 seg($('penSeg'), 0, v => { pen = +v; });
 $('txtIn').addEventListener('input', txInfo);
 $('clearPad').onclick = () => { pad.pixels.fill(1); showTx(); };
@@ -452,44 +734,57 @@ function makeRx() {
   rx = new Receiver(actx.sampleRate, { ...cfg }, {
     onState: (s, info) => {
       if (s === 'detected') { pill('Frame detected', 'live'); clearOut(); }
-      if (s === 'header') { pill(info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`, 'live'); }
+      if (s === 'header') { pill((info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`) + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`), 'live'); }
       if (s === 'lost') { pill('Listening', 'live'); }
     },
-    onProgress: p => { $('rxProg').style.width = (100 * p.done / p.hdr.n0) + '%'; showOut(p.hdr, p.bits, p.done); },
+    onProgress: p => { $('rxProg').style.width = (100 * p.done / p.hdr.nc) + '%'; if (p.bits) showOut(p.hdr, p.bits, p.done); },
     onDone: res => { lastRec = res; showOut(res.hdr, res.bits, res.hdr.n0); showStats(res); pill('Received ✓', 'ok'); setTimeout(() => { if (stream) pill('Listening', 'live'); }, 4000); }
   });
 }
 function restartRx() { if (rx && actx) { makeRx(); clearOut(); } }
-function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); }
+function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); }
 function showOut(hdr, bits, done) {
   if (hdr.type === 'text') { $('rxOutText').textContent = decodeText(bits.subarray(0, done - done % 8)); $('rxFig').classList.add('hidden'); }
   else { $('rxOutText').textContent = ''; $('rxFig').classList.remove('hidden'); drawPixels($('rxCanvas'), { h: hdr.h, w: hdr.w, pixels: bits }, done); }
 }
+function showRaw(res) {
+  // what an uncoded frame would have shown with the same channel errors
+  const hdr = res.hdr; if (hdr.code === 'none') return;
+  const raw = Uint8Array.from(res.bits, (b, j) => b ^ ((res.llr[j] > 0 ? 1 : 0) ^ res.sent[j]));
+  if (hdr.type === 'text') { $('rxRawText').textContent = 'Without the code: ' + decodeText(raw); $('rxRawText').classList.remove('hidden'); }
+  else { drawPixels($('rawCanvas'), { h: hdr.h, w: hdr.w, pixels: raw }); $('rawFig').classList.remove('hidden'); }
+}
 function showStats(res) {
-  const st = [];
+  const st = [], code = res.hdr.code;
+  showRaw(res);
   st.push([`${cfg.rate}`, 'bit/s']);
   st.push([res.hdr.n0, 'message bits']);
+  if (code !== 'none') {
+    st.push([CODE_INFO[code].rate, `code rate, ${CODE_INFO[code].short}`]);
+    st.push([res.chErr, `channel bit errors corrected (of ${res.hdr.nc} bits)`]);
+    if (code === 'rs') st.push([`${res.rsFails} / ${res.rsBlocks}`, 'Reed–Solomon blocks with too many errors']);
+  }
   st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
   st.push([res.pilotErr === null ? 'not found' : `${res.pilotErr} / ${NP}`, 'errors on the postamble']);
   let truth = null;
   if (res.hdr.type === 'image' && res.hdr.h === DEMO.h && res.hdr.w === DEMO.w) truth = demoPixels().pixels;
   if (truth) {
     let e = 0; for (let i = 0; i < truth.length; i++) e += truth[i] !== res.bits[i];
-    st.push([(e / truth.length).toExponential(1), `bit error rate (${e} errors)`]);
+    st.push([(e / truth.length).toExponential(1), `bit error rate${code === 'none' ? '' : ' after decoding'} (${e} errors)`]);
     drawPixels($('refCanvas'), demoPixels()); $('refFig').classList.remove('hidden');
   }
   $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
-  drawHist(res, truth);
+  drawHist(res, truth ? Uint8Array.from(encodeFEC(code, truth), (x, j) => x ^ res.key[j]) : res.sent);
   $('recBtn').classList.remove('hidden');
 }
-function drawHist(res, truth) {
+function drawHist(res, sent) {   // sent: transmitted channel bits (known for the demo image, else the decoder's decision)
   const cv = $('hist'); cv.classList.remove('hidden'); $('histLegend').classList.remove('hidden');
   const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
   g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H);
   const nb = 80, lim = 6, h0 = new Float32Array(nb), h1 = new Float32Array(nb);
   res.llr.forEach((r, i) => {
     const k = Math.max(0, Math.min(nb - 1, Math.floor((r + lim) / (2 * lim) * nb)));
-    const sent1 = truth ? (truth[i] ^ res.key[i]) : (r > 0); (sent1 ? h1 : h0)[k]++;
+    (sent[i] ? h1 : h0)[k]++;
   });
   const mx = Math.max(...h0, ...h1, 1), bw = W / nb;
   [[h0, css('--f0')], [h1, css('--f1')]].forEach(([h, col]) => { g.fillStyle = col; g.globalAlpha = .8; h.forEach((v, k) => g.fillRect(k * bw, H - v / mx * (H - 6), bw - 1, v / mx * (H - 6))); });
