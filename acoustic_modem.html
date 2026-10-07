@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Acoustic Modem</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#ffffff; --ink:#16181d; --muted:#5d6472; --line:#e2e5ea;
+  --accent:#2457d6; --accent-ink:#ffffff; --ok:#1d8a4e; --warn:#b26a00; --bad:#c23b32;
+  --f0:#2f6fe4; --f1:#e2463a; --plot-bg:#0e1117; --plot-grid:#2a2f3a;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1115; --card:#171a21; --ink:#e8eaef; --muted:#9aa2b1; --line:#2a2f3a;
+    --accent:#5b8cff; --accent-ink:#0b0d12; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b5f;
+    --f0:#6b9bff; --f1:#ff7a6e;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1115; --card:#171a21; --ink:#e8eaef; --muted:#9aa2b1; --line:#2a2f3a;
+  --accent:#5b8cff; --accent-ink:#0b0d12; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b5f;
+  --f0:#6b9bff; --f1:#ff7a6e;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+header{padding:18px 16px 8px;max-width:1200px;margin:0 auto}
+h1{font-size:22px;margin:0 0 2px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0}
+.settings{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-top:12px}
+.settings label{color:var(--muted);font-size:13px;margin-right:6px}
+main{max-width:1200px;margin:0 auto;padding:8px 16px 40px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:860px){main{grid-template-columns:1fr}}
+.roles{display:none;max-width:1200px;margin:0 auto;padding:4px 16px}
+@media (max-width:860px){.roles{display:block} main[data-role="tx"] #rxCard, main[data-role="rx"] #txCard{display:none}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-width:0}
+.card h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;background:transparent;color:var(--ink);padding:7px 12px;font:inherit;font-size:14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.roles .seg{display:flex}.roles .seg button{flex:1;padding:10px}
+textarea{width:100%;min-height:76px;font:inherit;font-size:17px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:9px 14px;font:inherit;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;font-size:16px;padding:12px 22px}
+.btn:disabled{opacity:.45;cursor:default}
+.muted{color:var(--muted);font-size:13px}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.pill.ok{background:var(--ok);color:#fff}.pill.warn{background:var(--warn);color:#fff}.pill.bad{background:var(--bad);color:#fff}.pill.live{background:var(--accent);color:var(--accent-ink)}
+canvas{display:block;max-width:100%}
+.plot{width:100%;height:150px;background:var(--plot-bg);border-radius:10px}
+.plot.small{height:90px}
+.imgbox{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.pix{image-rendering:pixelated;image-rendering:crisp-edges;background:#888;border-radius:6px;border:1px solid var(--line)}
+.pad{touch-action:none;cursor:crosshair}
+.progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.progress>div{height:100%;width:0;background:var(--accent);transition:width .1s linear}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:12px}
+.rxtext{font-size:24px;font-weight:600;min-height:38px;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:4px 0 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+details{margin-top:12px}summary{cursor:pointer;color:var(--muted)}
+.hidden{display:none!important}
+figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
+.pad,#txCanvas{user-select:none;-webkit-user-select:none;touch-action:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Acoustic modem</h1>
+  <p class="sub">Binary FSK over the air: one device transmits through its speaker, any device in the room decodes through its microphone.</p>
+  <div class="settings">
+    <div><label>Tones</label><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button></span></div>
+    <div><label>Rate</label><span class="seg" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button></span> <span class="muted">bit/s</span></div>
+    <span class="muted">Transmitter and receivers must use the same settings.</span>
+  </div>
+</header>
+<div class="roles"><span class="seg" id="roleSeg"><button data-v="tx">Transmit</button><button data-v="rx">Receive</button></span></div>
+
+<main id="main" data-role="rx">
+<section class="card" id="txCard">
+  <h2>Transmit</h2>
+  <span class="seg" id="msgSeg"><button data-v="text">Text</button><button data-v="demo">Demo image</button><button data-v="draw">Draw</button><button data-v="photo">Photo</button></span>
+  <div id="txText" class="row"><textarea id="txtIn" maxlength="1023">Hello CentraleSupélec!</textarea></div>
+  <div id="txImg" class="row hidden">
+    <div class="imgbox">
+      <canvas id="txCanvas" class="pix" width="57" height="74"></canvas>
+      <div id="drawTools" class="hidden">
+        <div class="row"><span class="seg" id="penSeg"><button data-v="0">Pen</button><button data-v="1">Eraser</button></span><button class="btn" id="clearPad">Clear</button></div>
+        <div class="muted">Draw on the 32×32 grid.</div>
+      </div>
+      <div id="photoTools" class="hidden">
+        <input type="file" id="photoIn" accept="image/*">
+        <div class="muted">Scaled to at most 64 pixels and turned black and white.</div>
+      </div>
+    </div>
+  </div>
+  <p class="muted" id="txInfo"></p>
+  <div class="row">
+    <button class="btn primary" id="sendBtn">▶ Send</button>
+    <button class="btn" id="wavBtn">Download WAV</button>
+  </div>
+  <div class="progress"><div id="txProg"></div></div>
+  <p class="muted" id="txStatus">Start listening on the receiver first, then press Send.</p>
+  <details>
+    <summary>What is being sent</summary>
+    <p class="muted">Frame: 0.1 s warm-up · 127-bit MLS preamble · 24-bit header (type and size, each bit sent 3 times) · scrambled message · 127-bit MLS postamble. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone. The same frame is produced by <code>audioComm_tx.m</code> and <code>audiocomm.py</code>.</p>
+  </details>
+</section>
+
+<section class="card" id="rxCard">
+  <h2>Receive <span class="pill" id="rxPill">Idle</span></h2>
+  <div class="row">
+    <button class="btn primary" id="listenBtn">● Start listening</button>
+    <span class="muted" id="rxFs"></span>
+  </div>
+  <canvas id="spec" class="plot"></canvas>
+  <div class="legend"><span><i style="background:var(--f0)"></i>bit 0 tone</span><span><i style="background:var(--f1)"></i>bit 1 tone</span><span>live spectrogram, last ~5 s</span></div>
+  <canvas id="corr" class="plot small" style="margin-top:10px"></canvas>
+  <div class="legend"><span>match with the known preamble (frame detected above the dashed line)</span></div>
+  <div style="margin-top:14px">
+    <div class="progress"><div id="rxProg"></div></div>
+    <div id="rxOutText" class="rxtext" style="margin-top:10px"></div>
+    <div class="imgbox" style="margin-top:10px">
+      <figure id="rxFig" class="hidden"><canvas id="rxCanvas" class="pix" width="1" height="1"></canvas><figcaption>received</figcaption></figure>
+      <figure id="refFig" class="hidden"><canvas id="refCanvas" class="pix" width="1" height="1"></canvas><figcaption>sent (demo image)</figcaption></figure>
+    </div>
+  </div>
+  <div class="stats" id="stats"></div>
+  <canvas id="hist" class="plot small hidden" style="margin-top:10px"></canvas>
+  <div class="legend hidden" id="histLegend"><span>soft output log(E<sub>high</sub>/E<sub>low</sub>) per bit: two well separated humps mean a clean channel</span></div>
+  <div class="row"><button class="btn hidden" id="recBtn">Download received recording (WAV)</button></div>
+</section>
+</main>
+
+<script id="modem-core">
+// ---- modem core (no DOM): shared by the page and the offline tests ----
+const PILOT = Array.from("0000000111111011111001111010111000011011101001100010101100000101111000111011011001001010010000100111001011010001000110011010101", Number);
+const NP = 127, HBITS = 24, HREP = 3, NH = HBITS * HREP;
+const TONES = { low: [4000, 8000], high: [8000, 16000] };
+const FS_TX = 48000;
+
+function prbs(n) {            // LFSR x^15 + x^14 + 1, all-ones seed
+  let s = 0x7fff; const k = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { const fb = ((s >> 14) ^ (s >> 13)) & 1; s = ((s << 1) | fb) & 0x7fff; k[i] = fb; }
+  return k;
+}
+function msb(v, nb) { const o = []; for (let i = nb - 1; i >= 0; i--) o.push((v >> i) & 1); return o; }
+function textCodes(text) { return Array.from(text).slice(0, 1023).map(ch => { const c = ch.codePointAt(0); return c < 256 ? c : 63; }); }
+
+// msg = {type:'text', text} | {type:'image', h, w, pixels (col-major, 1 = white)}
+function buildFrame(msg, cfg) {
+  let type, a, b, data;
+  if (msg.type === 'text') { const c = textCodes(msg.text); type = 0; a = c.length; b = 0; data = c.flatMap(v => msb(v, 8)); }
+  else { type = 1; a = msg.h; b = msg.w; data = Array.from(msg.pixels); }
+  const hdr = [...msb(type, 2), ...msb(a, 11), ...msb(b, 11)];
+  const key = prbs(data.length);
+  const warm = Array.from({ length: Math.round(0.1 * cfg.rate) }, (_, i) => (i + 1) % 2);
+  const bits = [...warm, ...PILOT, ...hdr.flatMap(x => [x, x, x]), ...data.map((x, i) => x ^ key[i]), ...PILOT];
+  return { bits, data, n0: data.length, warm: warm.length };
+}
+function modulate(bits, cfg, fs = FS_TX) {
+  const [F0, F1] = TONES[cfg.tones], L = Math.round(fs / cfg.rate), pad = Math.round(0.2 * fs);
+  const x = new Float32Array(2 * pad + bits.length * L);
+  const w0 = new Float32Array(L), w1 = new Float32Array(L);
+  for (let j = 0; j < L; j++) { w0[j] = 0.9 * Math.sin(2 * Math.PI * F0 * j / fs); w1[j] = 0.9 * Math.sin(2 * Math.PI * F1 * j / fs); }
+  bits.forEach((bt, i) => x.set(bt ? w1 : w0, pad + i * L));
+  return x;
+}
+function parseHeader(hb) {
+  const val = (s, n) => hb.slice(s, s + n).reduce((v, x) => 2 * v + x, 0);
+  const type = val(0, 2), a = val(2, 11), b = val(13, 11);
+  if (type === 0 && a >= 1 && b === 0) return { type: 'text', len: a, n0: 8 * a };
+  if (type === 1 && a >= 1 && b >= 1 && a <= 256 && b <= 256 && a * b <= 20000) return { type: 'image', h: a, w: b, n0: a * b };
+  return null;
+}
+
+// Streaming receiver. push() Float32 chunks; callbacks: onState(s, info), onProgress(info), onDone(res)
+class Receiver {
+  constructor(fs, cfg, cb = {}) {
+    this.fs = fs; this.cfg = cfg; this.cb = cb;
+    [this.F0, this.F1] = TONES[cfg.tones];
+    this.Lr = fs / cfg.rate; this.Lw = Math.round(this.Lr);
+    this.offs = Int32Array.from({ length: NP }, (_, j) => Math.round(j * this.Lr));
+    this.a = Float32Array.from(PILOT, x => 2 * x - 1);
+    this.cap = Math.ceil(fs * 160);
+    this.y = new Float32Array(this.cap); this.z0 = new Float32Array(this.cap); this.z1 = new Float32Array(this.cap); this.d = new Float32Array(this.cap);
+    this.base = 0; this.n = 0; this.nz = 0;
+    this.C = new Float64Array(4); this.H = new Float64Array(4 * this.Lw);
+    this.w0 = 2 * Math.PI * this.F0 / fs; this.w1 = 2 * Math.PI * this.F1 / fs; this.ph0 = 0; this.ph1 = 0;
+    this.thr = 0.3; this.state = 'search'; this.sp = 0; this.cand = -1;
+    this.corrHist = new Float32Array(500); this.corrPos = 0; this.blk = 0; this.blkMax = 0; this.blkLen = Math.round(fs / 100);
+  }
+  push(chunk) {
+    const { C, H, Lw } = this;
+    for (let t = 0; t < chunk.length; t++) {
+      if (this.n - this.base >= this.cap) { this.compact(true); }
+      const v = chunk[t], n = this.n, i = n - this.base;
+      this.y[i] = v;
+      this.ph0 += this.w0; if (this.ph0 > 6.283185307179586) this.ph0 -= 6.283185307179586;
+      this.ph1 += this.w1; if (this.ph1 > 6.283185307179586) this.ph1 -= 6.283185307179586;
+      C[0] += v * Math.cos(this.ph0); C[1] += v * Math.sin(this.ph0); C[2] += v * Math.cos(this.ph1); C[3] += v * Math.sin(this.ph1);
+      const h = 4 * (n % Lw);
+      const r0 = C[0] - H[h], i0 = C[1] - H[h + 1], r1 = C[2] - H[h + 2], i1 = C[3] - H[h + 3];
+      H[h] = C[0]; H[h + 1] = C[1]; H[h + 2] = C[2]; H[h + 3] = C[3];
+      if (n >= Lw - 1) {
+        const m = n - Lw + 1 - this.base;   // window [m, m+Lw-1]
+        if (m >= 0) {
+          const e0 = Math.hypot(r0, i0), e1 = Math.hypot(r1, i1);
+          this.z0[m] = e0; this.z1[m] = e1; this.d[m] = (e1 - e0) / (e1 + e0 + 1e-12);
+        }
+        this.nz = n - Lw + 2;
+      }
+      this.n++;
+    }
+    this.process();
+  }
+  corrAt(m) { let s = 0; const d = this.d, o = this.offs, a = this.a, b = m - this.base; for (let j = 0; j < NP; j++) s += a[j] * d[b + o[j]]; return s / NP; }
+  logCorr(c) {
+    if (c > this.blkMax) this.blkMax = c;
+    if (++this.blk >= this.blkLen) { this.corrHist[this.corrPos++ % this.corrHist.length] = this.blkMax; this.blk = 0; this.blkMax = -1; }
+  }
+  compact(force) {
+    // keep only what the search still needs
+    const keepFrom = Math.max(this.base, this.sp - 2 * this.Lw);
+    const shift = keepFrom - this.base;
+    if (shift <= 0) { if (force) this.reset(); return; }
+    for (const arr of [this.y, this.z0, this.z1, this.d]) arr.copyWithin(0, shift, this.n - this.base);
+    this.base = keepFrom;
+  }
+  reset() { this.base = this.n; this.sp = this.n; this.nz = this.n; this.state = 'search'; this.cand = -1; }
+  process() {
+    if (this.state === 'search') {
+      const last = this.nz - 1 - this.offs[NP - 1];
+      while (this.sp <= last) {
+        if (this.sp < this.base) { this.sp = this.base; continue; }
+        const c = this.corrAt(this.sp); this.logCorr(c);
+        if (this.cand < 0 && c > this.thr) { this.cand = this.sp; this.cbest = c; this.pbest = this.sp; }
+        if (this.cand >= 0) {
+          if (c > this.cbest) { this.cbest = c; this.pbest = this.sp; }
+          if (this.sp > this.cand + 2 * this.Lw) { this.startFrame(this.pbest, this.cbest); break; }
+        }
+        this.sp++;
+      }
+      if (this.state === 'search' && this.n - this.base > this.fs * 20) this.compact(false);
+    }
+    if (this.state === 'frame') this.track();
+    if (this.state === 'final') this.finalize();
+  }
+  startFrame(p1, cmax) {
+    Object.assign(this, { state: 'frame', p1, cmax, pos: p1, k: 0, hdrLLR: [], hdr: null, llr: [], postTrk: [], cand: -1 });
+    this.cb.onState && this.cb.onState('detected', { t: p1 / this.fs, cmax });
+  }
+  track() {
+    const delta = Math.max(1, Math.round(this.Lw / 4)), mu = 0.05, eps = 1e-9;
+    while (true) {
+      const total = NP + NH + (this.hdr ? this.hdr.n0 + NP : 0);
+      if (this.k >= total) { this.state = 'final'; return; }
+      const m = Math.round(this.pos);
+      if (m + delta >= this.nz) return;
+      const b = m - this.base;
+      const r = Math.log((this.z1[b] + eps) / (this.z0[b] + eps));
+      if (this.k > 0) this.pos += mu * (Math.abs(this.d[b + delta]) - Math.abs(this.d[b - delta])) * delta;
+      const k = this.k;
+      if (k >= NP && k < NP + NH) {
+        this.hdrLLR.push(r);
+        if (k === NP + NH - 1) {
+          const hb = []; for (let i = 0; i < HBITS; i++) hb.push(this.hdrLLR[3 * i] + this.hdrLLR[3 * i + 1] + this.hdrLLR[3 * i + 2] > 0 ? 1 : 0);
+          const hdr = parseHeader(hb);
+          const need = (this.p1 - this.base) + (NP * 2 + NH + (hdr ? hdr.n0 : 0) + 4) * this.Lr * 1.01;
+          if (!hdr || need >= this.cap) {
+            this.cb.onState && this.cb.onState('lost', { reason: hdr ? 'message too long' : 'unreadable header' });
+            this.state = 'search'; this.sp = this.p1 + this.Lw; return;
+          }
+          this.hdr = hdr; this.key = prbs(hdr.n0); this.bits = new Uint8Array(hdr.n0);
+          this.cb.onState && this.cb.onState('header', hdr);
+        }
+      } else if (this.hdr && k >= NP + NH && k < NP + NH + this.hdr.n0) {
+        const j = k - NP - NH; this.llr.push(r); this.bits[j] = (r > 0 ? 1 : 0) ^ this.key[j];
+        if (j % 32 === 31 || j === this.hdr.n0 - 1) this.cb.onProgress && this.cb.onProgress({ hdr: this.hdr, bits: this.bits, done: j + 1 });
+      }
+      this.pos += this.Lr; this.k++;
+    }
+  }
+  finalize() {
+    const { hdr, Lr, p1, eps = 1e-9 } = this;
+    const Delta = (NP + NH + hdr.n0) * Lr, tol = Math.round(0.005 * Delta) + this.Lw;
+    const hi = Math.round(p1 + Delta) + tol;
+    if (hi + this.offs[NP - 1] >= this.nz) return;   // wait for more samples
+    let best = -2, p2 = 0;
+    for (let m = Math.round(p1 + Delta) - tol; m <= hi; m++) { const c = this.corrAt(m); if (c > best) { best = c; p2 = m; } }
+    const found = best >= 0.5 * this.cmax;
+    const rho = found ? (p2 - p1) / Delta : 1;
+    let llr = this.llr, bits = this.bits, pilotErr = null;
+    if (found) {
+      llr = []; bits = new Uint8Array(hdr.n0);
+      for (let j = 0; j < hdr.n0; j++) {
+        const b = Math.round(p1 + (NP + NH + j) * Lr * rho) - this.base;
+        const r = Math.log((this.z1[b] + eps) / (this.z0[b] + eps)); llr.push(r); bits[j] = (r > 0 ? 1 : 0) ^ this.key[j];
+      }
+      pilotErr = 0;
+      for (let j = 0; j < NP; j++) { const b = Math.round(p2 + j * Lr * rho) - this.base; if ((this.z1[b] > this.z0[b] ? 1 : 0) !== PILOT[j]) pilotErr++; }
+    }
+    const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(p1 + Delta + NP * Lr + 0.3 * this.fs));
+    const res = { hdr, bits, llr, scrambledHat: llr.map(r => r > 0 ? 1 : 0), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
+                  t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
+    this.state = 'search'; this.sp = Math.round(p1 + Delta + NP * Lr);
+    this.cb.onDone && this.cb.onDone(res);
+  }
+}
+function decodeText(bits) { let s = ''; for (let i = 0; i + 8 <= bits.length; i += 8) { let v = 0; for (let j = 0; j < 8; j++) v = 2 * v + bits[i + j]; s += String.fromCharCode(v); } return s; }
+function wavBlob(x, fs) {
+  const buf = new ArrayBuffer(44 + 2 * x.length), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + 2 * x.length, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, fs, true); v.setUint32(28, 2 * fs, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, 2 * x.length, true);
+  for (let i = 0; i < x.length; i++) v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, x[i])) * 32767, true);
+  return new Blob([buf], { type: 'audio/wav' });
+}
+const DEMO = { h: 74, w: 57, b64: "//////////////////////////////////////////wB//////////4AH+H///////8AA8A///////gH8AAH//////gD/gAQ/////4AB/8B+H///8AAA//h/h///AAAGP/4f8f//gAD/j/8H/D//4A//w/GA/4//+D//8PxgP+P//wf//j8Yh/h//4H//4/+If8f/8D//+H/iH/H/+D///x/4z/wP/gf//8OOP/8B/+D///gAD//AP/g///8AA//xD/wf//+AAP/8Y/4P///h/B//GAeD///w/8P/xwHwP//4f/D/8eD+D//+P/4f/H//g///j//H/x//wf//w//x/8f/4P//8P88f/H/+B///D/HH/h//wP//4/zx/g///D//+P/4f4P8/h///h/+P/D/Hwf//8f/D/4fx8B///B/h//H8fAP//4Pg//5/H+D///AAf///h/h///4AP///4fw////gP///+P4B///////PwD/Af//////gAA/4H/////48AAf/j/////+PAH//w/////wDw///8B///+AAcf///AP//4AAAH///+H//gAHwB////h//AA/+A////wH8AD//5////8B4AP////////4QAf////////+AB//////////gD//////////4H//////////+P//////////////////////////////////A" };
+function demoPixels() {
+  const raw = atob(DEMO.b64), n = DEMO.h * DEMO.w, p = new Uint8Array(n);
+  for (let i = 0; i < n; i++) p[i] = (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
+  return { type: 'image', h: DEMO.h, w: DEMO.w, pixels: p };
+}
+if (typeof module !== 'undefined') module.exports = { PILOT, NP, NH, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader };
+</script>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const params = new URLSearchParams(location.search);
+const cfg = { tones: TONES[params.get('tones')] ? params.get('tones') : 'low', rate: [200, 400, 800, 1600].includes(+params.get('rate')) ? +params.get('rate') : 400 };
+let msgMode = 'text', pen = 0, actx = null;
+
+function seg(el, value, onPick) {
+  const set = v => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v))));
+  set(value);
+  el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); onPick(b.dataset.v); });
+}
+function ctx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }
+function syncUrl() { const u = new URL(location.href); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); history.replaceState(null, '', u); }
+
+seg($('tonesSeg'), cfg.tones, v => { cfg.tones = v; syncUrl(); txInfo(); restartRx(); });
+seg($('rateSeg'), cfg.rate, v => { cfg.rate = +v; syncUrl(); txInfo(); restartRx(); });
+const role = matchMedia('(max-width:860px)').matches && params.get('role') === 'tx' ? 'tx' : 'rx';
+$('main').dataset.role = role;
+seg($('roleSeg'), role, v => { $('main').dataset.role = v; });
+
+// ---------- transmitter ----------
+const pad = { h: 32, w: 32, pixels: new Uint8Array(32 * 32).fill(1) };
+let photo = null;
+function currentMsg() {
+  if (msgMode === 'text') return { type: 'text', text: $('txtIn').value || ' ' };
+  if (msgMode === 'demo') return demoPixels();
+  if (msgMode === 'draw') return { type: 'image', ...pad };
+  return photo ? { type: 'image', ...photo } : demoPixels();
+}
+function drawPixels(cv, img, done = img.h * img.w, scale = 4) {
+  cv.width = img.w; cv.height = img.h;
+  const z = Math.max(2, Math.floor(Math.min(220 / img.h, 240 / img.w)));
+  cv.style.width = img.w * z + 'px'; cv.style.height = img.h * z + 'px';
+  const g = cv.getContext('2d'), id = g.createImageData(img.w, img.h);
+  for (let k = 0; k < img.h * img.w; k++) {
+    const r = k % img.h, c = Math.floor(k / img.h), o = 4 * (r * img.w + c);
+    const v = k < done ? (img.pixels[k] ? 255 : 0) : 136;
+    id.data[o] = id.data[o + 1] = id.data[o + 2] = v; id.data[o + 3] = 255;
+  }
+  g.putImageData(id, 0, 0);
+}
+function showTx() {
+  $('txText').classList.toggle('hidden', msgMode !== 'text');
+  $('txImg').classList.toggle('hidden', msgMode === 'text');
+  $('drawTools').classList.toggle('hidden', msgMode !== 'draw');
+  $('photoTools').classList.toggle('hidden', msgMode !== 'photo');
+  const m = currentMsg(); if (m.type === 'image') drawPixels($('txCanvas'), m);
+  txInfo();
+}
+function txInfo() {
+  const f = buildFrame(currentMsg(), cfg);
+  const desc = msgMode === 'text' ? `${textCodes($('txtIn').value).length} characters` : (() => { const m = currentMsg(); return `${m.w}×${m.h} image`; })();
+  $('txInfo').textContent = `${desc} · ${f.n0} message bits · ${(f.bits.length / cfg.rate + 0.4).toFixed(1)} s of sound at ${cfg.rate} bit/s`;
+}
+seg($('msgSeg'), msgMode, v => { msgMode = v; showTx(); });
+seg($('penSeg'), 0, v => { pen = +v; });
+$('txtIn').addEventListener('input', txInfo);
+$('clearPad').onclick = () => { pad.pixels.fill(1); showTx(); };
+function padPaint(e) {
+  const r = $('txCanvas').getBoundingClientRect();
+  const c = Math.floor((e.clientX - r.left) / r.width * pad.w), rr = Math.floor((e.clientY - r.top) / r.height * pad.h);
+  if (c < 0 || rr < 0 || c >= pad.w || rr >= pad.h) return;
+  const [c0, r0] = lastCell || [c, rr], n = Math.max(Math.abs(c - c0), Math.abs(rr - r0), 1);
+  for (let s = 0; s <= n; s++) { const cc = Math.round(c0 + (c - c0) * s / n), r = Math.round(r0 + (rr - r0) * s / n); pad.pixels[cc * pad.h + r] = pen; }
+  lastCell = [c, rr]; drawPixels($('txCanvas'), pad);
+}
+let painting = false, lastCell = null;
+$('txCanvas').addEventListener('pointerdown', e => { if (msgMode !== 'draw') return; e.preventDefault(); painting = true; $('txCanvas').setPointerCapture(e.pointerId); padPaint(e); });
+$('txCanvas').addEventListener('pointermove', e => { if (painting) padPaint(e); });
+$('txCanvas').addEventListener('pointerup', () => { painting = false; lastCell = null; txInfo(); });
+$('photoIn').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const im = new Image();
+  im.onload = () => {
+    const s = 64 / Math.max(im.width, im.height), w = Math.max(1, Math.round(im.width * s)), h = Math.max(1, Math.round(im.height * s));
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.drawImage(im, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data, lum = new Float32Array(w * h); let mean = 0;
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) { const o = 4 * (r * w + c), L = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2]; lum[c * h + r] = L; mean += L; }
+    mean /= w * h; photo = { h, w, pixels: Uint8Array.from(lum, L => L > mean ? 1 : 0) }; showTx();
+  };
+  im.src = URL.createObjectURL(f);
+};
+let playing = null;
+$('sendBtn').onclick = () => {
+  const a = ctx();
+  if (playing) { playing.stop(); return; }
+  const x = modulate(buildFrame(currentMsg(), cfg).bits, cfg);
+  const buf = a.createBuffer(1, x.length, FS_TX); buf.copyToChannel(x, 0);
+  const src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination);
+  const t0 = a.currentTime, dur = x.length / FS_TX;
+  playing = src; $('sendBtn').textContent = '■ Stop'; $('txStatus').textContent = `Sending ${dur.toFixed(1)} s… turn the volume up.`;
+  const tick = () => { if (playing !== src) return; $('txProg').style.width = Math.min(100, 100 * (a.currentTime - t0) / dur) + '%'; requestAnimationFrame(tick); };
+  src.onended = () => { playing = null; $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = 'Sent.'; };
+  src.start(); tick();
+};
+function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+$('wavBtn').onclick = () => {
+  const m = currentMsg();
+  download(wavBlob(modulate(buildFrame(m, cfg).bits, cfg), FS_TX), `acoustic_${m.type}_${cfg.tones}_${cfg.rate}bps.wav`);
+};
+showTx();
+
+// ---------- receiver ----------
+let rx = null, stream = null, proc = null, analyser = null, lastRec = null;
+const pill = (t, cls = '') => { $('rxPill').textContent = t; $('rxPill').className = 'pill ' + cls; };
+function makeRx() {
+  rx = new Receiver(actx.sampleRate, { ...cfg }, {
+    onState: (s, info) => {
+      if (s === 'detected') { pill('Frame detected', 'live'); clearOut(); }
+      if (s === 'header') { pill(info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`, 'live'); }
+      if (s === 'lost') { pill('Listening', 'live'); }
+    },
+    onProgress: p => { $('rxProg').style.width = (100 * p.done / p.hdr.n0) + '%'; showOut(p.hdr, p.bits, p.done); },
+    onDone: res => { lastRec = res; showOut(res.hdr, res.bits, res.hdr.n0); showStats(res); pill('Received ✓', 'ok'); setTimeout(() => { if (stream) pill('Listening', 'live'); }, 4000); }
+  });
+}
+function restartRx() { if (rx && actx) { makeRx(); clearOut(); } }
+function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); }
+function showOut(hdr, bits, done) {
+  if (hdr.type === 'text') { $('rxOutText').textContent = decodeText(bits.subarray(0, done - done % 8)); $('rxFig').classList.add('hidden'); }
+  else { $('rxOutText').textContent = ''; $('rxFig').classList.remove('hidden'); drawPixels($('rxCanvas'), { h: hdr.h, w: hdr.w, pixels: bits }, done); }
+}
+function showStats(res) {
+  const st = [];
+  st.push([`${cfg.rate}`, 'bit/s']);
+  st.push([res.hdr.n0, 'message bits']);
+  st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
+  st.push([res.pilotErr === null ? 'not found' : `${res.pilotErr} / ${NP}`, 'errors on the postamble']);
+  let truth = null;
+  if (res.hdr.type === 'image' && res.hdr.h === DEMO.h && res.hdr.w === DEMO.w) truth = demoPixels().pixels;
+  if (truth) {
+    let e = 0; for (let i = 0; i < truth.length; i++) e += truth[i] !== res.bits[i];
+    st.push([(e / truth.length).toExponential(1), `bit error rate (${e} errors)`]);
+    drawPixels($('refCanvas'), demoPixels()); $('refFig').classList.remove('hidden');
+  }
+  $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  drawHist(res, truth);
+  $('recBtn').classList.remove('hidden');
+}
+function drawHist(res, truth) {
+  const cv = $('hist'); cv.classList.remove('hidden'); $('histLegend').classList.remove('hidden');
+  const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
+  g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H);
+  const nb = 80, lim = 6, h0 = new Float32Array(nb), h1 = new Float32Array(nb);
+  res.llr.forEach((r, i) => {
+    const k = Math.max(0, Math.min(nb - 1, Math.floor((r + lim) / (2 * lim) * nb)));
+    const sent1 = truth ? (truth[i] ^ res.key[i]) : (r > 0); (sent1 ? h1 : h0)[k]++;
+  });
+  const mx = Math.max(...h0, ...h1, 1), bw = W / nb;
+  [[h0, css('--f0')], [h1, css('--f1')]].forEach(([h, col]) => { g.fillStyle = col; g.globalAlpha = .8; h.forEach((v, k) => g.fillRect(k * bw, H - v / mx * (H - 6), bw - 1, v / mx * (H - 6))); });
+  g.globalAlpha = 1; g.strokeStyle = '#fff8'; g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke();
+}
+$('recBtn').onclick = () => { if (lastRec) download(wavBlob(lastRec.recording, lastRec.fs), `received_${cfg.tones}_${cfg.rate}bps_${Math.round(lastRec.fs)}Hz.wav`); };
+
+$('listenBtn').onclick = async () => {
+  const a = ctx();
+  if (stream) { stream.getTracks().forEach(t => t.stop()); proc.disconnect(); stream = null; $('listenBtn').textContent = '● Start listening'; pill('Idle'); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  } catch (e) { pill('No microphone', 'bad'); $('rxFs').textContent = 'Microphone access was refused or the page is not served over https.'; return; }
+  const src = a.createMediaStreamSource(stream);
+  analyser = a.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0; analyser.minDecibels = -100; analyser.maxDecibels = -25;
+  proc = a.createScriptProcessor(4096, 1, 1);
+  const mute = a.createGain(); mute.gain.value = 0;
+  src.connect(analyser); src.connect(proc); proc.connect(mute); mute.connect(a.destination);
+  makeRx(); clearOut();
+  proc.onaudioprocess = e => rx.push(e.inputBuffer.getChannelData(0));
+  $('listenBtn').textContent = '■ Stop listening'; pill('Listening', 'live');
+  $('rxFs').textContent = `microphone at ${a.sampleRate} Hz`;
+  draw();
+};
+
+// live plots
+const fbin = new Uint8Array(1024);
+function draw() {
+  if (!stream) return;
+  const sp = $('spec'), W = Math.round(sp.clientWidth * devicePixelRatio), H = Math.round(sp.clientHeight * devicePixelRatio);
+  if (sp.width !== W || sp.height !== H) { sp.width = W; sp.height = H; sp._img = false; }
+  const g = sp.getContext('2d');
+  if (!sp._img) { sp._img = true; g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H); }
+  const col = Math.max(2, Math.round(W / 300));
+  g.drawImage(sp, -col, 0);
+  analyser.getByteFrequencyData(fbin);
+  const fmax = Math.min(actx.sampleRate / 2, 1.5 * TONES[cfg.tones][1]), nb = Math.floor(fmax / (actx.sampleRate / 2) * analyser.frequencyBinCount);
+  for (let y = 0; y < H; y++) {
+    const v = Math.pow(fbin[Math.floor((1 - y / H) * (nb - 1))] / 255, 2.2);
+    g.fillStyle = `hsl(${230 - 230 * v},85%,${6 + 52 * v}%)`; g.fillRect(W - col, y, col, 1);
+  }
+  const [F0, F1] = TONES[cfg.tones];
+  g.fillStyle = css('--f0'); g.fillRect(W - 6, H * (1 - F0 / fmax) - 1, 6, 3);
+  g.fillStyle = css('--f1'); g.fillRect(W - 6, H * (1 - F1 / fmax) - 1, 6, 3);
+  // correlation history
+  const cv = $('corr'), CW = cv.width = cv.clientWidth * devicePixelRatio, CH = cv.height = cv.clientHeight * devicePixelRatio, c = cv.getContext('2d');
+  c.fillStyle = css('--plot-bg'); c.fillRect(0, 0, CW, CH);
+  const y = v => CH - 4 - Math.max(0, v) * (CH - 8);
+  c.setLineDash([4, 4]); c.strokeStyle = '#ffffff66'; c.beginPath(); c.moveTo(0, y(rx.thr)); c.lineTo(CW, y(rx.thr)); c.stroke(); c.setLineDash([]);
+  c.strokeStyle = css('--accent'); c.lineWidth = 1.5 * devicePixelRatio; c.beginPath();
+  const L = rx.corrHist.length;
+  for (let i = 0; i < L; i++) { const v = rx.corrHist[(rx.corrPos + i) % L]; const xx = i / (L - 1) * CW; i ? c.lineTo(xx, y(v)) : c.moveTo(xx, y(v)); }
+  c.stroke();
+  requestAnimationFrame(draw);
+}
+})();
+</script>
+</body>
+</html>
