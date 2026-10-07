@@ -132,6 +132,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     <button class="btn primary" id="listenBtn">● Start listening</button>
     <span class="muted" id="rxFs"></span>
   </div>
+  <div class="row"><span class="muted">Soft output</span><span class="seg" id="softSeg"><button data-v="cal">Calibrated LLR</button><button data-v="ratio">ln(E₁/E₀)</button></span></div>
   <canvas id="spec" class="plot"></canvas>
   <div class="legend"><span><i style="background:var(--f0)"></i>bit 0 tone</span><span><i style="background:var(--f1)"></i>bit 1 tone</span><span>live spectrogram, last ~5 s</span></div>
   <canvas id="corr" class="plot small" style="margin-top:10px"></canvas>
@@ -150,6 +151,11 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   <canvas id="hist" class="plot small hidden" style="margin-top:10px"></canvas>
   <div class="legend hidden" id="histLegend"><span>soft output log(E<sub>high</sub>/E<sub>low</sub>) per bit: two well separated humps mean a clean channel</span></div>
   <div class="row"><button class="btn hidden" id="recBtn">Download received recording (WAV)</button></div>
+  <details>
+    <summary>Soft output</summary>
+    <p class="muted"><b>ln(E₁/E₀)</b> compares the energies received on the two tones. Its sign is the right decision when both tones arrive equally strong, but its size says little about reliability: a bit drowned in noise can look as sure as a clean one.</p>
+    <p class="muted"><b>Calibrated LLR</b> measures, on the 127 known bits of the preamble, the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². It corrects an imbalance between the tones (speaker, microphone, room) and gives the Viterbi decoder reliabilities on the right scale. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal. Switch after a reception to decode the same recording both ways.</p>
+  </details>
 </section>
 </main>
 
@@ -227,8 +233,8 @@ function convEncode(d) {
   for (const b of [...d, 0, 0, 0, 0, 0, 0]) { const reg = (b << 6) | s; out.push(parity(reg & CC_G[0]), parity(reg & CC_G[1])); s = reg >> 1; }
   return out;
 }
-function convDecode(llr, n0) {
-  const T = llr.length / 2, NS = 64, clip = v => Math.max(-4, Math.min(4, v));
+function convDecode(llr, n0, lim = 4) {
+  const T = llr.length / 2, NS = 64, clip = v => Math.max(-lim, Math.min(lim, v));
   let pm = new Float64Array(NS).fill(-1e18); pm[0] = 0;
   const dec = new Uint8Array(T * NS), o0 = new Int8Array(128), o1 = new Int8Array(128);
   for (let reg = 0; reg < 128; reg++) { o0[reg] = 2 * parity(reg & CC_G[0]) - 1; o1[reg] = 2 * parity(reg & CC_G[1]) - 1; }
@@ -314,12 +320,54 @@ function encodeFEC(code, d) {
   return Array.from(d);
 }
 // llr: channel LLRs after descrambling (> 0 means 1). Returns the n0 message bits.
-function decodeFEC(code, n0, llr) {
+function decodeFEC(code, n0, llr, lim = 4) {   // lim: clipping of the soft values in the Viterbi decoder
   const hard = a => a.map(r => r > 0 ? 1 : 0);
   if (code === 'hamming') return { bits: hamDecode(hard(deinterleave(llr)), n0) };
-  if (code === 'conv') return { bits: convDecode(deinterleave(llr), n0) };
+  if (code === 'conv') return { bits: convDecode(deinterleave(llr), n0, lim) };
   if (code === 'rs') return rsDecode(hard(llr), n0);
   return { bits: hard(llr) };
+}
+
+// ---- soft output: the plain ratio ln(E1/E0), or the LLR of non-coherent FSK calibrated on the preamble ----
+function lnI0(x) {                                  // ln I0(x), modified Bessel function (Abramowitz & Stegun 9.8.1-2)
+  if (x < 3.75) { const t = (x / 3.75) ** 2; return Math.log(1 + t * (3.5156229 + t * (3.0899424 + t * (1.2067492 + t * (0.2659732 + t * (0.0360768 + t * 0.0045813)))))); }
+  const t = 3.75 / x;
+  return x - 0.5 * Math.log(x) + Math.log(0.39894228 + t * (0.01328592 + t * (0.00225319 + t * (-0.00157565 + t * (0.00916281 + t * (-0.02057706 + t * (0.02635537 + t * (-0.01647633 + t * 0.00392377))))))));
+}
+// For each tone, level A and noise variance s2 (per real dimension) from the tone energies E on the preamble:
+// E[E^2] = A^2 + 2 s2 when the tone is sent (Rician), 2 s2 when it is not (Rayleigh).
+function calibrate(pe0, pe1) {
+  const tone = (e, on) => {
+    let sOn = 0, nOn = 0, sOff = 0, nOff = 0;
+    e.forEach((v, j) => { if (PILOT[j] === on) { sOn += v * v; nOn++; } else { sOff += v * v; nOff++; } });
+    const pOn = sOn / nOn, pOff = sOff / nOff, a2 = Math.max(pOn - pOff, 1e-6 * pOn), s2 = Math.max(pOff / 2, 1e-12 * pOn);
+    return { mu: Math.sqrt(a2), s2, snrDb: 10 * Math.log10(a2 / (2 * s2)) };
+  };
+  return { t0: tone(pe0, 0), t1: tone(pe1, 1) };
+}
+// g: local signal level relative to the preamble. In a room most of the disturbance is the echo of the signal itself,
+// so it rises and falls with the signal: dividing the energies by g keeps the preamble's levels and noise valid.
+function softLLR(soft, cal, E0, E1, g = 1) {
+  if (soft === 'ratio') return Math.log((E1 + 1e-9) / (E0 + 1e-9));
+  const { t0, t1 } = cal; E0 /= g; E1 /= g;
+  return lnI0(t1.mu * E1 / t1.s2) - t1.mu * t1.mu / (2 * t1.s2) - lnI0(t0.mu * E0 / t0.s2) + t0.mu * t0.mu / (2 * t0.s2);
+}
+// Level tracking: the signal level (whichever tone is on), averaged over +-W symbols, relative to the preamble.
+function levelTrack(res, W = 24) {
+  const { t0, t1 } = res.cal, q = (E0, E1) => Math.max(E0 * E0 / (t0.mu * t0.mu), E1 * E1 / (t1.mu * t1.mu));
+  const qref = res.pe0.reduce((s, E0, j) => s + q(E0, res.pe1[j]), 0) / res.pe0.length;
+  const n = res.e0.length, cs = new Float64Array(n + 1);
+  for (let j = 0; j < n; j++) cs[j + 1] = cs[j] + q(res.e0[j], res.e1[j]);
+  return Array.from({ length: n }, (_, j) => { const a = Math.max(0, j - W), b = Math.min(n, j + W + 1); return Math.sqrt(Math.min(4, Math.max(0.01, (cs[b] - cs[a]) / (b - a) / qref))); });
+}
+// Decode a received frame with either soft output ('cal' or 'ratio'); returns the fields that depend on that choice.
+function decodeFrame(res, soft) {
+  const g = soft === 'ratio' ? null : levelTrack(res);
+  const { hdr, key } = res, llr = res.e0.map((E0, j) => softLLR(soft, res.cal, E0, res.e1[j], g ? g[j] : 1));
+  const dec = decodeFEC(hdr.code, hdr.n0, llr.map((r, j) => key[j] ? -r : r), soft === 'ratio' ? 4 : Infinity);
+  const bits = Uint8Array.from(dec.bits), sent = Uint8Array.from(encodeFEC(hdr.code, bits), (x, j) => x ^ key[j]);
+  const chErr = llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0);    // channel errors the code corrected
+  return { soft, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks };
 }
 
 // ---- QR code (byte mode, error level M, versions 1-9), built here so the page needs no network ----
@@ -521,7 +569,7 @@ class Receiver {
     if (this.state === 'final') this.finalize();
   }
   startFrame(p1, cmax) {
-    Object.assign(this, { state: 'frame', p1, cmax, pos: p1, k: 0, hdrLLR: [], hdr: null, llr: [], postTrk: [], cand: -1 });
+    Object.assign(this, { state: 'frame', p1, cmax, pos: p1, k: 0, hdrLLR: [], hdr: null, llr: [], pe0: [], pe1: [], e0: [], e1: [], cand: -1 });
     this.cb.onState && this.cb.onState('detected', { t: p1 / this.fs, cmax });
   }
   track() {
@@ -535,6 +583,7 @@ class Receiver {
       const r = Math.log((this.z1[b] + eps) / (this.z0[b] + eps));
       if (this.k > 0) this.pos += mu * (Math.abs(this.d[b + delta]) - Math.abs(this.d[b - delta])) * delta;
       const k = this.k;
+      if (k < NP) { this.pe0.push(this.z0[b]); this.pe1.push(this.z1[b]); }
       if (k >= NP && k < NP + NH) {
         this.hdrLLR.push(r);
         if (k === NP + NH - 1) {
@@ -549,7 +598,7 @@ class Receiver {
           this.cb.onState && this.cb.onState('header', hdr);
         }
       } else if (this.hdr && k >= NP + NH && k < NP + NH + this.hdr.nc) {
-        const j = k - NP - NH, plain = this.hdr.code === 'none'; this.llr.push(r);
+        const j = k - NP - NH, plain = this.hdr.code === 'none'; this.llr.push(r); this.e0.push(this.z0[b]); this.e1.push(this.z1[b]);
         if (plain) this.bits[j] = (r > 0 ? 1 : 0) ^ this.key[j];   // coded frames are decoded at the end
         if (j % 32 === 31 || j === this.hdr.nc - 1) this.cb.onProgress && this.cb.onProgress({ hdr: this.hdr, bits: plain ? this.bits : null, done: j + 1 });
       }
@@ -565,23 +614,19 @@ class Receiver {
     for (let m = Math.round(p1 + Delta) - tol; m <= hi; m++) { const c = this.corrAt(m); if (c > best) { best = c; p2 = m; } }
     const found = best >= 0.5 * this.cmax;
     const rho = found ? (p2 - p1) / Delta : 1;
-    let llr = this.llr, pilotErr = null;
-    if (found) {
-      llr = [];
-      for (let j = 0; j < hdr.nc; j++) {
-        const b = Math.round(p1 + (NP + NH + j) * Lr * rho) - this.base;
-        llr.push(Math.log((this.z1[b] + eps) / (this.z0[b] + eps)));
-      }
+    let e0 = this.e0, e1 = this.e1, pe0 = this.pe0, pe1 = this.pe1, pilotErr = null;
+    if (found) {   // re-read the tone energies at the instants corrected for the clock offset
+      const at = j => Math.round(p1 + j * Lr * rho) - this.base;
+      e0 = []; e1 = []; pe0 = []; pe1 = [];
+      for (let j = 0; j < hdr.nc; j++) { const b = at(NP + NH + j); e0.push(this.z0[b]); e1.push(this.z1[b]); }
+      for (let j = 0; j < NP; j++) { const b = at(j); pe0.push(this.z0[b]); pe1.push(this.z1[b]); }
       pilotErr = 0;
       for (let j = 0; j < NP; j++) { const b = Math.round(p2 + j * Lr * rho) - this.base; if ((this.z1[b] > this.z0[b] ? 1 : 0) !== PILOT[j]) pilotErr++; }
     }
-    // descramble, decode, then re-encode the decision to count the channel errors the code removed
-    const dec = decodeFEC(hdr.code, hdr.n0, llr.map((r, j) => this.key[j] ? -r : r)), bits = Uint8Array.from(dec.bits);
-    const sent = Uint8Array.from(encodeFEC(hdr.code, bits), (x, j) => x ^ this.key[j]);
-    const chErr = llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0);
     const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(p1 + Delta + NP * Lr + 0.3 * this.fs));
-    const res = { hdr, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks, key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
+    const res = { hdr, e0, e1, pe0, pe1, cal: calibrate(pe0, pe1), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
                   t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
+    Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
     this.state = 'search'; this.sp = Math.round(p1 + Delta + NP * Lr);
     this.cb.onDone && this.cb.onDone(res);
   }
@@ -601,7 +646,7 @@ function demoPixels() {
   for (let i = 0; i < n; i++) p[i] = (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
   return { type: 'image', h: DEMO.h, w: DEMO.w, pixels: p };
 }
-if (typeof module !== 'undefined') module.exports = { PILOT, NP, NH, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix };
+if (typeof module !== 'undefined') module.exports = { PILOT, NP, NH, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, calibrate, softLLR, levelTrack, decodeFrame, lnI0 };
 </script>
 
 <script>
@@ -610,7 +655,7 @@ const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const params = new URLSearchParams(location.search);
 const cfg = { tones: TONES[params.get('tones')] ? params.get('tones') : 'low', rate: [200, 400, 800, 1600].includes(+params.get('rate')) ? +params.get('rate') : 400,
-              code: CODES.includes(params.get('code')) ? params.get('code') : 'none' };
+              code: CODES.includes(params.get('code')) ? params.get('code') : 'none', soft: params.get('soft') === 'ratio' ? 'ratio' : 'cal' };
 const PAGE_URL = 'https://sheng-yang-cs.github.io/AudioComm/acoustic_modem.html';
 let msgMode = 'text', pen = 0, actx = null;
 
@@ -764,6 +809,9 @@ function showStats(res) {
     st.push([res.chErr, `channel bit errors corrected (of ${res.hdr.nc} bits)`]);
     if (code === 'rs') st.push([`${res.rsFails} / ${res.rsBlocks}`, 'Reed–Solomon blocks with too many errors']);
   }
+  const { t0, t1 } = res.cal;
+  st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, 'SNR per symbol, low / high tone (from the preamble)']);
+  st.push([`${(20 * Math.log10(t1.mu / t0.mu)).toFixed(1)} dB`, 'level of the high tone relative to the low tone']);
   st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
   st.push([res.pilotErr === null ? 'not found' : `${res.pilotErr} / ${NP}`, 'errors on the postamble']);
   let truth = null;
@@ -781,7 +829,10 @@ function drawHist(res, sent) {   // sent: transmitted channel bits (known for th
   const cv = $('hist'); cv.classList.remove('hidden'); $('histLegend').classList.remove('hidden');
   const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
   g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H);
-  const nb = 80, lim = 6, h0 = new Float32Array(nb), h1 = new Float32Array(nb);
+  const a = res.llr.map(Math.abs).sort((x, y) => x - y), lim = res.soft === 'ratio' ? 6 : Math.max(6, 1.3 * (a[Math.floor(0.95 * (a.length - 1))] || 0));
+  $('histLegend').firstElementChild.innerHTML = res.soft === 'ratio' ? 'soft output ln(E<sub>high</sub>/E<sub>low</sub>) per bit: two well separated humps mean a clean channel'
+    : `calibrated LLR per bit (axis ±${lim.toFixed(0)}): two well separated humps mean a clean channel`;
+  const nb = 80, h0 = new Float32Array(nb), h1 = new Float32Array(nb);
   res.llr.forEach((r, i) => {
     const k = Math.max(0, Math.min(nb - 1, Math.floor((r + lim) / (2 * lim) * nb)));
     (sent[i] ? h1 : h0)[k]++;
@@ -790,6 +841,10 @@ function drawHist(res, sent) {   // sent: transmitted channel bits (known for th
   [[h0, css('--f0')], [h1, css('--f1')]].forEach(([h, col]) => { g.fillStyle = col; g.globalAlpha = .8; h.forEach((v, k) => g.fillRect(k * bw, H - v / mx * (H - 6), bw - 1, v / mx * (H - 6))); });
   g.globalAlpha = 1; g.strokeStyle = '#fff8'; g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke();
 }
+seg($('softSeg'), cfg.soft, v => {   // re-decode the last message with the other soft output
+  cfg.soft = v; if (rx) rx.cfg.soft = v;
+  if (lastRec) { Object.assign(lastRec, decodeFrame(lastRec, v)); clearOut(); $('rxProg').style.width = '100%'; showOut(lastRec.hdr, lastRec.bits, lastRec.hdr.n0); showStats(lastRec); }
+});
 $('recBtn').onclick = () => { if (lastRec) download(wavBlob(lastRec.recording, lastRec.fs), `received_${cfg.tones}_${cfg.rate}bps_${Math.round(lastRec.fs)}Hz.wav`); };
 
 $('listenBtn').onclick = async () => {
