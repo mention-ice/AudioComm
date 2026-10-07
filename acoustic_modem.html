@@ -5,38 +5,47 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Acoustic Modem</title>
 <style>
+/* CentraleSupélec colours, taken from the logo: crimson #96023C, grey-violet #857894, black */
 :root{
-  --bg:#f6f7f9; --card:#ffffff; --ink:#16181d; --muted:#5d6472; --line:#e2e5ea;
-  --accent:#2457d6; --accent-ink:#ffffff; --ok:#1d8a4e; --warn:#b26a00; --bad:#c23b32;
-  --f0:#2f6fe4; --f1:#e2463a; --plot-bg:#0e1117; --plot-grid:#2a2f3a;
+  --brand:#96023c; --brand-ink:#ffffff; --brand2:#857894;
+  --bg:#f5f4f7; --card:#ffffff; --ink:#141216; --muted:#5f5a6b; --line:#e2dfe8;
+  --accent:#96023c; --accent-ink:#ffffff; --ok:#1d7a4e; --warn:#a66300; --bad:#b0122f;
+  --f0:#857894; --f1:#d61f63; --plot-bg:#120f15; --plot-grid:#2c2733;
   --radius:14px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#0f1115; --card:#171a21; --ink:#e8eaef; --muted:#9aa2b1; --line:#2a2f3a;
-    --accent:#5b8cff; --accent-ink:#0b0d12; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b5f;
-    --f0:#6b9bff; --f1:#ff7a6e;
+    --brand:#7a0231; --brand-ink:#ffffff; --brand2:#a99dbb;
+    --bg:#0f0d12; --card:#1a1620; --ink:#ece9f1; --muted:#a69fb3; --line:#2f2937;
+    --accent:#e0457f; --accent-ink:#16070d; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
+    --f0:#a99dbb; --f1:#ff5c92;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0f1115; --card:#171a21; --ink:#e8eaef; --muted:#9aa2b1; --line:#2a2f3a;
-  --accent:#5b8cff; --accent-ink:#0b0d12; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b5f;
-  --f0:#6b9bff; --f1:#ff7a6e;
+  --brand:#7a0231; --brand-ink:#ffffff; --brand2:#a99dbb;
+  --bg:#0f0d12; --card:#1a1620; --ink:#ece9f1; --muted:#a69fb3; --line:#2f2937;
+  --accent:#e0457f; --accent-ink:#16070d; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
+  --f0:#a99dbb; --f1:#ff5c92;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
-header{padding:18px 16px 8px;max-width:1200px;margin:0 auto}
+header{background:var(--brand);color:var(--brand-ink);border-bottom:4px solid var(--brand2);margin-bottom:12px}
+.hd{max-width:1200px;margin:0 auto;padding:16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
 h1{font-size:22px;margin:0 0 2px;letter-spacing:-.01em}
-.sub{color:var(--muted);margin:0}
-.settings{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-top:12px}
-.settings label{color:var(--muted);font-size:13px;margin-right:6px}
+.sub{color:var(--brand-ink);opacity:.85;margin:0}
+header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,255,255,.55)}
+.opts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
+.opts>.muted:nth-child(odd){white-space:nowrap}
+.opts>.seg{justify-self:start}
+@media (max-width:520px){.opts{grid-template-columns:1fr;gap:4px}.opts>.seg{margin-bottom:6px}}
+.card h2{border-left:4px solid var(--accent);padding-left:8px}
 main{max-width:1200px;margin:0 auto;padding:8px 16px 40px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media (max-width:860px){main{grid-template-columns:1fr}}
 .roles{display:none;max-width:1200px;margin:0 auto;padding:4px 16px}
 @media (max-width:860px){.roles{display:block} main[data-role="tx"] #rxCard, main[data-role="rx"] #txCard{display:none}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-width:0}
-.card h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.card h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:8px;line-height:1.2}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
 .seg button{border:0;background:transparent;color:var(--ink);padding:7px 12px;font:inherit;font-size:14px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
@@ -76,17 +85,13 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 </style>
 </head>
 <body>
-<header>
-  <h1>Acoustic modem</h1>
-  <p class="sub">Binary FSK over the air: one device transmits through its speaker, any device in the room decodes through its microphone.</p>
-  <div class="settings">
-    <div><label>Tones</label><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button></span></div>
-    <div><label>Rate</label><span class="seg" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button></span> <span class="muted">bit/s</span></div>
-    <div><label>Preamble</label><span class="seg" id="preSeg"><button data-v="127">127</button><button data-v="255">255</button><button data-v="511">511</button></span> <span class="muted">bits, longer reaches farther</span></div>
-    <span class="muted">Chosen on the transmitter only: receivers read them from the header of each frame.</span>
-    <button class="btn" id="qrBtn">QR code for phones</button>
+<header><div class="hd">
+  <div>
+    <h1>Acoustic modem</h1>
+    <p class="sub">Binary FSK over the air: one device transmits through its speaker, any device in the room decodes through its microphone.</p>
   </div>
-</header>
+  <button class="btn" id="qrBtn">QR code for phones</button>
+</div></header>
 <div id="qrOverlay" class="overlay hidden"><div class="qrbox"><canvas id="qrCanvas"></canvas><p id="qrUrl"></p><p>Scan to open the receiver. It needs no settings. Click to close.</p></div></div>
 <div class="roles"><span class="seg" id="roleSeg"><button data-v="tx">Transmit</button><button data-v="rx">Receive</button></span></div>
 
@@ -94,7 +99,6 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 <section class="card" id="txCard">
   <h2>Transmit</h2>
   <span class="seg" id="msgSeg"><button data-v="text">Text</button><button data-v="demo">Demo image</button><button data-v="draw">Draw</button><button data-v="photo">Photo</button></span>
-  <div class="row"><span class="muted">Error correction</span><span class="seg" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="rs">Reed–Solomon</button></span></div>
   <div id="txText" class="row"><textarea id="txtIn" maxlength="1023">Hello CentraleSupélec!</textarea></div>
   <div id="txImg" class="row hidden">
     <div class="imgbox">
@@ -109,6 +113,13 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
       </div>
     </div>
   </div>
+  <div class="opts">
+    <span class="muted">Error correction</span><span class="seg" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="rs">Reed–Solomon</button></span>
+    <span class="muted">Tones</span><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button></span>
+    <span class="muted">Rate, bit/s</span><span class="seg" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button></span>
+    <span class="muted">Preamble, bits</span><span class="seg" id="preSeg"><button data-v="127">127</button><button data-v="255">255</button><button data-v="511">511</button></span>
+    <span></span><span class="muted">A longer preamble and a lower rate reach farther. Receivers need no settings: they read all of these from the header of each frame.</span>
+  </div>
   <p class="muted" id="txInfo"></p>
   <div class="row">
     <button class="btn primary" id="sendBtn">▶ Send</button>
@@ -118,7 +129,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   <p class="muted" id="txStatus">Start listening on the receiver first, then press Send.</p>
   <details>
     <summary>What is being sent</summary>
-    <p class="muted">A frame has two parts. The <b>control part</b> is always sent at 4 / 8 kHz and 400 bit/s, a mode every receiver knows in advance: 0.1 s warm-up · MLS preamble · header. The <b>message part</b> uses the tones and rate chosen above: coded and scrambled message · MLS postamble (the same sequence as the preamble).
+    <p class="muted">A frame has two parts. The <b>control part</b> is always sent at 4 / 8 kHz and 400 bit/s, a mode every receiver knows in advance: 0.1 s warm-up · MLS preamble · header. The <b>message part</b> uses the tones and rate chosen on the transmitter: coded and scrambled message · MLS postamble (the same sequence as the preamble).
     The header carries the type and size of the message, the code, the rate and the tones, protected by a CRC-8 and the convolutional code, so the receivers need no settings, as with the SIGNAL field of Wi-Fi. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone. <code>audiocomm.py</code> produces and decodes the same frames.</p>
     <p class="muted">The receivers find a frame by correlating what they hear with the three possible preambles (maximum-length sequences of 127, 255 or 511 bits).
     A longer preamble gathers more energy before deciding that a frame starts: each doubling of its length gives about 3 dB of margin, so phones farther away, or in a noisier room, still find the frame; the header is then sent 2 or 4 times so that it is read as far away.
