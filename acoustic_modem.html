@@ -416,17 +416,27 @@ $('photoIn').onchange = e => {
   im.src = URL.createObjectURL(f);
 };
 let playing = null;
-$('sendBtn').onclick = () => {
-  const a = ctx();
+// Each Send uses a fresh AudioContext, closed when playback ends. A long-lived context can end up
+// suspended or "interrupted" (sleep, idle, output device change) and then plays silence.
+$('sendBtn').onclick = async () => {
   if (playing) { playing.stop(); return; }
+  const a = new (window.AudioContext || window.webkitAudioContext)();
+  try { await a.resume(); } catch (e) {}
   const x = modulate(buildFrame(currentMsg(), cfg).bits, cfg);
   const buf = a.createBuffer(1, x.length, FS_TX); buf.copyToChannel(x, 0);
   const src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination);
-  const t0 = a.currentTime, dur = x.length / FS_TX;
+  const dur = x.length / FS_TX; let t0 = a.currentTime;
   playing = src; $('sendBtn').textContent = '■ Stop'; $('txStatus').textContent = `Sending ${dur.toFixed(1)} s… turn the volume up.`;
   const tick = () => { if (playing !== src) return; $('txProg').style.width = Math.min(100, 100 * (a.currentTime - t0) / dur) + '%'; requestAnimationFrame(tick); };
-  src.onended = () => { playing = null; $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = 'Sent.'; };
-  src.start(); tick();
+  const finish = msg => {
+    if (playing !== src) return;
+    playing = null; $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = msg;
+    a.close().catch(() => {});
+  };
+  src.onended = () => finish('Sent.');
+  src.start(); t0 = a.currentTime; tick();
+  // If the audio clock does not move, the browser is not playing anything: reset instead of hanging on "Stop".
+  setTimeout(() => { if (playing === src && a.currentTime - t0 < 0.1) finish('The browser gave no audio output. Click Send again.'); }, 1500);
 };
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 $('wavBtn').onclick = () => {
