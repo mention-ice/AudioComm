@@ -145,7 +145,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     <b>Reed–Solomon (255,223)</b>: works on bytes, corrects up to 16 wrong bytes in each block of 255, good against bursts.
     <b>Turbo</b>: rate 1/2 as in 4G: two small recursive convolutional codes, the second fed with the message shuffled, decoded by two soft decoders that exchange what they learnt, up to 8 times. It needs about 1.3 dB less signal than the convolutional code for the same frame error rate.
     Hamming, convolutional and turbo bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.</p>
-    <p class="muted"><b>Tone hopping.</b> In a room, the sound of each bit rings on for a large part of a second, far longer than the bit (2.5 ms at 400 bit/s). With only two tones, the echo of the earlier bits sits on both tones all the time; beyond the critical distance, where the echo is louder than the direct sound, it buries the bit. Hopping spreads the bits over 6400 / R pairs of adjacent tones from 1.6 to 14 kHz (16 pairs at 400 bit/s, R the rate): bit k uses pair 7k mod 16 (s k mod H in general), so a pair is used again only H bits later and the echo on each tone is H/2 times weaker, about 3 dB per doubling of the pairs. The preamble and header hop too (at 400 bit/s), otherwise far receivers would not find the frame. Each tone has its own level (speaker, room, microphone), so the receiver levels the tones before deciding.</p>
+    <p class="muted"><b>Tone hopping.</b> In a room, the sound of each bit rings on for a large part of a second, far longer than the bit (2.5 ms at 400 bit/s). With only two tones, the echo of the earlier bits sits on both tones all the time; beyond the critical distance, where the echo is louder than the direct sound, it buries the bit. Hopping spreads the bits over 6400 / R pairs of adjacent tones from 3.2 to 16 kHz (16 pairs at 400 bit/s, R the rate): bit k uses pair 7k mod 16 (s k mod H in general), so a pair is used again only H bits later and the echo on each tone is H/2 times weaker, about 3 dB per doubling of the pairs. The preamble and header hop too (at 400 bit/s), otherwise far receivers would not find the frame. Each tone has its own level (speaker, room, microphone), so the receiver levels the tones before deciding. The band starts at 3.2 kHz: below that, a small speaker gives little and a room is noisy, and in a real test the 1.6 kHz tone the band first started at caused nearly all the errors.</p>
   </details>
 </section>
 
@@ -635,7 +635,7 @@ function drawQR(cv, text, px = 8) {
 // Header: type 2 | a 11 | b 11 | code 2 | rate 2 | tones 2 | 0 0, then CRC-8, all through the convolutional code.
 // Code: 0 none, 1 Hamming, 2 convolutional, 3 Reed–Solomon; the turbo code (4) is sent as 0 with the CRC inverted,
 // the way 4G signals the number of antennas by masking a CRC, so receivers that predate it simply ignore the frame.
-// Tones: 0 low (4 / 8 kHz), 1 high (8 / 16 kHz), 2 tone hopping (1.6 to 14 kHz, see hopSet).
+// Tones: 0 low (4 / 8 kHz), 1 high (8 / 16 kHz), 2 tone hopping (3.2 to 16 kHz, see hopSet).
 // Types: 0 text (a = characters), 1 image (a = height, b = width), 2 room sounding (a = MLS order, b = periods).
 const CTRL = { tones: 'low', rate: 400 };
 const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high', 'hop'];
@@ -860,12 +860,13 @@ function analyseSounding(y, base, fs, first, step, order, periods, noise) {
 }
 
 // ---- tone hopping (tones 'hop'): many tone pairs, visited in turn, so that the echo of a bit lands on idle tones ----
-// At R bit/s there are H = 6400 / R pairs of adjacent tones, bit 0 -> 1600 + 2pR Hz and bit 1 -> 1600 + (2p + 1)R Hz,
-// p = 0 .. H - 1 (1.6 to 14 kHz). Symbol k of a segment (counted from the first preamble bit, from the first message bit
+// At R bit/s there are H = 6400 / R pairs of adjacent tones, bit 0 -> 3200 + 2pR Hz and bit 1 -> 3200 + (2p + 1)R Hz,
+// p = 0 .. H - 1 (3.2 to 16 kHz). The pairs started at 1.6 kHz at first, but in a real room that tone, low in a small
+// speaker's range and close to the room's noise, caused nearly all the errors. Symbol k of a segment (counted from the first preamble bit, from the first message bit
 // through the postamble, or from the first bit of a sounding's postamble) uses pair p = s k mod H, s = H/2 - 1 (1 if H = 4):
 // a pair comes back only every H symbols, so the echo it hears is the one left after H bits of decay. The control
 // part hops too (at 400 bit/s, 16 pairs), otherwise far receivers would never find the frame.
-const HOP_F0 = 1600, HOP_BAND = 12800;
+const HOP_F0 = 3200, HOP_BAND = 12800;
 function hopSet(rate) {
   const H = HOP_BAND / (2 * rate), s = H > 4 ? H / 2 - 1 : 1;
   return { H, s, rate, pair: k => ((s * k) % H + H) % H, tones: p => [HOP_F0 + 2 * p * rate, HOP_F0 + (2 * p + 1) * rate] };
