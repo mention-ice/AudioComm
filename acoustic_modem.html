@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Acoustic Modem</title>
+<title>Acoustic Modem v1</title>
 <style>
 /* CentraleSupélec colours, taken from the logo: crimson #96023C, grey-violet #857894, black */
 :root{
@@ -38,6 +38,7 @@ header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,
 .opts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
 .opts>.muted:nth-child(odd){white-space:nowrap}
 .opts>.seg{justify-self:start}
+.opts:not(.sounding) .so,.opts.sounding .mo{display:none}
 @media (max-width:520px){.opts{grid-template-columns:1fr;gap:4px}.opts>.seg{margin-bottom:6px}}
 .card h2{border-left:4px solid var(--accent);padding-left:8px}
 main{max-width:1200px;margin:0 auto;padding:8px 16px 40px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -87,7 +88,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 <body>
 <header><div class="hd">
   <div>
-    <h1>Acoustic modem</h1>
+    <h1>Acoustic modem <span style="font-weight:500;opacity:.75">v1</span></h1>
     <p class="sub">Binary FSK over the air: one device transmits through its speaker, any device in the room decodes through its microphone.</p>
   </div>
   <button class="btn" id="qrBtn">QR code for phones</button>
@@ -98,7 +99,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 <main id="main" data-role="rx">
 <section class="card" id="txCard">
   <h2>Transmit</h2>
-  <span class="seg" id="msgSeg"><button data-v="text">Text</button><button data-v="demo">Demo image</button><button data-v="draw">Draw</button><button data-v="photo">Photo</button></span>
+  <span class="seg" id="msgSeg"><button data-v="text">Text</button><button data-v="demo">Demo image</button><button data-v="draw">Draw</button><button data-v="photo">Photo</button><button data-v="sound">Sound the room</button></span>
   <div id="txText" class="row"><textarea id="txtIn" maxlength="1023">Hello CentraleSupélec!</textarea></div>
   <div id="txImg" class="row hidden">
     <div class="imgbox">
@@ -113,12 +114,15 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
       </div>
     </div>
   </div>
-  <div class="opts">
-    <span class="muted">Error correction</span><span class="seg" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="rs">Reed–Solomon</button></span>
-    <span class="muted">Tones</span><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button></span>
-    <span class="muted">Rate, bit/s</span><span class="seg" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button></span>
+  <div class="opts" id="txOpts">
+    <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="rs">Reed–Solomon</button><button data-v="turbo">Turbo</button></span>
+    <span class="muted">Tones</span><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
+    <span class="muted mo">Rate, bit/s</span><span class="seg mo" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button></span>
+    <span class="muted so">Period</span><span class="seg so" id="ordSeg"><button data-v="14">0.34 s</button><button data-v="15">0.68 s</button><button data-v="16">1.37 s</button></span>
+    <span class="muted so">Periods averaged</span><span class="seg so" id="perSeg"><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button></span>
     <span class="muted">Preamble, bits</span><span class="seg" id="preSeg"><button data-v="127">127</button><button data-v="255">255</button><button data-v="511">511</button></span>
-    <span></span><span class="muted">A longer preamble and a lower rate reach farther. Receivers need no settings: they read all of these from the header of each frame.</span>
+    <span class="mo"></span><span class="muted mo">A longer preamble and a lower rate reach farther; in a reverberant room, beyond a few metres, use Hopping. Receivers need no settings: they read all of these from the header of each frame.</span>
+    <span class="so"></span><span class="muted so">Plays a loud hiss (a maximum-length sequence, MLS) from which every receiver measures the room: impulse response, reverberation time, frequency response, noise. The period must outlast the room's echo: take 1.37 s in a large or reverberant room. Each doubling of the periods averaged gives 3 dB less noise on the measurement. With Hopping, the preamble and header hop too, so that receivers far away still find the sounding.</span>
   </div>
   <p class="muted" id="txInfo"></p>
   <div class="row">
@@ -129,16 +133,19 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   <p class="muted" id="txStatus">Start listening on the receiver first, then press Send.</p>
   <details>
     <summary>What is being sent</summary>
-    <p class="muted">A frame has two parts. The <b>control part</b> is always sent at 4 / 8 kHz and 400 bit/s, a mode every receiver knows in advance: 0.1 s warm-up · MLS preamble · header. The <b>message part</b> uses the tones and rate chosen on the transmitter: coded and scrambled message · MLS postamble (the same sequence as the preamble).
-    The header carries the type and size of the message, the code, the rate and the tones, protected by a CRC-8 and the convolutional code, so the receivers need no settings, as with the SIGNAL field of Wi-Fi. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone. <code>audiocomm.py</code> produces and decodes the same frames.</p>
+    <p class="muted">A frame has two parts. The <b>control part</b> is sent at 400 bit/s, at 4 / 8 kHz or hopping, two modes every receiver knows in advance: 0.1 s warm-up · MLS preamble · header. The <b>message part</b> uses the tones and rate chosen on the transmitter: coded and scrambled message · MLS postamble (the same sequence as the preamble).
+    The header carries the type (text, image or room sounding) and size of the message, the code, the rate and the tones, protected by a CRC-8 and the convolutional code, so the receivers need no settings, as with the SIGNAL field of Wi-Fi. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone. <code>audiocomm.py</code> produces and decodes the same frames.</p>
     <p class="muted">The receivers find a frame by correlating what they hear with the three possible preambles (maximum-length sequences of 127, 255 or 511 bits).
     A longer preamble gathers more energy before deciding that a frame starts: each doubling of its length gives about 3 dB of margin, so phones farther away, or in a noisier room, still find the frame; the header is then sent 2 or 4 times so that it is read as far away.
-    Neither helps once the message itself is too weak: for that, also lower the rate (200 bit/s gives the message 3 dB more) and use a code.</p>
+    Neither helps once the message itself is too weak: for that, also lower the rate (200 bit/s gives the message 3 dB more) and use a code.
+    The preamble also gives the instant of every symbol. Its long symbols (2.5 ms) tolerate an error of several samples, but the message's short ones do not (0.6 ms at 1600 bit/s). So with tone hopping, once the message is in, the receivers fine-tune its timing on the message itself, by up to half a symbol or 0.5 ms, and keep it if it makes the two tones of each symbol clearly more distinct.</p>
     <p class="muted">The receivers read the code from the header, so only the transmitter chooses it.
     <b>Hamming (7,4)</b>: 3 parity bits per 4 bits, corrects 1 wrong bit in each block of 7 (hard decisions).
     <b>Convolutional</b>: rate 1/2, constraint length 7 (generators 171, 133 octal), decoded by the Viterbi algorithm on the soft outputs.
     <b>Reed–Solomon (255,223)</b>: works on bytes, corrects up to 16 wrong bytes in each block of 255, good against bursts.
-    Hamming and convolutional bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.</p>
+    <b>Turbo</b>: rate 1/2 as in 4G: two small recursive convolutional codes, the second fed with the message shuffled, decoded by two soft decoders that exchange what they learnt, up to 8 times. It needs about 1.3 dB less signal than the convolutional code for the same frame error rate.
+    Hamming, convolutional and turbo bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.</p>
+    <p class="muted"><b>Tone hopping.</b> In a room, the sound of each bit rings on for a large part of a second, far longer than the bit (2.5 ms at 400 bit/s). With only two tones, the echo of the earlier bits sits on both tones all the time; beyond the critical distance, where the echo is louder than the direct sound, it buries the bit. Hopping spreads the bits over 6400 / R pairs of adjacent tones from 3.2 to 16 kHz (16 pairs at 400 bit/s, R the rate): bit k uses pair 7k mod 16 (s k mod H in general), so a pair is used again only H bits later and the echo on each tone is H/2 times weaker, about 3 dB per doubling of the pairs. The preamble and header hop too (at 400 bit/s), otherwise far receivers would not find the frame. Each tone has its own level (speaker, room, microphone), so the receiver levels the tones before deciding. The band starts at 3.2 kHz: below that, a small speaker gives little and a room is noisy, and in a real test the 1.6 kHz tone the band first started at caused nearly all the errors.</p>
   </details>
 </section>
 
@@ -150,7 +157,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   </div>
   <div class="row"><span class="muted">Soft output</span><span class="seg" id="softSeg"><button data-v="cal">Calibrated LLR</button><button data-v="ratio">ln(E₁/E₀)</button></span></div>
   <canvas id="spec" class="plot"></canvas>
-  <div class="legend"><span><i style="background:var(--f0)"></i>bit 0 tone</span><span><i style="background:var(--f1)"></i>bit 1 tone</span><span>live spectrogram, last ~5 s</span></div>
+  <div class="legend"><span><i style="background:var(--f0)"></i>bit 0 tone</span><span><i style="background:var(--f1)"></i>bit 1 tone</span><span>live spectrogram, last ~5 s; hopping: band edges</span></div>
   <canvas id="corr" class="plot small" style="margin-top:10px"></canvas>
   <div class="legend"><span>match with the known preamble (frame detected above the dashed line)</span></div>
   <div style="margin-top:14px">
@@ -163,14 +170,26 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
       <figure id="refFig" class="hidden"><canvas id="refCanvas" class="pix" width="1" height="1"></canvas><figcaption>sent (demo image)</figcaption></figure>
     </div>
   </div>
+  <div id="sndOut" class="hidden" style="margin-top:10px">
+    <canvas id="irPlot" class="plot"></canvas>
+    <div class="legend"><span><i style="background:var(--f1)"></i>impulse response energy</span><span><i style="background:var(--f0)"></i>energy decay curve</span><span>dashed: slope → RT60</span></div>
+    <canvas id="frPlot" class="plot" style="margin-top:10px"></canvas>
+    <div class="legend"><span><i style="background:var(--f1)"></i>frequency response (1/6 octave)</span><span><i style="background:var(--f0)"></i>SNR of the sounding</span><span>dotted: the modem's tones</span></div>
+  </div>
   <div class="stats" id="stats"></div>
   <canvas id="hist" class="plot small hidden" style="margin-top:10px"></canvas>
   <div class="legend hidden" id="histLegend"><span>soft output log(E<sub>high</sub>/E<sub>low</sub>) per bit: two well separated humps mean a clean channel</span></div>
-  <div class="row"><button class="btn hidden" id="recBtn">Download received recording (WAV)</button></div>
+  <div class="row"><button class="btn hidden" id="irBtn">Download impulse response (WAV)</button><button class="btn hidden" id="recBtn">Download received recording (WAV)</button></div>
   <details>
     <summary>Soft output</summary>
     <p class="muted"><b>ln(E₁/E₀)</b> compares the energies received on the two tones. Its sign is the right decision when both tones arrive equally strong, but its size says little about reliability: a bit drowned in noise can look as sure as a clean one.</p>
-    <p class="muted"><b>Calibrated LLR</b> measures, on the known bits of the postamble (sent at the message's tones and rate), the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². It corrects an imbalance between the tones (speaker, microphone, room) and gives the Viterbi decoder reliabilities on the right scale. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal. Switch after a reception to decode the same recording both ways.</p>
+    <p class="muted"><b>Calibrated LLR</b> measures, on the known bits of the postamble (sent at the message's tones and rate), the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². If the postamble is not found (for example when the end of the sound was cut off), A and σ² are estimated on the message itself: its bits are guessed from the energies, then the guesses and the estimates are refined in turn (EM). With the postamble, the LLR is then multiplied by the factor α ≤ 1 that best predicts the postamble's own bits: the echoes of short symbols have heavier tails than Gaussian noise, which makes the model too sure of itself (α ≈ 0.3 at 1600 bit/s in a real room). It corrects an imbalance between the tones (speaker, microphone, room) and gives the Viterbi decoder reliabilities on the right scale. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal. Switch after a reception to decode the same recording both ways.</p>
+  </details>
+  <details>
+    <summary>Room sounding</summary>
+    <p class="muted">Choose <b>Sound the room</b> on the transmitter. After the usual control part (preamble and header, so that the receivers know what follows) it plays a maximum-length sequence of 2<sup>n</sup>−1 samples of ±1 at 48 kHz, several times in a row. The circular autocorrelation of an MLS is a single spike, so correlating one received period with the sequence gives the impulse response h(t) of the whole chain: speaker, room and microphone. Averaging the periods lowers the noise; the first period is skipped, so that the room already rings in its steady state.</p>
+    <p class="muted">From h(t): the <b>reverberation time</b> RT60, the time the sound energy takes to fall by 60 dB, from the slope of the Schroeder energy decay curve (the backward integral of h²) between −5 and −25 dB (T20) or −15 dB (T10); the <b>direct-to-reverberant ratio</b> (energy within 2.5 ms of the direct sound against the rest); <b>C50</b> (first 50 ms against the rest); the <b>rms delay spread</b> τ<sub>rms</sub>, to compare with the duration of a bit (2.5 ms at 400 bit/s): echoes much longer than a bit cause intersymbol interference. The <b>frequency response</b> shows how strongly each tone arrives, and the noise heard just before the frame gives the <b>SNR</b> per frequency, turned into the E<sub>s</sub>/N<sub>0</sub> a tone of the modem would get.</p>
+    <p class="muted">These are the parameters of a room model: a direct path, an exponentially decaying diffuse tail with the measured RT60, per-frequency gains and noise. <code>audiocomm_v1.py sim</code> plays any frame through a measured impulse response (downloaded above) to try the modem offline in that room.</p>
   </details>
 </section>
 </main>
@@ -203,19 +222,20 @@ function msb(v, nb) { const o = []; for (let i = nb - 1; i >= 0; i--) o.push((v 
 function textCodes(text) { return Array.from(text).slice(0, 1023).map(ch => { const c = ch.codePointAt(0); return c < 256 ? c : 63; }); }
 
 // ---- channel coding: bits are arrays of 0/1, LLRs are > 0 for a 1 ----
-// The code is announced in the header (top 2 bits of the 11-bit field b), so receivers pick it up automatically.
-const CODES = ['none', 'hamming', 'conv', 'rs'];
+// The code is announced in the header (see headerBits), so receivers pick it up automatically.
+const CODES = ['none', 'hamming', 'conv', 'rs', 'turbo'];
 const CODE_INFO = {
   none:    { name: 'no code', short: 'no code', rate: '1' },
   hamming: { name: 'Hamming (7,4) + interleaver', short: 'Hamming (7,4)', rate: '4/7' },
   conv:    { name: 'convolutional (171,133), K = 7, soft Viterbi + interleaver', short: 'convolutional code', rate: '1/2' },
-  rs:      { name: 'Reed–Solomon (255,223) over bytes', short: 'Reed–Solomon', rate: '≈ 7/8' }
+  rs:      { name: 'Reed–Solomon (255,223) over bytes', short: 'Reed–Solomon', rate: '≈ 7/8' },
+  turbo:   { name: 'turbo (two 8-state codes, 13 and 15 octal), iterative log-MAP + interleaver', short: 'turbo code', rate: '1/2' }
 };
 const RS_K = 223, RS_P = 32;
 
 function codedLength(code, n0) {
   if (code === 'hamming') return 7 * Math.ceil(n0 / 4);
-  if (code === 'conv') return 2 * (n0 + 6);
+  if (code === 'conv' || code === 'turbo') return 2 * (n0 + 6);
   if (code === 'rs') { const K = Math.ceil(n0 / 8), B = Math.ceil(K / RS_K); return 8 * (K + RS_P * B); }
   return n0;
 }
@@ -278,6 +298,88 @@ function convDecode(llr, n0, lim = 4) {
   const out = new Array(T); let ns = 0;
   for (let t = T - 1; t >= 0; t--) { out[t] = ns >> 5; ns = ((ns & 31) << 1) | dec[t * NS + ns]; }
   return out.slice(0, n0);
+}
+
+// Turbo code (as in 4G): two 8-state recursive systematic encoders, feedback 1 + D^2 + D^3 and parity 1 + D + D^3
+// (13 and 15 octal); the second one encodes the message in the order of a spread pseudo-random interleaver. Parity bits
+// are taken alternately from each (rate 1/2), and each encoder returns to state 0 with 3 tail steps:
+// k bits -> [k message bits | k parity bits | 12 tail bits] = 2k + 12 bits, as long as with the convolutional code.
+// The decoder runs two log-MAP (BCJR) decoders in turn, each passing the other what it learnt (extrinsic LLRs).
+const TB_NEXT = [], TB_PAR = [];   // index 2 s + u: next state and parity bit from state s with input u
+for (let s = 0; s < 8; s++) {
+  const s1 = (s >> 2) & 1, s2 = (s >> 1) & 1, s3 = s & 1;
+  for (let u = 0; u < 2; u++) { const a = u ^ s2 ^ s3; TB_PAR.push(a ^ s1 ^ s3); TB_NEXT.push((a << 2) | (s1 << 1) | s2); }
+}
+const TURBO_PERMS = new Map();
+function turboPerm(k) {   // Fisher-Yates shuffle driven by xorshift32 seeded with k, then spread (S-random): positions
+  // closer than S stay more than S apart where possible, which makes low-weight codewords rare
+  if (TURBO_PERMS.has(k)) return TURBO_PERMS.get(k);
+  const p = Array.from({ length: k }, (_, i) => i); let x = ((0x9E3779B9 ^ k) >>> 0) || 1;
+  for (let i = k - 1; i > 0; i--) {
+    x = (x ^ (x << 13)) >>> 0; x = (x ^ (x >>> 17)) >>> 0; x = (x ^ (x << 5)) >>> 0;
+    const j = x % (i + 1), t = p[i]; p[i] = p[j]; p[j] = t;
+  }
+  const S = Math.min(16, Math.floor(Math.sqrt(k / 2)));
+  for (let i = 0; i < k; i++)
+    for (let m = i; m < k; m++) {
+      let ok = true;
+      for (let j = Math.max(0, i - S); j < i && ok; j++) ok = Math.abs(p[m] - p[j]) > S;
+      if (ok) { const t = p[i]; p[i] = p[m]; p[m] = t; break; }
+    }
+  TURBO_PERMS.set(k, p);
+  return p;
+}
+function rscEncode(u) {   // parity bits, then the 3 tail inputs that bring the register back to 0 and their parity bits
+  let s = 0; const p = [], tu = [], tp = [];
+  for (const b of u) { p.push(TB_PAR[2 * s + b]); s = TB_NEXT[2 * s + b]; }
+  for (let i = 0; i < 3; i++) { const b = ((s >> 1) & 1) ^ (s & 1); tu.push(b); tp.push(TB_PAR[2 * s + b]); s = TB_NEXT[2 * s + b]; }
+  return { p, tu, tp };
+}
+function turboEncode(d) {
+  const pi = turboPerm(d.length), e1 = rscEncode(d), e2 = rscEncode(pi.map(i => d[i]));
+  return [...d, ...d.map((_, i) => i % 2 ? e2.p[i] : e1.p[i]), ...e1.tu, ...e1.tp, ...e2.tu, ...e2.tp];
+}
+function bcjr(ls, la, lp) {   // log-MAP over the steps of ls, from state 0 to state 0; LLRs are ln P(0)/P(1) here
+  const T = ls.length, A = new Float64Array(8 * (T + 1)).fill(-1e9), g = new Float64Array(16 * T), out = new Float64Array(T);
+  const lse = (a, b) => a > b ? a + Math.log1p(Math.exp(b - a)) : b + Math.log1p(Math.exp(a - b));   // ln(e^a + e^b)
+  for (let t = 0; t < T; t++) for (let q = 0; q < 16; q++) g[16 * t + q] = 0.5 * ((ls[t] + la[t]) * (1 - 2 * (q & 1)) + lp[t] * (1 - 2 * TB_PAR[q]));
+  A[0] = 0;
+  for (let t = 0; t < T; t++) {   // forward: alpha
+    const a = 8 * t, n = a + 8;
+    for (let q = 0; q < 16; q++) { const s = n + TB_NEXT[q]; A[s] = lse(A[s], A[a + (q >> 1)] + g[16 * t + q]); }
+    let m = -Infinity; for (let s = 0; s < 8; s++) m = Math.max(m, A[n + s]); for (let s = 0; s < 8; s++) A[n + s] -= m;
+  }
+  let B = new Float64Array(8).fill(-1e9); B[0] = 0;
+  for (let t = T - 1; t >= 0; t--) {   // backward: beta, and the a-posteriori LLR of each input
+    const nb = new Float64Array(8).fill(-1e9); let l0 = -1e9, l1 = -1e9;
+    for (let q = 0; q < 16; q++) {
+      const gb = g[16 * t + q] + B[TB_NEXT[q]], v = A[8 * t + (q >> 1)] + gb;
+      if (q & 1) l1 = lse(l1, v); else l0 = lse(l0, v);
+      nb[q >> 1] = lse(nb[q >> 1], gb);
+    }
+    out[t] = l0 - l1;
+    let m = -Infinity; for (let s = 0; s < 8; s++) m = Math.max(m, nb[s]); for (let s = 0; s < 8; s++) nb[s] -= m;
+    B = nb;
+  }
+  return out;
+}
+function turboDecode(llr, n0, lim = Infinity, iters = 8) {   // llr > 0 means 1; returns the message bits and the iterations run
+  const k = n0, pi = turboPerm(k), L = llr.map(v => -Math.max(-lim, Math.min(lim, Math.max(-30, Math.min(30, v)))));
+  const ls = L.slice(0, k), lp = L.slice(k, 2 * k), tl = L.slice(2 * k), z3 = [0, 0, 0];
+  const lp1 = lp.map((v, i) => i % 2 ? 0 : v), lp2 = lp.map((v, i) => i % 2 ? v : 0), ls2 = pi.map(i => ls[i]);
+  let le2 = new Float64Array(k), x = null, it = 0;
+  while (it < iters) {
+    it++;
+    const a1 = bcjr([...ls, ...tl.slice(0, 3)], [...le2, ...z3], [...lp1, ...tl.slice(3, 6)]);
+    const le1 = Float64Array.from({ length: k }, (_, i) => a1[i] - ls[i] - le2[i]);
+    const a2 = bcjr([...ls2, ...tl.slice(6, 9)], [...pi.map(i => le1[i]), ...z3], [...lp2, ...tl.slice(9, 12)]);
+    const n2 = new Float64Array(k), xn = new Uint8Array(k);
+    pi.forEach((j, i) => { n2[j] = a2[i] - ls2[i] - le1[j]; xn[j] = a2[i] < 0 ? 1 : 0; });
+    const same = x !== null && xn.every((v, i) => v === x[i]);
+    le2 = n2; x = xn;
+    if (same) break;   // the decisions no longer change
+  }
+  return { bits: Array.from(x), iters: it };
 }
 
 // Reed–Solomon over GF(256) (primitive polynomial 0x11d), 32 parity bytes: corrects up to 16 wrong bytes per codeword
@@ -344,6 +446,7 @@ function rsDecode(c, n0) {
 function encodeFEC(code, d) {
   if (code === 'hamming') return interleave(hamEncode(d));
   if (code === 'conv') return interleave(convEncode(d));
+  if (code === 'turbo') return interleave(turboEncode(d));
   if (code === 'rs') return rsEncode(d);
   return Array.from(d);
 }
@@ -352,6 +455,7 @@ function decodeFEC(code, n0, llr, lim = 4) {   // lim: clipping of the soft valu
   const hard = a => a.map(r => r > 0 ? 1 : 0);
   if (code === 'hamming') return { bits: hamDecode(hard(deinterleave(llr)), n0) };
   if (code === 'conv') return { bits: convDecode(deinterleave(llr), n0, lim) };
+  if (code === 'turbo') return turboDecode(deinterleave(llr), n0, lim);
   if (code === 'rs') return rsDecode(hard(llr), n0);
   return { bits: hard(llr) };
 }
@@ -372,19 +476,46 @@ function calibrate(pe0, pe1) {
     const pOn = sOn / nOn, pOff = sOff / nOff, a2 = Math.max(pOn - pOff, 1e-6 * pOn), s2 = Math.max(pOff / 2, 1e-12 * pOn);
     return { mu: Math.sqrt(a2), s2, snrDb: 10 * Math.log10(a2 / (2 * s2)) };
   };
-  return { t0: tone(pe0, 0), t1: tone(pe1, 1) };
+  const cal = { t0: tone(pe0, 0), t1: tone(pe1, 1) };
+  // The model assumes Gaussian noise. The echoes of short symbols have heavier tails, which makes its LLR too sure of
+  // itself: shrink it by the factor alpha (at most 1) that best predicts the postamble's own bits, P(bit) = 1 / (1 + e^(-alpha L)).
+  cal.alpha = fitScale(pe0.map((E0, j) => softLLR('cal', cal, E0, pe1[j]) * (2 * P[j] - 1)));
+  return cal;
+}
+function fitScale(r) {   // r: LLRs times the sign of the known bits; alpha on a grid from 1 down to 0.05
+  let b = { a: 1, f: -Infinity };
+  for (let k = 0; k < 40; k++) { const a = Math.pow(0.05, k / 39); let f = 0; for (const v of r) f -= Math.log1p(Math.exp(-a * v)); if (f > b.f) b = { a, f }; }
+  return b.a;
+}
+// Without the postamble (not found, e.g. when the end of the sound was cut off), the same levels and noise are
+// estimated on the message itself. Its bits are unknown, so each symbol counts as a 1 with the probability given by
+// the current LLR, and the estimate is refined a few times (EM), starting from the hard decisions E1 > E0.
+function calibrateBlind(e0, e1, rounds = 8) {
+  const fit = (e, w) => {   // w[j]: probability that the tone is on in symbol j
+    let sOn = 0, nOn = 0, sOff = 0, nOff = 0;
+    e.forEach((v, j) => { sOn += w[j] * v * v; nOn += w[j]; sOff += (1 - w[j]) * v * v; nOff += 1 - w[j]; });
+    const pOn = sOn / Math.max(nOn, 1e-9), pOff = sOff / Math.max(nOff, 1e-9), a2 = Math.max(pOn - pOff, 1e-6 * pOn), s2 = Math.max(pOff / 2, 1e-12 * pOn);
+    return { mu: Math.sqrt(a2), s2, snrDb: 10 * Math.log10(a2 / (2 * s2)) };
+  };
+  let p1 = Array.from(e0, (v, j) => e1[j] > v ? 1 : 0);
+  for (let r = 0; ; r++) {
+    const cal = { t0: fit(e0, p1.map(p => 1 - p)), t1: fit(e1, p1) };
+    if (r === rounds) return cal;
+    p1 = Array.from(e0, (v, j) => 1 / (1 + Math.exp(-softLLR('cal', cal, v, e1[j]))));
+  }
 }
 // g: local signal level relative to the preamble. In a room most of the disturbance is the echo of the signal itself,
 // so it rises and falls with the signal: dividing the energies by g keeps the preamble's levels and noise valid.
 function softLLR(soft, cal, E0, E1, g = 1) {
   if (soft === 'ratio') return Math.log((E1 + 1e-9) / (E0 + 1e-9));
   const { t0, t1 } = cal; E0 /= g; E1 /= g;
-  return lnI0(t1.mu * E1 / t1.s2) - t1.mu * t1.mu / (2 * t1.s2) - lnI0(t0.mu * E0 / t0.s2) + t0.mu * t0.mu / (2 * t0.s2);
+  return (cal.alpha || 1) * (lnI0(t1.mu * E1 / t1.s2) - t1.mu * t1.mu / (2 * t1.s2) - lnI0(t0.mu * E0 / t0.s2) + t0.mu * t0.mu / (2 * t0.s2));
 }
 // Level tracking: the signal level (whichever tone is on), averaged over +-W symbols, relative to the preamble.
 function levelTrack(res, W = 24) {
   const { t0, t1 } = res.cal, q = (E0, E1) => Math.max(E0 * E0 / (t0.mu * t0.mu), E1 * E1 / (t1.mu * t1.mu));
-  const qref = res.pe0.reduce((s, E0, j) => s + q(E0, res.pe1[j]), 0) / res.pe0.length;
+  const [r0, r1] = res.found === false ? [res.e0, res.e1] : [res.pe0, res.pe1];   // without the postamble: relative to the message
+  const qref = r0.reduce((s, E0, j) => s + q(E0, r1[j]), 0) / r0.length;
   const n = res.e0.length, cs = new Float64Array(n + 1);
   for (let j = 0; j < n; j++) cs[j + 1] = cs[j] + q(res.e0[j], res.e1[j]);
   return Array.from({ length: n }, (_, j) => { const a = Math.max(0, j - W), b = Math.min(n, j + W + 1); return Math.sqrt(Math.min(4, Math.max(0.01, (cs[b] - cs[a]) / (b - a) / qref))); });
@@ -396,7 +527,7 @@ function decodeFrame(res, soft) {
   const dec = decodeFEC(hdr.code, hdr.n0, llr.map((r, j) => key[j] ? -r : r), soft === 'ratio' ? 4 : Infinity);
   const bits = Uint8Array.from(dec.bits), sent = Uint8Array.from(encodeFEC(hdr.code, bits), (x, j) => x ^ key[j]);
   const chErr = llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0);    // channel errors the code corrected
-  return { soft, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks };
+  return { soft, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks, iters: dec.iters };
 }
 
 // ---- QR code (byte mode, error level M, versions 1-9), built here so the page needs no network ----
@@ -496,26 +627,33 @@ function drawQR(cv, text, px = 8) {
 
 
 // ---- frame ----
-// Control part, in a mode every receiver knows in advance (like the SIGNAL field of Wi-Fi):
+// Control part, in a mode every receiver knows in advance (like the SIGNAL field of Wi-Fi), 4 / 8 kHz at 400 bit/s,
+// or tone hopping at 400 bit/s when the message hops:
 //   0.1 s warm-up | MLS preamble (127, 255 or 511 bits) | header, sent 1, 2 or 4 times
 // then the message part, in the tones and rate the header announces:
 //   coded and scrambled message | MLS postamble (same sequence as the preamble)
 // Header: type 2 | a 11 | b 11 | code 2 | rate 2 | tones 2 | 0 0, then CRC-8, all through the convolutional code.
+// Code: 0 none, 1 Hamming, 2 convolutional, 3 Reed–Solomon; the turbo code (4) is sent as 0 with the CRC inverted,
+// the way 4G signals the number of antennas by masking a CRC, so receivers that predate it simply ignore the frame.
+// Tones: 0 low (4 / 8 kHz), 1 high (8 / 16 kHz), 2 tone hopping (3.2 to 16 kHz, see hopSet).
+// Types: 0 text (a = characters), 1 image (a = height, b = width), 2 room sounding (a = MLS order, b = periods).
 const CTRL = { tones: 'low', rate: 400 };
-const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high'];
+const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high', 'hop'];
 function crc8(bits) {   // CRC-8, generator x^8 + x^2 + x + 1
   let r = 0;
   for (const b of bits) { const fb = ((r >> 7) & 1) ^ b; r = (r << 1) & 0xff; if (fb) r ^= 0x07; }
   return msb(r, 8);
 }
 function headerBits(h) {
-  const v = [...msb(h.type, 2), ...msb(h.a, 11), ...msb(h.b, 11), ...msb(CODES.indexOf(h.code), 2),
+  const c = CODES.indexOf(h.code);
+  const v = [...msb(h.type, 2), ...msb(h.a, 11), ...msb(h.b, 11), ...msb(c & 3, 2),
              ...msb(RATES.indexOf(h.rate), 2), ...msb(TONE_SETS.indexOf(h.tones), 2), 0, 0];
-  return encodeFEC('conv', [...v, ...crc8(v)]);
+  return encodeFEC('conv', [...v, ...crc8(v).map(b => b ^ (c >> 2))]);
 }
-// msg = {type:'text', text} | {type:'image', h, w, pixels (col-major, 1 = white)}
+// msg = {type:'text', text} | {type:'image', h, w, pixels (col-major, 1 = white)} | {type:'sound', order, periods}
 function buildFrame(msg, cfg) {
-  const code = cfg.code || 'none', tones = cfg.tones || 'low', rate = cfg.rate || 400, pre = PILOTS[cfg.pre] ? +cfg.pre : 127;
+  if (msg.type === 'sound') return buildSounding(msg, cfg);
+  const code = cfg.code || 'none', tones = TONE_SETS.includes(cfg.tones) ? cfg.tones : 'low', rate = cfg.rate || 400, pre = PILOTS[cfg.pre] ? +cfg.pre : 127;
   let type, a, b, data;
   if (msg.type === 'text') { const c = textCodes(msg.text); type = 0; a = c.length; b = 0; data = c.flatMap(v => msb(v, 8)); }
   else { type = 1; a = msg.h; b = msg.w; data = Array.from(msg.pixels); }
@@ -523,14 +661,26 @@ function buildFrame(msg, cfg) {
   const ch = encodeFEC(code, data), key = prbs(ch.length);
   const warm = Array.from({ length: Math.round(0.1 * CTRL.rate) }, (_, i) => (i + 1) % 2);
   const ctrl = [...warm, ...P, ...Array(HREPS[pre]).fill(hdr).flat()], body = [...ch.map((x, i) => x ^ key[i]), ...P];
-  const segs = [{ bits: ctrl, tones: CTRL.tones, rate: CTRL.rate }, { bits: body, tones, rate }];
+  const ctl = tones === 'hop' ? 'hop' : CTRL.tones;   // a hopping message has a hopping control part
+  const segs = [{ bits: ctrl, tones: ctl, rate: CTRL.rate, k0: -warm.length }, { bits: body, tones, rate }];
   return { segs, bits: [...ctrl, ...body], data, n0: data.length, nc: ch.length, warm: warm.length, dur: ctrl.length / CTRL.rate + body.length / rate };
 }
 function modulate(frame, fs = FS_TX) {
-  const pad = Math.round(0.2 * fs), n = frame.segs.reduce((s, g) => s + g.bits.length * Math.round(fs / g.rate), 0);
+  const len = g => g.wave ? Math.round(g.wave.length * fs / FS_TX) : g.bits.length * Math.round(fs / g.rate);
+  const pad = Math.round(0.2 * fs), n = frame.segs.reduce((s, g) => s + len(g), 0);
   const x = new Float32Array(2 * pad + n);
   let o = pad;
   for (const g of frame.segs) {
+    if (g.wave) {   // a waveform at FS_TX (room sounding), linearly resampled if needed
+      const r = FS_TX / fs, m = len(g);
+      for (let i = 0; i < m; i++) { const t = i * r, k = Math.floor(t), u = t - k; x[o + i] = (1 - u) * g.wave[k] + u * (g.wave[k + 1] || 0); }
+      o += m; continue;
+    }
+    if (g.tones === 'hop') {   // tone hopping: symbol j of the segment on the pair of k0 + j (k0 < 0 for the warm-up)
+      const hs = hopSet(g.rate), L = Math.round(fs / g.rate);
+      g.bits.forEach((bt, j) => { const f = hs.tones(hs.pair((g.k0 || 0) + j))[bt]; for (let i = 0; i < L; i++) x[o + i] = 0.9 * Math.sin(2 * Math.PI * f * i / fs); o += L; });
+      continue;
+    }
     const [F0, F1] = TONES[g.tones], L = Math.round(fs / g.rate), w0 = new Float32Array(L), w1 = new Float32Array(L);
     for (let j = 0; j < L; j++) { w0[j] = 0.9 * Math.sin(2 * Math.PI * F0 * j / fs); w1[j] = 0.9 * Math.sin(2 * Math.PI * F1 * j / fs); }
     for (const bt of g.bits) { x.set(bt ? w1 : w0, o); o += L; }
@@ -538,15 +688,257 @@ function modulate(frame, fs = FS_TX) {
   return x;
 }
 function parseHeader(hb) {   // hb: the 40 decoded header bits; null unless the CRC and the fields are valid
-  if (crc8(hb.slice(0, 32)).join('') !== hb.slice(32, 40).join('')) return null;
+  const crc = crc8(hb.slice(0, 32)), ext = crc.every((b, i) => b === hb[32 + i]) ? 0 : crc.every((b, i) => b !== hb[32 + i]) ? 1 : -1;
+  if (ext < 0) return null;   // neither the CRC nor the inverted CRC (codes 4 to 7)
   const val = (s, n) => hb.slice(s, s + n).reduce((v, x) => 2 * v + x, 0);
-  const type = val(0, 2), a = val(2, 11), b = val(13, 11), code = CODES[val(24, 2)], rate = RATES[val(26, 2)], tones = TONE_SETS[val(28, 2)];
-  if (!tones) return null;
+  const type = val(0, 2), a = val(2, 11), b = val(13, 11), code = CODES[val(24, 2) + 4 * ext], rate = RATES[val(26, 2)], tones = TONE_SETS[val(28, 2)];
+  if (!tones || !code) return null;
   let h = null;
   if (type === 0 && a >= 1 && b === 0) h = { type: 'text', len: a, n0: 8 * a };
   if (type === 1 && a >= 1 && b >= 1 && a <= 256 && b <= 256 && a * b <= 20000) h = { type: 'image', h: a, w: b, n0: a * b };
+  if (type === 2 && SOUND_TAPS[a] && b >= 1 && b <= 8) h = { type: 'sound', order: a, periods: b, n0: 0 };
   if (h) Object.assign(h, { code, nc: codedLength(code, h.n0), rate, tones });
   return h;
+}
+
+// ---- channel sounding (header type 2): a periodic MLS at the full sample rate, then the postamble ----
+// The room's impulse response h is the circular cross-correlation of one received period with the MLS:
+// the MLS autocorrelation is N at lag 0 and -1 elsewhere, so h[t] = (c[t] + sum r) / (N + 1).
+const SOUND_TAPS = { 14: [14, 13, 12, 2], 15: [15, 14], 16: [16, 15, 13, 4] }, SOUND_AMP = 0.35;
+function buildSounding(msg, cfg) {
+  const pre = PILOTS[cfg.pre] ? +cfg.pre : 127, order = SOUND_TAPS[msg.order] ? msg.order : 15, periods = msg.periods || 3;
+  const ctl = cfg.tones === 'hop' ? 'hop' : CTRL.tones;   // control part and postamble: hopping or 4 / 8 kHz
+  const P = PILOTS[pre], hdr = headerBits({ type: 2, a: order, b: periods, code: 'none', rate: CTRL.rate, tones: ctl });
+  const warm = Array.from({ length: Math.round(0.1 * CTRL.rate) }, (_, i) => (i + 1) % 2);
+  const ctrl = [...warm, ...P, ...Array(HREPS[pre]).fill(hdr).flat()];
+  const s = mls(order, SOUND_TAPS[order]), N = s.length, wave = new Float32Array((periods + 1) * N);   // one extra period first: the room reaches its periodic steady state
+  for (let i = 0; i < wave.length; i++) wave[i] = s[i % N] ? SOUND_AMP : -SOUND_AMP;
+  const segs = [{ bits: ctrl, tones: ctl, rate: CTRL.rate, k0: -warm.length }, { wave }, { bits: P, tones: ctl, rate: CTRL.rate }];
+  return { segs, data: [], n0: 0, nc: 0, dur: (ctrl.length + P.length) / CTRL.rate + wave.length / FS_TX, sound: { order, periods, N } };
+}
+function fft(re, im, inv = false) {   // in place, radix 2
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) { let b = n >> 1; for (; j & b; b >>= 1) j ^= b; j ^= b; if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const a = (inv ? 2 : -2) * Math.PI / len, wr = Math.cos(a), wi = Math.sin(a);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let j = 0; j < len / 2; j++) {
+        const k = i + j, l = k + len / 2, tr = re[l] * cr - im[l] * ci, ti = re[l] * ci + im[l] * cr;
+        re[l] = re[k] - tr; im[l] = im[k] - ti; re[k] += tr; im[k] += ti;
+        const t = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = t;
+      }
+    }
+  }
+  if (inv) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+}
+function welch(x, nfft = 2048) {   // power spectral density (arbitrary scale), Hann window, 50 % overlap
+  const p = new Float64Array(nfft / 2 + 1), w = Float64Array.from({ length: nfft }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / nfft));
+  let cnt = 0;
+  for (let o = 0; o + nfft <= x.length; o += nfft / 2) {
+    const re = Float64Array.from(w, (v, i) => v * x[o + i]), im = new Float64Array(nfft); fft(re, im);
+    for (let k = 0; k <= nfft / 2; k++) p[k] += re[k] * re[k] + im[k] * im[k];
+    cnt++;
+  }
+  return cnt ? p.map(v => v / cnt) : null;
+}
+// average a spectrum p (bins of df Hz) over 1/frac octave around each frequency of the grid
+function octSmooth(p, df, grid, frac) {
+  return grid.map(f => { const lo = Math.max(1, Math.floor(f * 2 ** (-0.5 / frac) / df)), hi = Math.min(p.length - 1, Math.ceil(f * 2 ** (0.5 / frac) / df)); let s = 0; for (let k = lo; k <= hi; k++) s += p[k]; return s / (hi - lo + 1); });
+}
+// y[t - base]: recording at fs; first: receiver time of the first chip; step: receiver samples per chip; noise: recording before the frame
+function analyseSounding(y, base, fs, first, step, order, periods, noise) {
+  const s = mls(order, SOUND_TAPS[order]), N = s.length, L = 1 << (order + 2);
+  const Sr = new Float64Array(L), Si = new Float64Array(L);
+  s.forEach((v, i) => { Sr[i] = 2 * v - 1; }); fft(Sr, Si);
+  const lanczos = t => {   // band-limited interpolation of the recording at time t (Lanczos, a = 6)
+    const i0 = Math.floor(t); let v = 0;
+    for (let i = i0 - 5; i <= i0 + 6; i++) { const x = t - i, k = x === 0 ? 1 : 6 * Math.sin(Math.PI * x) * Math.sin(Math.PI * x / 6) / (Math.PI * Math.PI * x * x); v += (y[i - base] || 0) * k; }
+    return v;
+  };
+  const period = (j, st, o = 0) => Float64Array.from({ length: N }, (_, k) => lanczos(first + (j * N + k + o) * st));
+  const ir = r => {
+    const re = new Float64Array(L), im = new Float64Array(L); let sum = 0;
+    for (let k = 0; k < N; k++) { re[k] = re[k + N] = r[k]; sum += r[k]; }
+    fft(re, im);
+    for (let k = 0; k < L; k++) { const a = re[k], b = im[k]; re[k] = a * Sr[k] + b * Si[k]; im[k] = b * Sr[k] - a * Si[k]; }   // times conj(S)
+    fft(re, im, true);
+    return Float64Array.from({ length: N }, (_, t) => (re[t] + sum) / (N + 1));
+  };
+  const lowpass = (x, fc) => {   // circular windowed-sinc (Blackman) filter, cutoff fc in cycles per sample: the band above 20 kHz only carries interpolation errors
+    const K = 48, w = Float64Array.from({ length: 2 * K + 1 }, (_, i) => { const u = i - K; return (u ? Math.sin(2 * Math.PI * fc * u) / (Math.PI * u) : 2 * fc) * (0.42 + 0.5 * Math.cos(Math.PI * u / K) + 0.08 * Math.cos(2 * Math.PI * u / K)); });
+    const g = w.reduce((a, b) => a + b, 0), n = x.length, xp = new Float64Array(n + 2 * K), y = new Float64Array(n);
+    for (let i = 0; i < n + 2 * K; i++) xp[i] = x[(i - K + n) % n];
+    for (let t = 0; t < n; t++) { let v = 0; for (let i = 0; i <= 2 * K; i++) v += w[i] * xp[t + i]; y[t] = v / g; }
+    return y;
+  };
+  const peak = h => { let m = 0; for (let i = 1; i < h.length; i++) if (Math.abs(h[i]) > Math.abs(h[m])) m = i;
+    const a = Math.abs(h[(m + N - 1) % N]), b = Math.abs(h[m]), c = Math.abs(h[(m + 1) % N]), den = a - 2 * b + c; return m + (den ? 0.5 * (a - c) / den : 0); };
+  // pass 1: the direct-path peak of each period. Its drift from one period to the next measures the residual clock offset;
+  // a jump (samples lost or repeated by the audio system) is absorbed by realigning each period on its own peak
+  let drift = 0, glitch = false, use = Array.from({ length: periods }, (_, j) => j + 1), pk = [];
+  const off = new Float64Array(periods + 1);
+  if (periods >= 2) {
+    for (let j = 1; j <= periods; j++) pk.push(peak(ir(period(j, step))));
+    for (let j = 1; j < pk.length; j++) { while (pk[j] - pk[0] > N / 2) pk[j] -= N; while (pk[j] - pk[0] < -N / 2) pk[j] += N; }
+    const mj = (pk.length - 1) / 2, mp = pk.reduce((u, v) => u + v, 0) / pk.length;
+    drift = pk.reduce((u, v, j) => u + (j - mj) * (v - mp), 0) / pk.reduce((u, _, j) => u + (j - mj) ** 2, 0);   // chips per period
+    if (Math.abs(drift) > 50 || pk.some((v, j) => Math.abs(v - mp - (j - mj) * drift) > 1)) {
+      glitch = true;
+      const dd = pk.slice(1).map((v, j) => v - pk[j]).filter(v => Math.abs(v) <= 50).sort((a, b) => a - b);
+      drift = dd.length ? (dd[(dd.length - 1) >> 1] + dd[dd.length >> 1]) / 2 : 0;
+      pk.forEach((v, j) => { off[j + 1] = v - pk[0] - j * drift; });
+    }
+  }
+  let st = step * (1 + drift / N);
+  const r = new Float64Array(N);
+  if (glitch) {   // the period cut by the jump holds two partial responses: drop the periods far from the median response
+    const hs = use.map(j => ir(period(j, st, off[j]))), dev = hs.map(() => 0), col = new Float64Array(hs.length);
+    for (let t = 0; t < N; t++) { hs.forEach((h, i) => { col[i] = h[t]; }); col.sort(); const m = hs.length % 2 ? col[hs.length >> 1] : (col[hs.length / 2 - 1] + col[hs.length / 2]) / 2; hs.forEach((h, i) => { dev[i] += (h[t] - m) ** 2; }); }
+    if (hs.length >= 3) { const md = [...dev].sort((a, b) => a - b)[Math.floor(dev.length / 2)]; use = use.filter((_, i) => dev[i] <= 3 * md); }
+    else { const pe = hs.map(h => { const p = Math.round(peak(h)); let s = 0; for (let k = -48; k <= 48; k++) s += h[(p + k + N) % N] ** 2; return s; }); use = [use[pe[0] >= pe[1] ? 0 : 1]]; }
+    // the clock drift again, from consecutive periods that are both kept and have no jump between them
+    const dd = use.filter(j => use.includes(j + 1) && Math.abs(pk[j] - pk[j - 1] - drift) < 5).map(j => pk[j] - pk[j - 1]);
+    if (dd.length) { drift = dd.reduce((a, b) => a + b, 0) / dd.length; pk.forEach((v, j) => { off[j + 1] = v - pk[0] - j * drift; }); st = step * (1 + drift / N); }
+  }
+  for (const j of use) period(j, st, off[j]).forEach((v, k) => { r[k] += v / use.length; });
+  const h0 = lowpass(ir(r), Math.min(20000, 0.45 * fs) / FS_TX), pre = Math.round(0.005 * FS_TX), p = Math.round(peak(h0));
+  const h = Float32Array.from({ length: N }, (_, i) => h0[(i + p - pre + 2 * N) % N]), e = Float64Array.from(h, v => v * v);
+  // noise floor of the response: the last 10 % of the period (just before the direct sound)
+  const floor = e.subarray(Math.round(0.9 * N)).reduce((u, v) => u + v, 0) / (N - Math.round(0.9 * N));
+  const W = Math.round(0.002 * FS_TX), cs = new Float64Array(N + 1); for (let i = 0; i < N; i++) cs[i + 1] = cs[i] + e[i];
+  const env = Float64Array.from({ length: N }, (_, i) => { const a = Math.max(0, i - W), b = Math.min(N, i + W + 1); return (cs[b] - cs[a]) / (b - a); });
+  let iend = Math.round(0.9 * N); for (let i = pre + W; i < 0.9 * N; i++) if (env[i] < 2 * floor) { iend = i; break; }
+  // Schroeder backward integration (noise floor removed), and the reverberation time from its slope.
+  // The decay hidden under the noise after iend is added back from the fitted slope (as in Lundeby's method), then the slope is fitted again.
+  let edc, edcDb, comp = 0;
+  const schroeder = () => {
+    edc = new Float64Array(iend + 1); edc[iend] = comp;
+    for (let i = iend - 1; i >= 0; i--) edc[i] = edc[i + 1] + Math.max(0, e[i] - floor);
+    edcDb = Array.from(edc, v => 10 * Math.log10(v / edc[0] + 1e-30));
+  };
+  schroeder();
+  const fit = (hiDb, loDb) => {
+    const idx = []; edcDb.forEach((v, i) => { if (i > pre && v <= hiDb && v >= loDb) idx.push(i); });
+    if (idx.length < 10) return null;
+    const tm = idx.reduce((u, i) => u + i, 0) / idx.length, vm = idx.reduce((u, i) => u + edcDb[i], 0) / idx.length;
+    const sl = idx.reduce((u, i) => u + (i - tm) * (edcDb[i] - vm), 0) / idx.reduce((u, i) => u + (i - tm) ** 2, 0);   // dB per sample
+    return sl < 0 ? { rt60: -60 / sl / FS_TX, slope: sl, at: vm - sl * tm, i0: idx[0], i1: idx[idx.length - 1] } : null;
+  };
+  const inr = 10 * Math.log10(env[pre] / floor);   // decay range above the noise: T20 needs about 35 dB, T10 about 25 dB
+  const reverb = () => { const f20 = inr >= 35 ? fit(-5, -25) : null, f10 = !f20 && inr >= 25 ? fit(-5, -15) : null; return f20 ? { ...f20, method: 'T20' } : f10 ? { ...f10, method: 'T10' } : null; };
+  let rt = reverb();
+  for (let it = 0; it < 2 && rt; it++) { comp = edc[0] * 10 ** ((rt.at + rt.slope * iend) / 10); schroeder(); rt = reverb(); }
+  const sum = (a, b) => cs[Math.min(N, Math.max(0, b))] - cs[Math.min(N, Math.max(0, a))];
+  const d25 = Math.round(0.0025 * FS_TX), d50 = Math.round(0.05 * FS_TX);
+  const direct = sum(pre - d25, pre + d25), late = Math.max(1e-30, sum(pre + d25, iend) - floor * (iend - pre - d25) + comp);
+  const drr = 10 * Math.log10(direct / late);
+  const c50 = 10 * Math.log10(Math.max(1e-30, sum(pre - d25, pre + d50) - floor * (d50 + d25)) / Math.max(1e-30, sum(pre + d50, iend) - floor * (iend - pre - d50) + comp));
+  let m0 = 0, m1 = 0, m2 = 0; for (let i = pre - d25; i < iend; i++) { const v = Math.max(0, e[i] - floor), t = (i - pre) / FS_TX; m0 += v; m1 += v * t; m2 += v * t * t; }
+  if (rt && comp) {   // moments of the exponential decay after iend
+    const ts = -10 / (rt.slope * Math.LN10) / FS_TX, te = (iend - pre) / FS_TX;
+    m0 += comp; m1 += comp * (te + ts); m2 += comp * (te * te + 2 * te * ts + 2 * ts * ts);
+  }
+  const tauRms = Math.sqrt(Math.max(0, m2 / m0 - (m1 / m0) ** 2));
+  // frequency response of the whole chain (speaker, room, microphone), 1/6 octave
+  const nf = 1 << Math.ceil(Math.log2(iend + 1)), hr = new Float64Array(nf), hi = new Float64Array(nf);
+  for (let i = 0; i <= iend && i < N; i++) hr[i] = h[i];
+  fft(hr, hi);
+  const pw = Float64Array.from({ length: nf / 2 + 1 }, (_, k) => hr[k] * hr[k] + hi[k] * hi[k]);
+  const fmax = Math.min(20000, 0.45 * fs), grid = []; for (let f = 100; f <= fmax; f *= 2 ** (1 / 24)) grid.push(f);
+  const H = octSmooth(pw, FS_TX / nf, grid, 6), Hmax = Math.max(...H), Hdb = H.map(v => 10 * Math.log10(v / Hmax + 1e-30));
+  // signal-to-noise ratio per frequency: received sounding versus the noise heard before the frame
+  let snr = null;
+  if (noise && noise.length >= 4096) {
+    const seg = Float64Array.from({ length: Math.round(periods * N * step) }, (_, i) => y[Math.round(first + N * step) + i - base] || 0);
+    const ps = welch(seg), pn = welch(noise);
+    if (ps && pn) { const a = octSmooth(ps, fs / 2048, grid, 3), b = octSmooth(pn, fs / 2048, grid, 3); snr = a.map((v, i) => 10 * Math.log10(Math.max(1e-12, v - b[i]) / b[i])); }
+  }
+  const at = (arr, f) => { if (!arr) return null; let k = 0; grid.forEach((g, i) => { if (Math.abs(Math.log(g / f)) < Math.abs(Math.log(grid[k] / f))) k = i; }); return f <= fmax ? arr[k] : null; };
+  const tones = [4000, 8000, 16000].map(f => ({ f, gain: at(Hdb, f), snr: at(snr, f) }));
+  return { fsIR: FS_TX, h, pre, iend, inr, env, edcDb, rt, drr, c50, tauRms, grid, Hdb, snr, tones, drift, glitch, used: use.length, N };
+}
+
+// ---- tone hopping (tones 'hop'): many tone pairs, visited in turn, so that the echo of a bit lands on idle tones ----
+// At R bit/s there are H = 6400 / R pairs of adjacent tones, bit 0 -> 3200 + 2pR Hz and bit 1 -> 3200 + (2p + 1)R Hz,
+// p = 0 .. H - 1 (3.2 to 16 kHz). The pairs started at 1.6 kHz at first, but in a real room that tone, low in a small
+// speaker's range and close to the room's noise, caused nearly all the errors. Symbol k of a segment (counted from the first preamble bit, from the first message bit
+// through the postamble, or from the first bit of a sounding's postamble) uses pair p = s k mod H, s = H/2 - 1 (1 if H = 4):
+// a pair comes back only every H symbols, so the echo it hears is the one left after H bits of decay. The control
+// part hops too (at 400 bit/s, 16 pairs), otherwise far receivers would never find the frame.
+const HOP_F0 = 3200, HOP_BAND = 12800;
+function hopSet(rate) {
+  const H = HOP_BAND / (2 * rate), s = H > 4 ? H / 2 - 1 : 1;
+  return { H, s, rate, pair: k => ((s * k) % H + H) % H, tones: p => [HOP_F0 + 2 * p * rate, HOP_F0 + (2 * p + 1) * rate] };
+}
+function toneDesc(tones, rate) {   // for the page: the tones of a frame, in words
+  if (tones !== 'hop') return `${TONES[tones].map(f => f / 1000).join(' / ')} kHz`;
+  const hs = hopSet(rate);
+  return `tone hopping, ${hs.H} pairs from ${HOP_F0 / 1000} to ${(HOP_F0 + (2 * hs.H - 1) * rate) / 1000} kHz`;
+}
+const TONE_TABS = new Map();
+function toneTab(f, fs, L) {   // cos and sin of a tone over a window of L samples
+  const key = `${f}/${fs}/${L}`;
+  let t = TONE_TABS.get(key);
+  if (!t) {
+    t = { c: new Float64Array(L), s: new Float64Array(L) };
+    for (let n = 0; n < L; n++) { t.c[n] = Math.cos(2 * Math.PI * f * n / fs); t.s[n] = Math.sin(2 * Math.PI * f * n / fs); }
+    TONE_TABS.set(key, t);
+  }
+  return t;
+}
+function energyAt(y, i, t) {   // |sum of y[i + n] exp(-j 2 pi f n / fs)| over the window of the tone table t
+  const c = t.c, s = t.s, L = c.length; let re = 0, im = 0;
+  for (let n = 0; n < L; n++) { const v = y[i + n]; re += v * c[n]; im += v * s[n]; }
+  return Math.sqrt(re * re + im * im);
+}
+// Speaker, room and microphone give each tone its own level. Each tone's energies are divided by their rms over the
+// symbols that used its pair (half of them carry the tone, half only the echo), so that one model fits all the tones.
+function hopNormalize(hs, e0, e1) {   // e0, e1: energies of symbols 0, 1, 2 ... of a hopped segment
+  const H = hs.H, s0 = new Float64Array(H), s1 = new Float64Array(H), n = new Float64Array(H);
+  e0.forEach((v, k) => { const p = hs.pair(k); s0[p] += v * v; s1[p] += e1[k] * e1[k]; n[p]++; });
+  const g0 = Array.from(s0, (v, p) => Math.sqrt(v / Math.max(1, n[p])) || 1), g1 = Array.from(s1, (v, p) => Math.sqrt(v / Math.max(1, n[p])) || 1);
+  const lv = [...g0, ...g1].filter((v, i) => n[i % H] > 0);
+  return { e0: e0.map((v, k) => v / g0[hs.pair(k)]), e1: e1.map((v, k) => v / g1[hs.pair(k)]), g0, g1,
+           spread: 20 * Math.log10(Math.max(...lv) / Math.min(...lv)) };
+}
+// Fine timing at the message's rate, with tone hopping. The symbol instants come from the 400 bit/s preamble and the
+// postamble. The preamble's long symbols tolerate an error of several samples, the short symbols of a fast message do
+// not: in a real room their best instant was a quarter of a symbol away at 1600 bit/s. So, in up to 8 blocks of the
+// message, find the shift (at most R samples) that makes the two tones most distinct, mean |E1 - E0| / (E1 + E0), and
+// fit a straight line through these shifts. read(j, s): [E0, E1] of message symbol j read s samples after its instant.
+// (With fixed tones the echo of the earlier bits lies on the same two tones, and in simulated rooms this measure then
+// often favoured a worse instant: they keep the instants of the preamble and postamble.)
+function fineTiming(read, nc, R) {
+  const K = Math.max(1, Math.min(8, Math.floor(nc / 128))), step = Math.max(1, Math.round(R / 6)), pts = [];
+  const blk = (j0, j1, s) => { let c = 0; for (let j = j0; j < j1; j++) { const [a, b] = read(j, s); c += Math.abs(b - a) / (a + b + 1e-12); } return c / (j1 - j0); };
+  for (let k = 0; k < K; k++) {
+    const j0 = Math.floor(k * nc / K), j1 = Math.floor((k + 1) * nc / K);
+    let best = { c: -1, s: 0 };
+    for (let s = -R; s <= R; s += step) { const c = blk(j0, j1, s); if (c > best.c) best = { c, s }; }   // coarse grid, then sample by sample
+    const s0 = best.s;
+    for (let s = Math.max(-R, s0 - step + 1); s <= Math.min(R, s0 + step - 1); s++) if (s !== s0) { const c = blk(j0, j1, s); if (c > best.c) best = { c, s }; }
+    pts.push([(j0 + j1 - 1) / 2, best.s]);
+  }
+  const n = pts.length, mx = pts.reduce((t, p) => t + p[0], 0) / n, my = pts.reduce((t, p) => t + p[1], 0) / n;
+  const sxx = pts.reduce((t, p) => t + (p[0] - mx) ** 2, 0), b = sxx > 0 ? pts.reduce((t, p) => t + (p[0] - mx) * (p[1] - my), 0) / sxx : 0;
+  const shift = j => Math.max(-2 * R, Math.min(2 * R, Math.round(my + b * (j - mx))));
+  const e0 = [], e1 = [];
+  for (let j = 0; j < nc; j++) { const [a, c] = read(j, shift(j)); e0.push(a); e1.push(c); }
+  return { e0, e1, from: shift(0), to: shift(nc - 1) };
+}
+// Are the tones clearly more distinct with energies a than with b, symbol by symbol? (paired t-test, t > 2)
+function sharper(a0, a1, b0, b1) {
+  const n = a0.length, d = Array.from(a0, (v, j) => Math.abs(a1[j] - v) / (a1[j] + v + 1e-12) - Math.abs(b1[j] - b0[j]) / (b1[j] + b0[j] + 1e-12));
+  const m = d.reduce((t, v) => t + v, 0) / n, sd = Math.sqrt(d.reduce((t, v) => t + (v - m) ** 2, 0) / Math.max(1, n - 1));
+  return m > 2 * sd / Math.sqrt(n);
+}
+function searchMax(f, lo, hi, Lw) {   // largest f(m), lo <= m <= hi: on a grid of Lw/8 samples, then sample by sample around the best
+  const c = Math.max(1, Math.floor(Lw / 8)); let b = { v: -2, m: lo };
+  for (let m = lo; m <= hi; m += c) { const v = f(m); if (v > b.v) b = { v, m }; }
+  const a = b.m;
+  for (let m = Math.max(lo, a - c + 1); m <= Math.min(hi, a + c - 1); m++) { const v = f(m); if (v > b.v) b = { v, m }; }
+  return b;
 }
 
 // Sliding non-coherent energies at two tones over a window of Lw samples, for every window start m >= m0
@@ -586,7 +978,15 @@ class Receiver {
     this.C = new Float64Array(4); this.H = new Float64Array(4 * this.Lw);
     this.w0 = 2 * Math.PI * this.F0 / fs; this.w1 = 2 * Math.PI * this.F1 / fs; this.ph0 = 0; this.ph1 = 0;
     this.thr = 0.3; this.state = 'search'; this.sp = 0; this.cand = -1;   // thr: detection line of the plot (scores are scaled to it)
+    this.cstep = Math.max(2, Math.floor(this.Lw / 12));   // step of the coarse search: the correlation peak is about 2 Lw wide
     this.corrHist = new Float32Array(500); this.corrPos = 0; this.blk = 0; this.blkMax = 0; this.blkLen = Math.round(fs / 100);
+    // tone hopping: sliding energies of the 2H control tones; the contrast of each pair goes into a ring buffer of
+    // 2^18 windows, and the same three correlators run on the contrast of whichever pair each preamble bit uses
+    const hs = this.hs = hopSet(CTRL.rate), T2 = 2 * hs.H;
+    Object.assign(this, { RB: 18, hmask: (1 << 18) - 1, hd: new Float32Array(hs.H << 18), T2, hC: new Float64Array(2 * T2), hH: new Float64Array(2 * T2 * this.Lw),
+      hE: new Float64Array(T2), hc: new Float64Array(T2), hs_: new Float64Array(T2), hw: Float64Array.from({ length: T2 }, (_, i) => 2 * Math.PI * (HOP_F0 + i * CTRL.rate) / fs) });
+    this.hrc = this.hw.map(Math.cos); this.hrs = this.hw.map(Math.sin);
+    this.hdets = this.dets.map(t => ({ ...t, hop: true, pair: Int32Array.from(t.P, (_, j) => hs.pair(j)) }));
   }
   push(chunk) {
     const { C, H, Lw } = this;
@@ -608,18 +1008,37 @@ class Receiver {
         }
         this.nz = n - Lw + 2;
       }
+      const T2 = this.T2, hC = this.hC, hH = this.hH, hE = this.hE, hc = this.hc, hsn = this.hs_, ho = 2 * T2 * (n % Lw);
+      if ((n & 1023) === 0) for (let k = 0; k < T2; k++) { const ph = (this.hw[k] * n) % 6.283185307179586; hc[k] = Math.cos(ph); hsn[k] = Math.sin(ph); }
+      for (let k = 0; k < T2; k++) {
+        const c = hc[k], s = hsn[k], re = (hC[2 * k] += v * c), im = (hC[2 * k + 1] += v * s), q = ho + 2 * k;
+        const dr = re - hH[q], di = im - hH[q + 1]; hH[q] = re; hH[q + 1] = im;
+        hE[k] = Math.sqrt(dr * dr + di * di);
+        hc[k] = c * this.hrc[k] - s * this.hrs[k]; hsn[k] = c * this.hrs[k] + s * this.hrc[k];
+      }
+      if (n >= Lw - 1) { const m = (n - Lw + 1) & this.hmask, RB = this.RB; for (let p = 0; 2 * p < T2; p++) { const a = hE[2 * p], b = hE[2 * p + 1]; this.hd[(p << RB) | m] = (b - a) / (b + a + 1e-12); } }
       this.n++;
     }
     this.process();
   }
   corrAt(t, m) { let s = 0; const d = this.d, o = t.offs, a = t.a, b = m - this.base; for (let j = 0; j < t.NP; j++) s += a[j] * d[b + o[j]]; return s / t.NP; }
+  corrAtHop(t, m) { let s = 0; const d = this.hd, o = t.offs, a = t.a, p = t.pair, RB = this.RB, mk = this.hmask; for (let j = 0; j < t.NP; j++) s += a[j] * d[(p[j] << RB) | ((m + o[j]) & mk)]; return s / t.NP; }
+  hopTabs(hs, k, Lw) { return hs.tones(hs.pair(k)).map(f => toneTab(f, this.fs, Lw)); }
+  hopCorr(m, hs, k0, P, Ld, Lw) {   // correlation of a hopping preamble or postamble whose first bit is symbol k0, computed from the signal
+    let s = 0;
+    for (let j = 0; j < P.length; j++) {
+      const [t0, t1] = this.hopTabs(hs, k0 + j, Lw), i = Math.round(m + j * Ld) - this.base, e0 = energyAt(this.y, i, t0), e1 = energyAt(this.y, i, t1);
+      s += (2 * P[j] - 1) * (e1 - e0) / (e1 + e0 + 1e-12);
+    }
+    return s / P.length;
+  }
   logCorr(c, step) {
     if (c > this.blkMax) this.blkMax = c;
     if ((this.blk += step) >= this.blkLen) { this.corrHist[this.corrPos++ % this.corrHist.length] = this.blkMax; this.blk = 0; this.blkMax = -1; }
   }
   compact(force) {
-    // keep only what the search still needs
-    const keepFrom = Math.max(this.base, this.sp - 2 * this.Lw);
+    // keep only what the search still needs, plus 1.2 s of noise before a frame (room sounding measures the SNR on it)
+    const keepFrom = Math.max(this.base, this.sp - 2 * this.Lw - Math.round(1.2 * this.fs));
     const shift = keepFrom - this.base;
     if (shift <= 0) { if (force) this.reset(); return; }
     for (const arr of [this.y, this.z0, this.z1, this.d]) arr.copyWithin(0, shift, this.n - this.base);
@@ -633,12 +1052,16 @@ class Receiver {
         if (this.sp < this.base) { this.sp = this.base; continue; }
         let s = 0, det = null;   // best score relative to its threshold, over the three preamble lengths
         for (const t of this.dets) { const v = this.corrAt(t, this.sp) / t.thr; if (v > s) { s = v; det = t; } }
-        const step = this.cand >= 0 ? 1 : 2;   // coarse search, fine around a candidate
+        if (this.sp >= this.nz - (1 << this.RB)) for (const t of this.hdets) { const v = this.corrAtHop(t, this.sp) / t.thr; if (v > s) { s = v; det = t; } }
+        const step = this.cand >= 0 ? 1 : this.cstep;   // coarse search, then sample by sample from just before a candidate
         this.logCorr(this.thr * s, step);
-        if (this.cand < 0 && s > 1) { this.cand = this.sp; this.cbest = s; this.pbest = this.sp; this.dbest = det; }
+        if (this.cand < 0 && s > 0.85) { this.cand = this.sp; this.cbest = 0; this.sp = Math.max(this.base, this.sp - this.cstep + 1); continue; }
         if (this.cand >= 0) {
           if (s > this.cbest) { this.cbest = s; this.pbest = this.sp; this.dbest = det; }
-          if (this.sp > this.cand + 2 * this.Lw) { this.startFrame(this.pbest, this.dbest); break; }
+          if (this.sp > this.cand + 2 * this.Lw) {
+            if (this.cbest > 1) { this.startFrame(this.pbest, this.dbest); break; }
+            this.cand = -1;   // the peak stayed below the line
+          }
         }
         this.sp += step;
       }
@@ -646,24 +1069,35 @@ class Receiver {
     }
     if (this.state === 'frame') this.track();
     if (this.state === 'final') this.finalize();
+    if (this.state === 'sound') this.finishSounding();
   }
   startFrame(p1, det) {
     const NP = det.NP, HR = HREPS[NP], NH = HR * NHC;
-    Object.assign(this, { state: 'frame', p1, det, NP, HR, NH, cmax: this.corrAt(det, p1), pos: p1, k: 0, hdrLLR: [], hdr: null, dt: null,
-                          llr: [], e0: [], e1: [], cand: -1 });
-    this.cb.onState && this.cb.onState('detected', { t: p1 / this.fs, cmax: this.cmax, pre: NP });
+    Object.assign(this, { state: 'frame', p1, det, NP, HR, NH, cmax: det.hop ? this.corrAtHop(det, p1) : this.corrAt(det, p1), pos: p1, k: 0, hdrLLR: [], hdr: null, dt: null,
+                          llr: [], e0: [], e1: [], cand: -1, hop: !!det.hop, ce0: [], ce1: [], mhs: null });
+    this.cb.onState && this.cb.onState('detected', { t: p1 / this.fs, cmax: this.cmax, pre: NP, hop: this.hop });
   }
   readHeader() {   // add up the copies, then the Viterbi decoder and the CRC
     const L = new Float64Array(NHC);
-    this.hdrLLR.forEach((r, i) => { L[i % NHC] += r; });
+    if (this.hop) {   // tone hopping: each tone's level normalized over the preamble and header, then ln(E1/E0)
+      const { e0, e1 } = hopNormalize(this.hs, this.ce0, this.ce1);
+      for (let k = this.NP; k < e0.length; k++) L[(k - this.NP) % NHC] += Math.log((e1[k] + 1e-9) / (e0[k] + 1e-9));
+    } else this.hdrLLR.forEach((r, i) => { L[i % NHC] += r; });
     const hb = Array.from(decodeFEC('conv', HBITS, Array.from(L)).bits), hdr = parseHeader(hb);
     const fail = why => { this.cb.onState && this.cb.onState('lost', { reason: why }); this.state = 'search'; this.sp = this.p1 + this.Lw; };
     if (!hdr) return fail('unreadable header');
+    if (hdr.type === 'sound') {   // room sounding: no tones to track, wait for the MLS and the postamble
+      Object.assign(this, { hdr, state: 'sound', chip0: this.pos + this.Lr, frac: 0 });
+      this.cb.onState && this.cb.onState('header', hdr);
+      return;
+    }
     const Ld = this.fs / hdr.rate, Lwd = Math.round(Ld), start = this.pos + this.Lr;   // first message bit
     const span = (hdr.nc + this.NP) * Ld, tol = Math.round(0.005 * (span + this.NH * this.Lr)) + Lwd;
     const m0 = Math.max(this.base, Math.round(start) - 2 * Lwd - tol), len = Math.ceil(1.01 * span) + 2 * tol + 6 * Lwd;
     if (m0 + len + Lwd - this.base >= this.cap) return fail('message too long');
-    Object.assign(this, { hdr, Ld, Lwd, key: prbs(hdr.nc), bits: new Uint8Array(hdr.n0), dt: new ToneEnergies(this.fs, hdr.tones, Lwd, m0, len) });
+    Object.assign(this, { hdr, Ld, Lwd, key: prbs(hdr.nc), bits: new Uint8Array(hdr.n0) });
+    if (hdr.tones === 'hop') this.mhs = hopSet(hdr.rate);   // energies computed symbol by symbol from the signal
+    else this.dt = new ToneEnergies(this.fs, hdr.tones, Lwd, m0, len);
     this.cb.onState && this.cb.onState('header', hdr);
   }
   track() {
@@ -671,18 +1105,31 @@ class Receiver {
     while (this.state === 'frame') {
       const ctl = this.k < this.NP + this.NH, k = this.k;
       if (this.hdr && k >= this.NP + this.NH + this.hdr.nc) { this.state = 'final'; return; }
-      // control part on the receiver's own energies, message part on energies at the announced tones and rate
-      const src = ctl ? this : this.dt, off = ctl ? this.base : this.dt.m0, L = ctl ? this.Lr : this.Ld, Lw = ctl ? this.Lw : this.Lwd;
-      if (!ctl) this.dt.feed(this.y, this.base, this.n);
-      const delta = Math.max(1, Math.round(Lw / 4)), m = Math.round(this.pos);
-      if (m + delta >= src.nz) return;
-      const b = m - off, r = Math.log((src.z1[b] + eps) / (src.z0[b] + eps));
-      if (k !== 0 && k !== this.NP + this.NH) this.pos += mu * (Math.abs(src.d[b + delta]) - Math.abs(src.d[b - delta])) * delta;
-      if (k >= this.NP && ctl) {
-        this.hdrLLR.push(r);
-        if (k === this.NP + this.NH - 1) { this.readHeader(); if (!this.hdr) return; }
-      } else if (!ctl) {
-        const j = k - this.NP - this.NH, plain = this.hdr.code === 'none'; this.llr.push(r); this.e0.push(src.z0[b]); this.e1.push(src.z1[b]);
+      // control part on the receiver's own energies, message part on energies at the announced tones and rate;
+      // with tone hopping, the energies of the symbol's pair, computed from the stored signal
+      const hop = ctl ? this.hop : this.hdr.tones === 'hop', L = ctl ? this.Lr : this.Ld, Lw = ctl ? this.Lw : this.Lwd;
+      const delta = Math.max(1, Math.round(Lw / 4)), m = Math.round(this.pos), gate = k !== 0 && k !== this.NP + this.NH;
+      let E0, E1, dl = 0, dr = 0;
+      if (hop) {
+        if (m + delta + Lw > this.n) return;
+        const [t0, t1] = this.hopTabs(ctl ? this.hs : this.mhs, ctl ? k : k - this.NP - this.NH, Lw), b = m - this.base, y = this.y;
+        const ct = i => { const a = energyAt(y, i, t0), c = energyAt(y, i, t1); return (c - a) / (c + a + 1e-12); };
+        E0 = energyAt(y, b, t0); E1 = energyAt(y, b, t1);
+        if (gate) { dl = ct(b - delta); dr = ct(b + delta); }
+      } else {
+        const src = ctl ? this : this.dt, off = ctl ? this.base : this.dt.m0;
+        if (!ctl) this.dt.feed(this.y, this.base, this.n);
+        if (m + delta >= src.nz) return;
+        const b = m - off; E0 = src.z0[b]; E1 = src.z1[b];
+        if (gate) { dl = src.d[b - delta]; dr = src.d[b + delta]; }
+      }
+      const r = Math.log((E1 + eps) / (E0 + eps));
+      if (gate) this.pos += mu * (Math.abs(dr) - Math.abs(dl)) * delta;
+      if (ctl) {
+        if (this.hop) { this.ce0.push(E0); this.ce1.push(E1); }
+        if (k >= this.NP) { this.hdrLLR.push(r); if (k === this.NP + this.NH - 1) { this.readHeader(); if (!this.hdr) return; } }
+      } else {
+        const j = k - this.NP - this.NH, plain = this.hdr.code === 'none'; this.llr.push(r); this.e0.push(E0); this.e1.push(E1);
         if (plain) this.bits[j] = (r > 0 ? 1 : 0) ^ this.key[j];   // coded frames are decoded at the end
         if (j % 32 === 31 || j === this.hdr.nc - 1) this.cb.onProgress && this.cb.onProgress({ hdr: this.hdr, bits: plain ? this.bits : null, done: j + 1 });
       }
@@ -690,6 +1137,7 @@ class Receiver {
     }
   }
   finalize() {
+    if (this.mhs) return this.finalizeHop();
     const { hdr, Lr, Ld, p1, NP, NH, dt, det } = this;
     dt.feed(this.y, this.base, this.n);
     const Delta = (NP + NH) * Lr + hdr.nc * Ld, tol = Math.round(0.005 * Delta) + this.Lwd;   // nominal p1 -> postamble
@@ -712,10 +1160,62 @@ class Receiver {
     for (let j = 0; j < NP; j++) { const b = at(q2 + j * Ld * rho); pe0.push(dt.z0[b] || 0); pe1.push(dt.z1[b] || 0); }
     if (found) pilotErr = pe0.reduce((s, v, j) => s + ((pe1[j] > v ? 1 : 0) !== det.P[j]), 0);
     const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(p1 + Delta + NP * Ld + 0.3 * this.fs));
-    const res = { hdr, NP, e0, e1, pe0, pe1, cal: calibrate(pe0, pe1), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
+    const res = { hdr, NP, e0, e1, pe0, pe1, cal: found ? calibrate(pe0, pe1) : calibrateBlind(e0, e1), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
                   t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
     Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
     this.state = 'search'; this.sp = Math.round(p1 + Delta + NP * Ld); this.dt = null;
+    this.cb.onDone && this.cb.onDone(res);
+  }
+  finalizeHop() {   // tone hopping: postamble searched near where the tracking expects it, then everywhere within 0.5 %
+    const { hdr, Lr, Ld, Lwd, p1, NP, NH, det, mhs } = this, nc = hdr.nc, P = det.P;
+    const Delta = (NP + NH) * Lr + nc * Ld, tol = Math.round(0.005 * Delta) + Lwd, mid = Math.round(p1 + Delta), here = Math.round(this.pos);
+    if (Math.max(mid + tol, here + 2 * Lwd) + Math.round((NP - 1) * Ld) + Lwd > this.n) return;   // wait for the postamble
+    const corr = m => this.hopCorr(m, mhs, nc, P, Ld, Lwd);
+    let best = searchMax(corr, here - 2 * Lwd, here + 2 * Lwd, Lwd);
+    if (best.v < 0.5 * this.cmax) { const b = searchMax(corr, mid - tol, mid + tol, Lwd); if (b.v > best.v) best = b; }
+    const found = best.v >= 0.5 * this.cmax, rho = found ? (best.m - p1) / Delta : 1, q2 = found ? best.m : here;
+    const at = (x, k) => { const i = Math.round(x) - this.base, [t0, t1] = this.hopTabs(mhs, k, Lwd); return [energyAt(this.y, i, t0), energyAt(this.y, i, t1)]; };
+    let e0 = this.e0, e1 = this.e1;
+    if (found) {   // re-read the tone energies at the instants corrected for the clock offset
+      e0 = []; e1 = [];
+      for (let j = 0; j < nc; j++) { const [a, b] = at(p1 + ((NP + NH) * Lr + j * Ld) * rho, j); e0.push(a); e1.push(b); }
+    }
+    // fine timing on the message, kept if it makes the tones clearly more distinct than the energies read so far
+    // (re-read above, or tracked during the frame when the postamble is missing)
+    const ft = fineTiming((j, s) => at(p1 + ((NP + NH) * Lr + j * Ld) * rho + s, j), nc, Math.min(Math.floor(Ld / 2), Math.round(5e-4 * this.fs)));
+    const timing = sharper(ft.e0, ft.e1, e0, e1) ? [ft.from, ft.to] : null;
+    if (timing) { e0 = ft.e0; e1 = ft.e1; }
+    const r0 = [], r1 = [];
+    for (let j = 0; j < NP; j++) { const [a, b] = at(q2 + j * Ld * rho, nc + j); r0.push(a); r1.push(b); }
+    const nm = hopNormalize(mhs, [...e0, ...r0], [...e1, ...r1]), pe0 = nm.e0.slice(nc), pe1 = nm.e1.slice(nc);
+    const pilotErr = found ? pe0.reduce((s, v, j) => s + ((pe1[j] > v ? 1 : 0) !== P[j]), 0) : null;
+    const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(q2 + NP * Ld * rho + 0.3 * this.fs));
+    const res = { hdr, NP, e0: nm.e0.slice(0, nc), e1: nm.e1.slice(0, nc), pe0, pe1, cal: found ? calibrate(pe0, pe1) : calibrateBlind(nm.e0.slice(0, nc), nm.e1.slice(0, nc)), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null,
+                  cmax: this.cmax, cmax2: best.v, pilotErr, timing, hopCtl: this.hop, spread: nm.spread, t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
+    Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
+    this.state = 'search'; this.sp = Math.round(q2 + NP * Ld * rho); this.mhs = null;
+    this.cb.onDone && this.cb.onDone(res);
+  }
+  finishSounding() {   // once the postamble is in: clock offset, then the room's impulse response
+    const { hdr, p1, NP, NH, Lr, det, fs } = this, N = (1 << hdr.order) - 1, sc = fs / FS_TX;
+    const Delta = (NP + NH) * Lr + (hdr.periods + 1) * N * sc, tol = Math.round(0.005 * Delta) + this.Lw, hi = Math.round(p1 + Delta) + tol;
+    if (hi + det.offs[NP - 1] >= this.nz) {
+      const frac = Math.max(0, Math.min(1, (this.nz - this.chip0) / (p1 + Delta + NP * Lr - this.chip0)));
+      if (frac - this.frac > 0.02) { this.frac = frac; this.cb.onProgress && this.cb.onProgress({ hdr, sound: true, frac }); }
+      return;
+    }
+    let best = -2, p2 = 0;   // the postamble is sent in the control mode (hopping from its first bit, or 4 / 8 kHz)
+    if (hdr.tones === 'hop') ({ v: best, m: p2 } = searchMax(m => this.hopCorr(m, this.hs, 0, det.P, Lr, this.Lw), Math.max(this.base, Math.round(p1 + Delta) - tol), hi, this.Lw));
+    else for (let m = Math.max(this.base, Math.round(p1 + Delta) - tol); m <= hi; m++) { const c = this.corrAt(det, m); if (c > best) { best = c; p2 = m; } }
+    const found = best >= 0.5 * this.cmax && Math.abs((p2 - p1) / Delta - 1) < 1e-3, rho = found ? (p2 - p1) / Delta : 1;   // clocks are within 1000 ppm
+    const first = found ? p1 + (NP + NH) * Lr * rho : this.chip0;
+    const n0 = Math.max(this.base, Math.round(p1 - 1.1 * fs)), n1 = Math.round(p1 - 0.15 * fs);   // noise: before the warm-up
+    const noise = n1 - n0 >= 4096 ? this.y.subarray(n0 - this.base, n1 - this.base) : null;
+    const sound = analyseSounding(this.y, this.base, fs, first, sc * rho, hdr.order, hdr.periods, noise);
+    const s0 = Math.max(this.base, Math.round(p1 - 0.3 * fs)), s1 = Math.min(this.n, Math.round(p1 + Delta * rho + NP * Lr + 0.3 * fs));
+    const res = { hdr, NP, found, ppm: found || hdr.periods >= 2 ? (rho * (1 + sound.drift / N) - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, t: p1 / fs, sound,
+                  recording: this.y.slice(s0 - this.base, s1 - this.base), fs };
+    this.state = 'search'; this.sp = Math.round(p1 + Delta * rho + NP * Lr);
     this.cb.onDone && this.cb.onDone(res);
   }
 }
@@ -735,7 +1235,9 @@ function demoPixels() {
   for (let i = 0; i < n; i++) p[i] = (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
   return { type: 'image', h: DEMO.h, w: DEMO.w, pixels: p };
 }
-if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0 };
+if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
+  SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
+  turboPerm, turboEncode, turboDecode, bcjr };
 </script>
 
 <script>
@@ -743,9 +1245,9 @@ if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATE
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const params = new URLSearchParams(location.search);
-const cfg = { tones: TONES[params.get('tones')] ? params.get('tones') : 'low', rate: [200, 400, 800, 1600].includes(+params.get('rate')) ? +params.get('rate') : 400,
+const cfg = { tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: [200, 400, 800, 1600].includes(+params.get('rate')) ? +params.get('rate') : 400,
               code: CODES.includes(params.get('code')) ? params.get('code') : 'none', soft: params.get('soft') === 'ratio' ? 'ratio' : 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127 };
-const PAGE_URL = 'https://sheng-yang-cs.github.io/AudioComm/acoustic_modem.html';
+const PAGE_URL = 'https://sheng-yang-cs.github.io/AudioComm/acoustic_modem_v1.html';
 let msgMode = 'text', pen = 0, actx = null;
 
 function seg(el, value, onPick) {
@@ -771,7 +1273,9 @@ seg($('roleSeg'), role, v => { $('main').dataset.role = v; });
 // ---------- transmitter ----------
 const pad = { h: 32, w: 32, pixels: new Uint8Array(32 * 32).fill(1) };
 let photo = null;
+const snd = { order: 15, periods: 4 };   // room sounding: MLS order (period 2^order - 1 samples at 48 kHz) and periods averaged
 function currentMsg() {
+  if (msgMode === 'sound') return { type: 'sound', ...snd };
   if (msgMode === 'text') return { type: 'text', text: $('txtIn').value || ' ' };
   if (msgMode === 'demo') return demoPixels();
   if (msgMode === 'draw') return { type: 'image', ...pad };
@@ -791,7 +1295,8 @@ function drawPixels(cv, img, done = img.h * img.w, scale = 4) {
 }
 function showTx() {
   $('txText').classList.toggle('hidden', msgMode !== 'text');
-  $('txImg').classList.toggle('hidden', msgMode === 'text');
+  $('txImg').classList.toggle('hidden', msgMode === 'text' || msgMode === 'sound');
+  $('txOpts').classList.toggle('sounding', msgMode === 'sound');
   $('drawTools').classList.toggle('hidden', msgMode !== 'draw');
   $('photoTools').classList.toggle('hidden', msgMode !== 'photo');
   const m = currentMsg(); if (m.type === 'image') drawPixels($('txCanvas'), m);
@@ -799,12 +1304,15 @@ function showTx() {
 }
 function txInfo() {
   const f = buildFrame(currentMsg(), cfg);
+  if (f.sound) { $('txInfo').textContent = `Room sounding · MLS of ${f.sound.N} samples (${(f.sound.N / FS_TX).toFixed(2)} s) played ${f.sound.periods + 1} times, the first to fill the room · preamble and header ${cfg.tones === 'hop' ? 'hopping' : 'at 4 / 8 kHz'} · ${(f.dur + 0.4).toFixed(1)} s of sound`; return; }
   const desc = msgMode === 'text' ? `${textCodes($('txtIn').value).length} characters` : (() => { const m = currentMsg(); return `${m.w}×${m.h} image`; })();
   const coded = cfg.code === 'none' ? '' : ` → ${f.nc} coded bits`;
-  $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, message at ${cfg.rate} bit/s`;
+  $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, message at ${cfg.rate} bit/s` + (cfg.tones === 'hop' ? `, ${toneDesc('hop', cfg.rate)}` : '');
 }
 seg($('msgSeg'), msgMode, v => { msgMode = v; showTx(); });
 seg($('codeSeg'), cfg.code, v => { cfg.code = v; syncUrl(); txInfo(); });
+seg($('ordSeg'), snd.order, v => { snd.order = +v; txInfo(); });
+seg($('perSeg'), snd.periods, v => { snd.periods = +v; txInfo(); });
 seg($('penSeg'), 0, v => { pen = +v; });
 $('txtIn').addEventListener('input', txInfo);
 $('clearPad').onclick = () => { pad.pixels.fill(1); showTx(); };
@@ -833,7 +1341,7 @@ $('photoIn').onchange = e => {
   im.src = URL.createObjectURL(f);
 };
 let playing = null;
-// Each Send uses a fresh AudioContext, closed when playback ends. A long-lived context can end up
+// Each Send uses a fresh AudioContext, closed shortly after playback ends. A long-lived context can end up
 // suspended or "interrupted" (sleep, idle, output device change) and then plays silence.
 $('sendBtn').onclick = async () => {
   if (playing) { playing.stop(); return; }
@@ -848,7 +1356,9 @@ $('sendBtn').onclick = async () => {
   const finish = msg => {
     if (playing !== src) return;
     playing = null; $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = msg;
-    a.close().catch(() => {});
+    // The speaker may still be playing the end of the buffer (output latency, up to a few tenths of a second with
+    // Bluetooth): closing the context now would cut it off, and the postamble with it. So wait before closing.
+    setTimeout(() => a.close().catch(() => {}), 2000 + 1000 * ((a.outputLatency || 0) + (a.baseLatency || 0)));
   };
   src.onended = () => finish('Sent.');
   src.start(); t0 = a.currentTime; tick();
@@ -858,7 +1368,7 @@ $('sendBtn').onclick = async () => {
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 $('wavBtn').onclick = () => {
   const m = currentMsg();
-  download(wavBlob(modulate(buildFrame(m, cfg)), FS_TX), `acoustic_${m.type}_${cfg.tones}_${cfg.rate}bps.wav`);
+  download(wavBlob(modulate(buildFrame(m, cfg)), FS_TX), m.type === 'sound' ? `acoustic_sounding_mls${m.order}_x${m.periods}.wav` : `acoustic_${m.type}_${cfg.tones}_${cfg.rate}bps.wav`);
 };
 showTx();
 
@@ -869,15 +1379,19 @@ function makeRx() {
   rx = new Receiver(actx.sampleRate, { ...cfg }, {
     onState: (s, info) => {
       if (s === 'detected') { pill('Frame detected', 'live'); clearOut(); }
-      if (s === 'header') { pill((info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`) + ` · ${info.rate} bit/s` + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`), 'live'); }
+      if (s === 'header' && info.type === 'sound') pill(`Measuring the room · ${info.periods} × ${(((1 << info.order) - 1) / FS_TX).toFixed(2)} s`, 'live');
+      else if (s === 'header') { pill((info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`) + ` · ${info.rate} bit/s` + (info.tones === 'hop' ? ' · hopping' : '') + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`), 'live'); }
       if (s === 'lost') { pill('Listening', 'live'); }
     },
-    onProgress: p => { $('rxProg').style.width = (100 * p.done / p.hdr.nc) + '%'; if (p.bits) showOut(p.hdr, p.bits, p.done); },
-    onDone: res => { lastRec = res; showOut(res.hdr, res.bits, res.hdr.n0); showStats(res); pill('Received ✓', 'ok'); setTimeout(() => { if (stream) pill('Listening', 'live'); }, 4000); }
+    onProgress: p => { if (p.sound) { $('rxProg').style.width = (100 * p.frac) + '%'; return; } $('rxProg').style.width = (100 * p.done / p.hdr.nc) + '%'; if (p.bits) showOut(p.hdr, p.bits, p.done); },
+    onDone: res => {
+      lastRec = res;
+      if (res.sound) { $('rxProg').style.width = '100%'; showSounding(res); pill('Room measured ✓', 'ok'); }
+      else { showOut(res.hdr, res.bits, res.hdr.n0); showStats(res); pill('Received ✓', 'ok'); } setTimeout(() => { if (stream) pill('Listening', 'live'); }, 4000); }
   });
 }
 function restartRx() { if (rx && actx) { makeRx(); clearOut(); } }
-function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); }
+function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('irBtn').classList.add('hidden'); $('sndOut').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); }
 function showOut(hdr, bits, done) {
   if (hdr.type === 'text') { $('rxOutText').textContent = decodeText(bits.subarray(0, done - done % 8)); $('rxFig').classList.add('hidden'); }
   else { $('rxOutText').textContent = ''; $('rxFig').classList.remove('hidden'); drawPixels($('rxCanvas'), { h: hdr.h, w: hdr.w, pixels: bits }, done); }
@@ -892,18 +1406,26 @@ function showRaw(res) {
 function showStats(res) {
   const st = [], code = res.hdr.code;
   showRaw(res);
-  st.push([`${res.hdr.rate}`, `bit/s, ${TONES[res.hdr.tones].map(f => f / 1000).join(' / ')} kHz, preamble ${res.NP} (read from the header)`]);
+  st.push([`${res.hdr.rate}`, `bit/s, ${toneDesc(res.hdr.tones, res.hdr.rate)}, preamble ${res.NP} (read from the header)`]);
   st.push([res.hdr.n0, 'message bits']);
   if (code !== 'none') {
     st.push([CODE_INFO[code].rate, `code rate, ${CODE_INFO[code].short}`]);
     st.push([res.chErr, `channel bit errors corrected (of ${res.hdr.nc} bits)`]);
     if (code === 'rs') st.push([`${res.rsFails} / ${res.rsBlocks}`, 'Reed–Solomon blocks with too many errors']);
+    if (code === 'turbo') st.push([res.iters, 'iterations of the turbo decoder (at most 8; it stops when its decisions no longer change)']);
   }
   const { t0, t1 } = res.cal;
-  st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, 'SNR per symbol, low / high tone (from the postamble)']);
-  st.push([`${(20 * Math.log10(t1.mu / t0.mu)).toFixed(1)} dB`, 'level of the high tone relative to the low tone']);
+  if (res.hdr.tones === 'hop') {
+    st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, `SNR per symbol, bit-0 / bit-1 tones, after levelling each tone (from the ${res.found ? 'postamble' : 'message: postamble not found'})`]);
+    st.push([`${res.spread.toFixed(0)} dB`, 'spread of the tone levels across the band (speaker, room, microphone)']);
+  } else {
+    st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, `SNR per symbol, low / high tone (from the ${res.found ? 'postamble' : 'message: postamble not found'})`]);
+    st.push([`${(20 * Math.log10(t1.mu / t0.mu)).toFixed(1)} dB`, 'level of the high tone relative to the low tone']);
+  }
   st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
   st.push([res.pilotErr === null ? 'not found' : `${res.pilotErr} / ${res.pe0.length}`, 'errors on the postamble']);
+  if (res.cal.alpha !== undefined) st.push([res.cal.alpha.toFixed(2), 'scale of the calibrated LLR, fitted on the postamble (below 1: the noise model was too sure of itself)']);
+  if (res.timing) st.push([res.timing.map(v => (v > 0 ? '+' : '') + v).join(' → '), 'samples of fine timing on the message, start → end']);
   let truth = null;
   if (res.hdr.type === 'image' && res.hdr.h === DEMO.h && res.hdr.w === DEMO.w) truth = demoPixels().pixels;
   if (truth) {
@@ -933,9 +1455,76 @@ function drawHist(res, sent) {   // sent: transmitted channel bits (known for th
 }
 seg($('softSeg'), cfg.soft, v => {   // re-decode the last message with the other soft output
   cfg.soft = v; if (rx) rx.cfg.soft = v;
-  if (lastRec) { Object.assign(lastRec, decodeFrame(lastRec, v)); clearOut(); $('rxProg').style.width = '100%'; showOut(lastRec.hdr, lastRec.bits, lastRec.hdr.n0); showStats(lastRec); }
+  if (lastRec && !lastRec.sound) { Object.assign(lastRec, decodeFrame(lastRec, v)); clearOut(); $('rxProg').style.width = '100%'; showOut(lastRec.hdr, lastRec.bits, lastRec.hdr.n0); showStats(lastRec); }
 });
-$('recBtn').onclick = () => { if (lastRec) download(wavBlob(lastRec.recording, lastRec.fs), `received_${lastRec.hdr.tones}_${lastRec.hdr.rate}bps_${Math.round(lastRec.fs)}Hz.wav`); };
+$('recBtn').onclick = () => { if (lastRec) download(wavBlob(lastRec.recording, lastRec.fs), lastRec.sound ? `received_sounding_${Math.round(lastRec.fs)}Hz.wav` : `received_${lastRec.hdr.tones}_${lastRec.hdr.rate}bps_${Math.round(lastRec.fs)}Hz.wav`); };
+$('irBtn').onclick = () => {   // the measured response, peak at 0.9, from 5 ms before the direct sound to the end of the decay
+  if (!lastRec || !lastRec.sound) return;
+  const s = lastRec.sound, n = Math.min(s.N, s.iend + Math.round(0.05 * FS_TX)), pk = s.h.reduce((m, v) => Math.max(m, Math.abs(v)), 0) || 1;
+  download(wavBlob(Float32Array.from(s.h.subarray(0, n), v => 0.9 * v / pk), FS_TX), 'room_impulse_response_48kHz.wav');
+};
+
+// ---------- room sounding results ----------
+const ESN0_400 = 10 * Math.log10(0.405 / SOUND_AMP ** 2 * (FS_TX / 2) / 400);   // tone of amplitude 0.9 at 400 bit/s vs the MLS spread over 0..24 kHz
+function showSounding(res) {
+  const s = res.sound, db = v => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)} dB`, st = [];
+  $('sndOut').classList.remove('hidden');
+  $('rxOutText').textContent = (s.rt ? `RT60 ${s.rt.rt60.toFixed(2)} s · ` : '') + `DRR ${s.drr >= 0 ? '+' : '−'}${Math.abs(s.drr).toFixed(1)} dB`;
+  st.push(s.rt ? [`${s.rt.rt60.toFixed(2)} s`, `reverberation time RT60 (${s.rt.method})`] : ['—', 'reverberation time: the decay is too short above the noise']);
+  st.push([`${(1000 * s.tauRms).toFixed(1)} ms`, 'rms delay spread τ<sub>rms</sub> (a bit lasts 2.5 ms at 400 bit/s)']);
+  st.push([db(s.drr), 'direct-to-reverberant ratio']);
+  st.push([db(s.c50), 'clarity C50, first 50 ms vs the rest']);
+  const [t4, t8, t16] = s.tones;
+  st.push([db(t8.gain - t4.gain) + (t16.gain === null ? '' : ` / ${db(t16.gain - t8.gain)}`), 'gain of 8 vs 4 kHz' + (t16.gain === null ? '' : ' / 16 vs 8 kHz') + ' (speaker, room, microphone)']);
+  if (s.snr) { const t = s.tones.filter(x => x.snr !== null); st.push([t.map(x => (x.snr + ESN0_400).toFixed(0)).join(' / ') + ' dB', `E<sub>s</sub>/N<sub>0</sub> of a tone at 400 bit/s, ${t.map(x => x.f / 1000).join(' / ')} kHz (noise only)`]); }
+  st.push([`${s.inr.toFixed(0)} dB`, 'decay range above the noise']);
+  st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
+  if (s.glitch) st.push([`${s.used} / ${res.hdr.periods}`, 'periods used: the audio skipped or repeated samples, periods realigned']);
+  $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  drawIR(s); drawFR(s);
+  $('irBtn').classList.remove('hidden'); $('recBtn').classList.remove('hidden');
+}
+function plotArea(cv) {
+  const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
+  g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H); g.font = `${11 * devicePixelRatio}px system-ui,sans-serif`;
+  return { g, W, H, L: 34 * devicePixelRatio, B: 16 * devicePixelRatio };
+}
+function label(g, W, H, txt, x, y, base) {   // text kept inside the plot
+  g.textBaseline = base; const w = g.measureText(txt).width;
+  if (x + w <= W - 2) g.fillText(txt, x, base === 'middle' ? Math.max(7 * devicePixelRatio, Math.min(H - 7 * devicePixelRatio, y)) : y);
+}
+function curve(g, n, X, Y, col, w = 1.5) { g.strokeStyle = col; g.lineWidth = w * devicePixelRatio; g.beginPath(); let on = false; for (let i = 0; i < n; i++) { const y = Y(i); if (!isFinite(y)) { on = false; continue; } on ? g.lineTo(X(i), y) : g.moveTo(X(i), y); on = true; } g.stroke(); }
+function drawIR(s) {   // energy envelope and decay curve, in dB against time after the direct sound
+  const { g, W, H, L, B } = plotArea($('irPlot')), fs = s.fsIR, n = Math.min(s.N, Math.max(Math.round(0.1 * fs), Math.round(1.25 * s.iend)));
+  const t0 = -s.pre / fs, t1 = (n - s.pre) / fs, X = t => L + (t - t0) / (t1 - t0) * (W - L - 4), Y = d => 4 + -d / 70 * (H - B - 8);
+  const em = Math.max(...s.env);
+  g.strokeStyle = '#ffffff22'; g.fillStyle = '#ffffff99';
+  for (let d = 0; d >= -70; d -= 10) { g.beginPath(); g.moveTo(L, Y(d)); g.lineTo(W, Y(d)); g.stroke(); label(g, W, H, `${d}`, 4, Y(d), 'middle'); }
+  const step = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5].find(v => (t1 - t0) / v <= 8) || 1;
+  for (let t = 0; t <= t1; t += step) { g.beginPath(); g.moveTo(X(t), 0); g.lineTo(X(t), H - B); g.stroke(); label(g, W, H, `${Math.round(1000 * t)} ms`, X(t) + 2, H - B + 2, 'top'); }
+  const px = Math.max(1, Math.floor(n / (W - L)));   // one point per pixel column: the largest value in it
+  curve(g, Math.ceil(n / px), j => X((j * px - s.pre) / fs), j => { let m = 0; for (let i = j * px; i < Math.min(n, (j + 1) * px); i++) m = Math.max(m, s.env[i]); return Y(Math.max(-70, 10 * Math.log10(m / em + 1e-12))); }, css('--f1'), 1);
+  if (s.rt) {   // the fitted slope, extended to -65 dB, under the decay curve
+    g.setLineDash([5 * devicePixelRatio, 4 * devicePixelRatio]);
+    const i1 = Math.min(n, (-65 - s.rt.at) / s.rt.slope), ia = Math.max(s.pre, (0 - s.rt.at) / s.rt.slope);
+    curve(g, 2, k => X(((k ? i1 : ia) - s.pre) / fs), k => Y(s.rt.at + s.rt.slope * (k ? i1 : ia)), '#ffffffcc', 1);
+    g.setLineDash([]); g.fillStyle = '#fff'; g.textBaseline = 'top'; g.fillText(`RT60 ≈ ${s.rt.rt60.toFixed(2)} s`, W - 110 * devicePixelRatio, 8 * devicePixelRatio);
+  }
+  curve(g, Math.min(n, s.edcDb.length), i => X((i - s.pre) / fs), i => s.edcDb[i] < -70 ? NaN : Y(s.edcDb[i]), css('--f0'), 2.5);
+}
+function drawFR(s) {   // frequency response and SNR, in dB against frequency (log scale)
+  const { g, W, H, L, B } = plotArea($('frPlot')), f0 = s.grid[0], f1 = s.grid[s.grid.length - 1];
+  const top = s.snr ? Math.max(10, 10 * Math.ceil(Math.max(...s.snr) / 10)) : 10, bot = -40;
+  const X = f => L + Math.log(f / f0) / Math.log(f1 / f0) * (W - L - 4), Y = d => 4 + (top - d) / (top - bot) * (H - B - 8);
+  g.strokeStyle = '#ffffff22'; g.fillStyle = '#ffffff99';
+  for (let d = top; d >= bot; d -= 10) { g.beginPath(); g.moveTo(L, Y(d)); g.lineTo(W, Y(d)); g.stroke(); label(g, W, H, `${d}`, 4, Y(d), 'middle'); }
+  for (const f of [100, 200, 500, 1000, 2000, 5000, 10000, 20000]) if (f >= f0 && f <= f1) { g.beginPath(); g.moveTo(X(f), 0); g.lineTo(X(f), H - B); g.stroke(); label(g, W, H, f >= 1000 ? `${f / 1000}k` : `${f}`, X(f) + 2, H - B + 2, 'top'); }
+  g.setLineDash([2 * devicePixelRatio, 3 * devicePixelRatio]); g.strokeStyle = '#ffffffaa';
+  for (const t of s.tones) if (t.gain !== null) { g.beginPath(); g.moveTo(X(t.f), 0); g.lineTo(X(t.f), H - B); g.stroke(); }
+  g.setLineDash([]);
+  if (s.snr) curve(g, s.grid.length, i => X(s.grid[i]), i => Y(Math.max(bot, s.snr[i])), css('--f0'), 2);
+  curve(g, s.grid.length, i => X(s.grid[i]), i => Y(Math.max(bot, s.Hdb[i])), css('--f1'), 2);
+}
 
 $('listenBtn').onclick = async () => {
   const a = ctx();
@@ -971,9 +1560,16 @@ function draw() {
     const v = Math.pow(fbin[Math.floor((1 - y / H) * (nb - 1))] / 255, 2.2);
     g.fillStyle = `hsl(${230 - 230 * v},85%,${6 + 52 * v}%)`; g.fillRect(W - col, y, col, 1);
   }
-  const [F0, F1] = TONES[rx.hdr ? rx.hdr.tones : CTRL.tones];   // the tones being received
-  g.fillStyle = css('--f0'); g.fillRect(W - 6, H * (1 - F0 / fmax) - 1, 6, 3);
-  g.fillStyle = css('--f1'); g.fillRect(W - 6, H * (1 - F1 / fmax) - 1, 6, 3);
+  const tn = rx.state === 'search' ? null : rx.hdr ? rx.hdr.tones : rx.hop ? 'hop' : CTRL.tones;   // the tones being received
+  if (tn === 'hop') {   // tone hopping: the edges of the band
+    const hs = hopSet(rx.hdr ? rx.hdr.rate : CTRL.rate), fa = HOP_F0, fb = HOP_F0 + (2 * hs.H - 1) * hs.rate;
+    g.fillStyle = css('--f0'); g.fillRect(W - 6, H * (1 - fa / fmax) - 1, 6, 3);
+    g.fillStyle = css('--f1'); g.fillRect(W - 6, H * (1 - fb / fmax) - 1, 6, 3);
+  } else {
+    const [F0, F1] = TONES[tn || CTRL.tones];
+    g.fillStyle = css('--f0'); g.fillRect(W - 6, H * (1 - F0 / fmax) - 1, 6, 3);
+    g.fillStyle = css('--f1'); g.fillRect(W - 6, H * (1 - F1 / fmax) - 1, 6, 3);
+  }
   // correlation history
   const cv = $('corr'), CW = cv.width = cv.clientWidth * devicePixelRatio, CH = cv.height = cv.clientHeight * devicePixelRatio, c = cv.getContext('2d');
   c.fillStyle = css('--plot-bg'); c.fillRect(0, 0, CW, CH);
