@@ -115,7 +115,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     </div>
   </div>
   <div class="opts" id="txOpts">
-    <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="rs">Reed–Solomon</button><button data-v="turbo">Turbo</button></span>
+    <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="turbo">Turbo</button></span>
     <span class="muted">Tones</span><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
     <span class="muted mo">Rate, bit/s</span><span class="seg mo" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button></span>
     <span class="muted so">Period</span><span class="seg so" id="ordSeg"><button data-v="14">0.34 s</button><button data-v="15">0.68 s</button><button data-v="16">1.37 s</button></span>
@@ -142,9 +142,9 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     <p class="muted">The receivers read the code from the header, so only the transmitter chooses it.
     <b>Hamming (7,4)</b>: 3 parity bits per 4 bits, corrects 1 wrong bit in each block of 7 (hard decisions).
     <b>Convolutional</b>: rate 1/2, constraint length 7 (generators 171, 133 octal), decoded by the Viterbi algorithm on the soft outputs.
-    <b>Reed–Solomon (255,223)</b>: works on bytes, corrects up to 16 wrong bytes in each block of 255, good against bursts.
     <b>Turbo</b>: rate 1/2 as in 4G: two small recursive convolutional codes, the second fed with the message shuffled, decoded by two soft decoders that exchange what they learnt, up to 8 times. It needs about 1.3 dB less signal than the convolutional code for the same frame error rate.
-    Hamming, convolutional and turbo bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.</p>
+    Hamming, convolutional and turbo bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.
+    v0 also offered <b>Reed–Solomon (255,223)</b>, which corrects up to 16 wrong bytes in each block of 255. In a room it fails as early as Hamming, since both decide each bit before decoding, so this page no longer sends it; it still decodes it.</p>
     <p class="muted"><b>Tone hopping.</b> In a room, the sound of each bit rings on for a large part of a second, far longer than the bit (2.5 ms at 400 bit/s). With only two tones, the echo of the earlier bits sits on both tones all the time; beyond the critical distance, where the echo is louder than the direct sound, it buries the bit. Hopping spreads the bits over 6400 / R pairs of adjacent tones from 3.2 to 16 kHz (16 pairs at 400 bit/s, R the rate): bit k uses pair 7k mod 16 (s k mod H in general), so a pair is used again only H bits later and the echo on each tone is H/2 times weaker, about 3 dB per doubling of the pairs. The preamble and header hop too (at 400 bit/s), otherwise far receivers would not find the frame. Each tone has its own level (speaker, room, microphone), so the receiver levels the tones before deciding. The band starts at 3.2 kHz: below that, a small speaker gives little and a room is noisy, and in a real test the 1.6 kHz tone the band first started at caused nearly all the errors.</p>
   </details>
 </section>
@@ -633,7 +633,7 @@ function drawQR(cv, text, px = 8) {
 // then the message part, in the tones and rate the header announces:
 //   coded and scrambled message | MLS postamble (same sequence as the preamble)
 // Header: type 2 | a 11 | b 11 | code 2 | rate 2 | tones 2 | 0 0, then CRC-8, all through the convolutional code.
-// Code: 0 none, 1 Hamming, 2 convolutional, 3 Reed–Solomon; the turbo code (4) is sent as 0 with the CRC inverted,
+// Code: 0 none, 1 Hamming, 2 convolutional, 3 Reed–Solomon (received only, from v0); the turbo code (4) is sent as 0 with the CRC inverted,
 // the way 4G signals the number of antennas by masking a CRC, so receivers that predate it simply ignore the frame.
 // Tones: 0 low (4 / 8 kHz), 1 high (8 / 16 kHz), 2 tone hopping (3.2 to 16 kHz, see hopSet).
 // Types: 0 text (a = characters), 1 image (a = height, b = width), 2 room sounding (a = MLS order, b = periods).
@@ -1246,7 +1246,7 @@ const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const params = new URLSearchParams(location.search);
 const cfg = { tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: [200, 400, 800, 1600].includes(+params.get('rate')) ? +params.get('rate') : 400,
-              code: CODES.includes(params.get('code')) ? params.get('code') : 'none', soft: params.get('soft') === 'ratio' ? 'ratio' : 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127 };
+              code: CODES.includes(params.get('code')) && params.get('code') !== 'rs' ? params.get('code') : 'none', soft: params.get('soft') === 'ratio' ? 'ratio' : 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127 };
 const PAGE_URL = 'https://sheng-yang-cs.github.io/AudioComm/acoustic_modem_v1.html';
 let msgMode = 'text', pen = 0, actx = null;
 
