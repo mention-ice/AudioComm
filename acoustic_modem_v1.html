@@ -137,7 +137,8 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     The header carries the type (text, image or room sounding) and size of the message, the code, the rate and the tones, protected by a CRC-8 and the convolutional code, so the receivers need no settings, as with the SIGNAL field of Wi-Fi. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone. <code>audiocomm.py</code> produces and decodes the same frames.</p>
     <p class="muted">The receivers find a frame by correlating what they hear with the three possible preambles (maximum-length sequences of 127, 255 or 511 bits).
     A longer preamble gathers more energy before deciding that a frame starts: each doubling of its length gives about 3 dB of margin, so phones farther away, or in a noisier room, still find the frame; the header is then sent 2 or 4 times so that it is read as far away.
-    Neither helps once the message itself is too weak: for that, also lower the rate (200 bit/s gives the message 3 dB more) and use a code.</p>
+    Neither helps once the message itself is too weak: for that, also lower the rate (200 bit/s gives the message 3 dB more) and use a code.
+    The preamble also gives the instant of every symbol. Its long symbols (2.5 ms) tolerate an error of several samples, but the message's short ones do not (0.6 ms at 1600 bit/s). So with tone hopping, once the message is in, the receivers fine-tune its timing on the message itself, by up to half a symbol or 0.5 ms, and keep it if it makes the two tones of each symbol clearly more distinct.</p>
     <p class="muted">The receivers read the code from the header, so only the transmitter chooses it.
     <b>Hamming (7,4)</b>: 3 parity bits per 4 bits, corrects 1 wrong bit in each block of 7 (hard decisions).
     <b>Convolutional</b>: rate 1/2, constraint length 7 (generators 171, 133 octal), decoded by the Viterbi algorithm on the soft outputs.
@@ -182,7 +183,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   <details>
     <summary>Soft output</summary>
     <p class="muted"><b>ln(E₁/E₀)</b> compares the energies received on the two tones. Its sign is the right decision when both tones arrive equally strong, but its size says little about reliability: a bit drowned in noise can look as sure as a clean one.</p>
-    <p class="muted"><b>Calibrated LLR</b> measures, on the known bits of the postamble (sent at the message's tones and rate), the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². It corrects an imbalance between the tones (speaker, microphone, room) and gives the Viterbi decoder reliabilities on the right scale. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal. Switch after a reception to decode the same recording both ways.</p>
+    <p class="muted"><b>Calibrated LLR</b> measures, on the known bits of the postamble (sent at the message's tones and rate), the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². If the postamble is not found (for example when the end of the sound was cut off), A and σ² are estimated on the message itself: its bits are guessed from the energies, then the guesses and the estimates are refined in turn (EM). With the postamble, the LLR is then multiplied by the factor α ≤ 1 that best predicts the postamble's own bits: the echoes of short symbols have heavier tails than Gaussian noise, which makes the model too sure of itself (α ≈ 0.3 at 1600 bit/s in a real room). It corrects an imbalance between the tones (speaker, microphone, room) and gives the Viterbi decoder reliabilities on the right scale. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal. Switch after a reception to decode the same recording both ways.</p>
   </details>
   <details>
     <summary>Room sounding</summary>
@@ -475,19 +476,46 @@ function calibrate(pe0, pe1) {
     const pOn = sOn / nOn, pOff = sOff / nOff, a2 = Math.max(pOn - pOff, 1e-6 * pOn), s2 = Math.max(pOff / 2, 1e-12 * pOn);
     return { mu: Math.sqrt(a2), s2, snrDb: 10 * Math.log10(a2 / (2 * s2)) };
   };
-  return { t0: tone(pe0, 0), t1: tone(pe1, 1) };
+  const cal = { t0: tone(pe0, 0), t1: tone(pe1, 1) };
+  // The model assumes Gaussian noise. The echoes of short symbols have heavier tails, which makes its LLR too sure of
+  // itself: shrink it by the factor alpha (at most 1) that best predicts the postamble's own bits, P(bit) = 1 / (1 + e^(-alpha L)).
+  cal.alpha = fitScale(pe0.map((E0, j) => softLLR('cal', cal, E0, pe1[j]) * (2 * P[j] - 1)));
+  return cal;
+}
+function fitScale(r) {   // r: LLRs times the sign of the known bits; alpha on a grid from 1 down to 0.05
+  let b = { a: 1, f: -Infinity };
+  for (let k = 0; k < 40; k++) { const a = Math.pow(0.05, k / 39); let f = 0; for (const v of r) f -= Math.log1p(Math.exp(-a * v)); if (f > b.f) b = { a, f }; }
+  return b.a;
+}
+// Without the postamble (not found, e.g. when the end of the sound was cut off), the same levels and noise are
+// estimated on the message itself. Its bits are unknown, so each symbol counts as a 1 with the probability given by
+// the current LLR, and the estimate is refined a few times (EM), starting from the hard decisions E1 > E0.
+function calibrateBlind(e0, e1, rounds = 8) {
+  const fit = (e, w) => {   // w[j]: probability that the tone is on in symbol j
+    let sOn = 0, nOn = 0, sOff = 0, nOff = 0;
+    e.forEach((v, j) => { sOn += w[j] * v * v; nOn += w[j]; sOff += (1 - w[j]) * v * v; nOff += 1 - w[j]; });
+    const pOn = sOn / Math.max(nOn, 1e-9), pOff = sOff / Math.max(nOff, 1e-9), a2 = Math.max(pOn - pOff, 1e-6 * pOn), s2 = Math.max(pOff / 2, 1e-12 * pOn);
+    return { mu: Math.sqrt(a2), s2, snrDb: 10 * Math.log10(a2 / (2 * s2)) };
+  };
+  let p1 = Array.from(e0, (v, j) => e1[j] > v ? 1 : 0);
+  for (let r = 0; ; r++) {
+    const cal = { t0: fit(e0, p1.map(p => 1 - p)), t1: fit(e1, p1) };
+    if (r === rounds) return cal;
+    p1 = Array.from(e0, (v, j) => 1 / (1 + Math.exp(-softLLR('cal', cal, v, e1[j]))));
+  }
 }
 // g: local signal level relative to the preamble. In a room most of the disturbance is the echo of the signal itself,
 // so it rises and falls with the signal: dividing the energies by g keeps the preamble's levels and noise valid.
 function softLLR(soft, cal, E0, E1, g = 1) {
   if (soft === 'ratio') return Math.log((E1 + 1e-9) / (E0 + 1e-9));
   const { t0, t1 } = cal; E0 /= g; E1 /= g;
-  return lnI0(t1.mu * E1 / t1.s2) - t1.mu * t1.mu / (2 * t1.s2) - lnI0(t0.mu * E0 / t0.s2) + t0.mu * t0.mu / (2 * t0.s2);
+  return (cal.alpha || 1) * (lnI0(t1.mu * E1 / t1.s2) - t1.mu * t1.mu / (2 * t1.s2) - lnI0(t0.mu * E0 / t0.s2) + t0.mu * t0.mu / (2 * t0.s2));
 }
 // Level tracking: the signal level (whichever tone is on), averaged over +-W symbols, relative to the preamble.
 function levelTrack(res, W = 24) {
   const { t0, t1 } = res.cal, q = (E0, E1) => Math.max(E0 * E0 / (t0.mu * t0.mu), E1 * E1 / (t1.mu * t1.mu));
-  const qref = res.pe0.reduce((s, E0, j) => s + q(E0, res.pe1[j]), 0) / res.pe0.length;
+  const [r0, r1] = res.found === false ? [res.e0, res.e1] : [res.pe0, res.pe1];   // without the postamble: relative to the message
+  const qref = r0.reduce((s, E0, j) => s + q(E0, r1[j]), 0) / r0.length;
   const n = res.e0.length, cs = new Float64Array(n + 1);
   for (let j = 0; j < n; j++) cs[j + 1] = cs[j] + q(res.e0[j], res.e1[j]);
   return Array.from({ length: n }, (_, j) => { const a = Math.max(0, j - W), b = Math.min(n, j + W + 1); return Math.sqrt(Math.min(4, Math.max(0.01, (cs[b] - cs[a]) / (b - a) / qref))); });
@@ -873,6 +901,37 @@ function hopNormalize(hs, e0, e1) {   // e0, e1: energies of symbols 0, 1, 2 ...
   return { e0: e0.map((v, k) => v / g0[hs.pair(k)]), e1: e1.map((v, k) => v / g1[hs.pair(k)]), g0, g1,
            spread: 20 * Math.log10(Math.max(...lv) / Math.min(...lv)) };
 }
+// Fine timing at the message's rate, with tone hopping. The symbol instants come from the 400 bit/s preamble and the
+// postamble. The preamble's long symbols tolerate an error of several samples, the short symbols of a fast message do
+// not: in a real room their best instant was a quarter of a symbol away at 1600 bit/s. So, in up to 8 blocks of the
+// message, find the shift (at most R samples) that makes the two tones most distinct, mean |E1 - E0| / (E1 + E0), and
+// fit a straight line through these shifts. read(j, s): [E0, E1] of message symbol j read s samples after its instant.
+// (With fixed tones the echo of the earlier bits lies on the same two tones, and in simulated rooms this measure then
+// often favoured a worse instant: they keep the instants of the preamble and postamble.)
+function fineTiming(read, nc, R) {
+  const K = Math.max(1, Math.min(8, Math.floor(nc / 128))), step = Math.max(1, Math.round(R / 6)), pts = [];
+  const blk = (j0, j1, s) => { let c = 0; for (let j = j0; j < j1; j++) { const [a, b] = read(j, s); c += Math.abs(b - a) / (a + b + 1e-12); } return c / (j1 - j0); };
+  for (let k = 0; k < K; k++) {
+    const j0 = Math.floor(k * nc / K), j1 = Math.floor((k + 1) * nc / K);
+    let best = { c: -1, s: 0 };
+    for (let s = -R; s <= R; s += step) { const c = blk(j0, j1, s); if (c > best.c) best = { c, s }; }   // coarse grid, then sample by sample
+    const s0 = best.s;
+    for (let s = Math.max(-R, s0 - step + 1); s <= Math.min(R, s0 + step - 1); s++) if (s !== s0) { const c = blk(j0, j1, s); if (c > best.c) best = { c, s }; }
+    pts.push([(j0 + j1 - 1) / 2, best.s]);
+  }
+  const n = pts.length, mx = pts.reduce((t, p) => t + p[0], 0) / n, my = pts.reduce((t, p) => t + p[1], 0) / n;
+  const sxx = pts.reduce((t, p) => t + (p[0] - mx) ** 2, 0), b = sxx > 0 ? pts.reduce((t, p) => t + (p[0] - mx) * (p[1] - my), 0) / sxx : 0;
+  const shift = j => Math.max(-2 * R, Math.min(2 * R, Math.round(my + b * (j - mx))));
+  const e0 = [], e1 = [];
+  for (let j = 0; j < nc; j++) { const [a, c] = read(j, shift(j)); e0.push(a); e1.push(c); }
+  return { e0, e1, from: shift(0), to: shift(nc - 1) };
+}
+// Are the tones clearly more distinct with energies a than with b, symbol by symbol? (paired t-test, t > 2)
+function sharper(a0, a1, b0, b1) {
+  const n = a0.length, d = Array.from(a0, (v, j) => Math.abs(a1[j] - v) / (a1[j] + v + 1e-12) - Math.abs(b1[j] - b0[j]) / (b1[j] + b0[j] + 1e-12));
+  const m = d.reduce((t, v) => t + v, 0) / n, sd = Math.sqrt(d.reduce((t, v) => t + (v - m) ** 2, 0) / Math.max(1, n - 1));
+  return m > 2 * sd / Math.sqrt(n);
+}
 function searchMax(f, lo, hi, Lw) {   // largest f(m), lo <= m <= hi: on a grid of Lw/8 samples, then sample by sample around the best
   const c = Math.max(1, Math.floor(Lw / 8)); let b = { v: -2, m: lo };
   for (let m = lo; m <= hi; m += c) { const v = f(m); if (v > b.v) b = { v, m }; }
@@ -1100,7 +1159,7 @@ class Receiver {
     for (let j = 0; j < NP; j++) { const b = at(q2 + j * Ld * rho); pe0.push(dt.z0[b] || 0); pe1.push(dt.z1[b] || 0); }
     if (found) pilotErr = pe0.reduce((s, v, j) => s + ((pe1[j] > v ? 1 : 0) !== det.P[j]), 0);
     const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(p1 + Delta + NP * Ld + 0.3 * this.fs));
-    const res = { hdr, NP, e0, e1, pe0, pe1, cal: calibrate(pe0, pe1), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
+    const res = { hdr, NP, e0, e1, pe0, pe1, cal: found ? calibrate(pe0, pe1) : calibrateBlind(e0, e1), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
                   t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
     Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
     this.state = 'search'; this.sp = Math.round(p1 + Delta + NP * Ld); this.dt = null;
@@ -1120,13 +1179,18 @@ class Receiver {
       e0 = []; e1 = [];
       for (let j = 0; j < nc; j++) { const [a, b] = at(p1 + ((NP + NH) * Lr + j * Ld) * rho, j); e0.push(a); e1.push(b); }
     }
+    // fine timing on the message, kept if it makes the tones clearly more distinct than the energies read so far
+    // (re-read above, or tracked during the frame when the postamble is missing)
+    const ft = fineTiming((j, s) => at(p1 + ((NP + NH) * Lr + j * Ld) * rho + s, j), nc, Math.min(Math.floor(Ld / 2), Math.round(5e-4 * this.fs)));
+    const timing = sharper(ft.e0, ft.e1, e0, e1) ? [ft.from, ft.to] : null;
+    if (timing) { e0 = ft.e0; e1 = ft.e1; }
     const r0 = [], r1 = [];
     for (let j = 0; j < NP; j++) { const [a, b] = at(q2 + j * Ld * rho, nc + j); r0.push(a); r1.push(b); }
     const nm = hopNormalize(mhs, [...e0, ...r0], [...e1, ...r1]), pe0 = nm.e0.slice(nc), pe1 = nm.e1.slice(nc);
     const pilotErr = found ? pe0.reduce((s, v, j) => s + ((pe1[j] > v ? 1 : 0) !== P[j]), 0) : null;
     const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(q2 + NP * Ld * rho + 0.3 * this.fs));
-    const res = { hdr, NP, e0: nm.e0.slice(0, nc), e1: nm.e1.slice(0, nc), pe0, pe1, cal: calibrate(pe0, pe1), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null,
-                  cmax: this.cmax, cmax2: best.v, pilotErr, hopCtl: this.hop, spread: nm.spread, t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
+    const res = { hdr, NP, e0: nm.e0.slice(0, nc), e1: nm.e1.slice(0, nc), pe0, pe1, cal: found ? calibrate(pe0, pe1) : calibrateBlind(nm.e0.slice(0, nc), nm.e1.slice(0, nc)), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null,
+                  cmax: this.cmax, cmax2: best.v, pilotErr, timing, hopCtl: this.hop, spread: nm.spread, t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
     Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
     this.state = 'search'; this.sp = Math.round(q2 + NP * Ld * rho); this.mhs = null;
     this.cb.onDone && this.cb.onDone(res);
@@ -1170,7 +1234,7 @@ function demoPixels() {
   for (let i = 0; i < n; i++) p[i] = (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
   return { type: 'image', h: DEMO.h, w: DEMO.w, pixels: p };
 }
-if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0,
+if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
   SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
   turboPerm, turboEncode, turboDecode, bcjr };
 </script>
@@ -1276,7 +1340,7 @@ $('photoIn').onchange = e => {
   im.src = URL.createObjectURL(f);
 };
 let playing = null;
-// Each Send uses a fresh AudioContext, closed when playback ends. A long-lived context can end up
+// Each Send uses a fresh AudioContext, closed shortly after playback ends. A long-lived context can end up
 // suspended or "interrupted" (sleep, idle, output device change) and then plays silence.
 $('sendBtn').onclick = async () => {
   if (playing) { playing.stop(); return; }
@@ -1291,7 +1355,9 @@ $('sendBtn').onclick = async () => {
   const finish = msg => {
     if (playing !== src) return;
     playing = null; $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = msg;
-    a.close().catch(() => {});
+    // The speaker may still be playing the end of the buffer (output latency, up to a few tenths of a second with
+    // Bluetooth): closing the context now would cut it off, and the postamble with it. So wait before closing.
+    setTimeout(() => a.close().catch(() => {}), 2000 + 1000 * ((a.outputLatency || 0) + (a.baseLatency || 0)));
   };
   src.onended = () => finish('Sent.');
   src.start(); t0 = a.currentTime; tick();
@@ -1349,14 +1415,16 @@ function showStats(res) {
   }
   const { t0, t1 } = res.cal;
   if (res.hdr.tones === 'hop') {
-    st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, 'SNR per symbol, bit-0 / bit-1 tones, after levelling each tone (from the postamble)']);
+    st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, `SNR per symbol, bit-0 / bit-1 tones, after levelling each tone (from the ${res.found ? 'postamble' : 'message: postamble not found'})`]);
     st.push([`${res.spread.toFixed(0)} dB`, 'spread of the tone levels across the band (speaker, room, microphone)']);
   } else {
-    st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, 'SNR per symbol, low / high tone (from the postamble)']);
+    st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, `SNR per symbol, low / high tone (from the ${res.found ? 'postamble' : 'message: postamble not found'})`]);
     st.push([`${(20 * Math.log10(t1.mu / t0.mu)).toFixed(1)} dB`, 'level of the high tone relative to the low tone']);
   }
   st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
   st.push([res.pilotErr === null ? 'not found' : `${res.pilotErr} / ${res.pe0.length}`, 'errors on the postamble']);
+  if (res.cal.alpha !== undefined) st.push([res.cal.alpha.toFixed(2), 'scale of the calibrated LLR, fitted on the postamble (below 1: the noise model was too sure of itself)']);
+  if (res.timing) st.push([res.timing.map(v => (v > 0 ? '+' : '') + v).join(' → '), 'samples of fine timing on the message, start → end']);
   let truth = null;
   if (res.hdr.type === 'image' && res.hdr.h === DEMO.h && res.hdr.w === DEMO.w) truth = demoPixels().pixels;
   if (truth) {
