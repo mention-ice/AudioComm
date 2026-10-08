@@ -1247,7 +1247,7 @@ const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).
 const params = new URLSearchParams(location.search);
 const cfg = { tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: [200, 400, 800, 1600].includes(+params.get('rate')) ? +params.get('rate') : 400,
               code: CODES.includes(params.get('code')) && params.get('code') !== 'rs' ? params.get('code') : 'none', soft: params.get('soft') === 'ratio' ? 'ratio' : 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127 };
-const PAGE_URL = 'https://sheng-yang-cs.github.io/AudioComm/acoustic_modem_v1.html';
+const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
 let msgMode = 'text', pen = 0, actx = null;
 
 function seg(el, value, onPick) {
@@ -1258,7 +1258,11 @@ function seg(el, value, onPick) {
 function ctx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }
 function syncUrl() { const u = new URL(location.href); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); history.replaceState(null, '', u); }
 // QR code: the online copy of this page (also when the laptop runs it from a local file); receivers need no settings
-function phoneUrl() { return location.protocol === 'https:' ? location.origin + location.pathname : PAGE_URL; }
+function phoneUrl() {   // from a local file: the online copy of the same file (the latest version if the name is not one of ours)
+  if (location.protocol === 'https:') return location.origin + location.pathname;
+  const name = location.pathname.split('/').pop();
+  return PAGE_SITE + (/^acoustic_modem(_v\d+)?\.html$/.test(name) ? name : 'acoustic_modem.html');
+}
 $('qrBtn').onclick = () => { const u = phoneUrl(); drawQR($('qrCanvas'), u); $('qrUrl').textContent = u; $('qrOverlay').classList.remove('hidden'); };
 $('qrOverlay').onclick = () => $('qrOverlay').classList.add('hidden');
 addEventListener('keydown', e => { if (e.key === 'Escape') $('qrOverlay').classList.add('hidden'); });
