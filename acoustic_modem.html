@@ -4,35 +4,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Acoustic Modem v1</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&display=swap">
 <style>
-/* CentraleSupélec colours, taken from the logo: crimson #96023C, grey-violet #857894, black */
+/* Colours of the Mention ICE logo: magenta #86144F, ink #1C1722, grey-violet #706A7F, ground #F5F3F6 */
 :root{
-  --brand:#96023c; --brand-ink:#ffffff; --brand2:#857894;
-  --bg:#f5f4f7; --card:#ffffff; --ink:#141216; --muted:#5f5a6b; --line:#e2dfe8;
-  --accent:#96023c; --accent-ink:#ffffff; --ok:#1d7a4e; --warn:#a66300; --bad:#b0122f;
-  --f0:#857894; --f1:#d61f63; --plot-bg:#120f15; --plot-grid:#2c2733;
+  --brand:#86144f; --brand-ink:#ffffff; --brand2:#706a7f;
+  --bg:#f5f3f6; --card:#ffffff; --ink:#1c1722; --muted:#5f5a6b; --line:#e3dfe7;
+  --accent:#86144f; --accent-ink:#ffffff; --ok:#1d7a4e; --warn:#a66300; --bad:#b0122f;
+  --f0:#706a7f; --f1:#d02f82; --plot-bg:#15111a; --plot-grid:#2e2836;
   --radius:14px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --brand:#7a0231; --brand-ink:#ffffff; --brand2:#a99dbb;
-    --bg:#0f0d12; --card:#1a1620; --ink:#ece9f1; --muted:#a69fb3; --line:#2f2937;
-    --accent:#e0457f; --accent-ink:#16070d; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
-    --f0:#a99dbb; --f1:#ff5c92;
+    --brand:#6b1040; --brand-ink:#ffffff; --brand2:#a9a3b5;
+    --bg:#110e14; --card:#1c1722; --ink:#f5f3f6; --muted:#a9a3b5; --line:#332c3b;
+    --accent:#e2589c; --accent-ink:#1c1722; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
+    --f0:#a9a3b5; --f1:#ff70ba;
   }
 }
 :root[data-theme="dark"]{
-  --brand:#7a0231; --brand-ink:#ffffff; --brand2:#a99dbb;
-  --bg:#0f0d12; --card:#1a1620; --ink:#ece9f1; --muted:#a69fb3; --line:#2f2937;
-  --accent:#e0457f; --accent-ink:#16070d; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
-  --f0:#a99dbb; --f1:#ff5c92;
+  --brand:#6b1040; --brand-ink:#ffffff; --brand2:#a9a3b5;
+  --bg:#110e14; --card:#1c1722; --ink:#f5f3f6; --muted:#a9a3b5; --line:#332c3b;
+  --accent:#e2589c; --accent-ink:#1c1722; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
+  --f0:#a9a3b5; --f1:#ff70ba;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
 header{background:var(--brand);color:var(--brand-ink);border-bottom:4px solid var(--brand2);margin-bottom:12px}
 .hd{max-width:1200px;margin:0 auto;padding:16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
-h1{font-size:22px;margin:0 0 2px;letter-spacing:-.01em}
+h1{font:700 23px/1.25 "Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;margin:0 0 2px;letter-spacing:-.01em}
+/* logo bar: always on white, the ground both logos are drawn for */
+.logos{background:#fff;border-bottom:1px solid #e3dfe7}
+.logos>div{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.ice{display:flex;align-items:center;gap:12px;color:#1c1722}
+.ice svg{height:44px;width:auto;display:block;flex:none}
+.ice span{font:700 15px/1.2 "Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif}
+.cs{height:60px;width:auto;display:block}
+@media (max-width:520px){.ice svg{height:30px}.ice{gap:8px}.ice span{font-size:12px}.cs{height:42px}}
 .sub{color:var(--brand-ink);opacity:.85;margin:0}
 header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,255,255,.55)}
 .opts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
@@ -86,7 +95,14 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 </style>
 </head>
 <body>
-<header><div class="hd">
+<header><div class="logos"><div>
+  <div class="ice" role="img" aria-label="Mention ICE, Information &amp; Communication Engineering">
+    <svg viewBox="226 116 444 230" aria-hidden="true"><circle cx="253.5" cy="142.5" r="22.5" fill="#86144F"/><path d="M253.5 207V315" stroke="#1C1722" stroke-width="42" stroke-linecap="round"/><path d="M487.1 161.2A92 92 0 1 0 487.1 302.2" fill="none" stroke="#86144F" stroke-width="36" stroke-linecap="round"/><path d="M454.2 198.2A42.5 42.5 0 1 0 454.2 265.2" fill="none" stroke="#706A7F" stroke-width="19" stroke-linecap="round"/><circle cx="428" cy="231.7" r="11" fill="#1C1722"/><path d="M573.3 146H645.7M573.3 317.5H645.7" stroke="#1C1722" stroke-width="38.5" stroke-linecap="round"/><path d="M573.3 232H608.7" stroke="#706A7F" stroke-width="38.5" stroke-linecap="round"/></svg>
+    <span aria-hidden="true">Information &amp;<br>Communication Engineering</span>
+  </div>
+  <img class="cs" alt="CentraleSupélec" width="390" height="200" src="data:image/png;base64,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">
+</div></div>
+<div class="hd">
   <div>
     <h1>Acoustic modem <span style="font-weight:500;opacity:.75">v1</span></h1>
     <p class="sub">Binary FSK over the air: one device transmits through its speaker, any device in the room decodes through its microphone.</p>
