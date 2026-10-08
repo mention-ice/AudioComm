@@ -8,7 +8,7 @@ Each version's page and Python script (`acoustic_modem_v0.html` and `audiocomm.p
 | `acoustic_modem_v0.html` | v0, the original page, frozen. |
 | `audiocomm.py` | Python version for the labs (v0). Uses numpy only (`sounddevice` is needed only for live play and record). It does not read hopping or turbo frames: use `audiocomm_v1.py` for those. |
 | `audioComm_tx.m`, `audioComm_rx.m`, `audioComm_params.m`, `audioComm_prbs.m` | MATLAB version (`audioComm_v4.m` is untouched) |
-| `acoustic_modem_v1.html`, `audiocomm_v1.py` | **v1**: v0 plus room sounding, tone hopping, a turbo code, a fix for cut-off endings, fine timing with a fitted LLR scale, a hop band starting at 3.2 kHz, and Reed–Solomon received but no longer sent (see the last seven sections). v0 = `acoustic_modem_v0.html` and `audiocomm.py`, frozen. |
+| `acoustic_modem_v1.html`, `audiocomm_v1.py` | **v1**: v0 plus room sounding, tone hopping, a turbo code, a fix for cut-off endings, fine timing with a fitted LLR scale, a hop band starting at 3.2 kHz, Reed–Solomon received but no longer sent, and turbo code rates 1/3 and 1/4 (see the last eight sections). v0 = `acoustic_modem_v0.html` and `audiocomm.py`, frozen. |
 
 ## Running the live demo
 
@@ -217,3 +217,42 @@ At 800 bit/s and below every text was read with either band, with about 2 to 10 
 
 - **What is lost:** its high rate (about 7/8). The demo image at 1600 bit/s lasts 4.9 s with Reed–Solomon, 7.0 s with the convolutional or turbo code, 6.4 s with Hamming and 4.4 s uncoded.
 - **Tests (simulation):** Reed–Solomon frames built by the v0 page's own code (4 / 8 and 8 / 16 kHz, 200 to 1600 bit/s) are read right by the v1 receiver; the page shows four codes and falls back to None when its address asks for `code=rs`; all 120 fixed-tone and 60 hopping settings still decode.
+
+## v1: turbo code rates 1/3 and 1/4
+
+- **Choosing it:** with Turbo selected, a "Turbo code rate" row offers 1/2 (as before), 1/3 and 1/4, and the page's address keeps the choice (`code=turbo3`, `code=turbo4`); `audiocomm_v1.py tx --code turbo3` or `--code turbo4`. Receivers read the rate from the header.
+- **Code:** the same two 8-state encoders and interleaver as at rate 1/2. Rate 1/3 sends every parity bit of both encoders, as cdma2000 does at rate 1/3 and as 4G's mother code before rate matching: k message bits give 3k + 12 channel bits. Rate 1/4 adds cdma2000's second parity output to each encoder, 1 + D + D² + D³ (17 octal), taken from each encoder in turn: 4k + 18 channel bits, the extra 6 being the tails' second parity bits. The three rates are nested (each one's bits include those of the higher rates); cdma2000's own rate-1/4 puncturing pattern may differ, it was not checked. The decoder is the same, with the extra parity LLRs added to each log-MAP decoder's branch metrics.
+- **Header:** codes 5 and 6 are sent as code fields 1 and 2 with the CRC inverted, the same trick as for code 4. Receivers that predate them (v0, and v1 until now) see a wrong CRC or a code they do not know, and ignore the frame. Frames with the other codes, rate-1/2 turbo included, are unchanged bit for bit.
+- **Textbook channel** (BPSK, white noise, 456 message bits, 400 frames per point), Eb/N0 for 10% frame errors: convolutional 2.7 dB, turbo 1/2 1.4 dB, 1/3 0.7 dB, 1/4 0.4 dB. At the same energy per message bit, rates 1/3 and 1/4 gain 0.7 and 1 dB over rate 1/2.
+
+**In the model rooms, what counts is the airtime.** Tone hopping, 511-bit preamble, 57-character text, the page's receiver, room with RT60 0.6 s. "Message bit/s" is the bit rate times the code rate, and "Frame" is the length of the sound.
+
+Limited by noise (DRR +6 dB, white noise, SNR measured over 3.2–16 kHz, 12 trials per point), SNR at which half the texts are read:
+
+| Bit rate | Code rate | Message bit/s | Frame | SNR for half the texts |
+|---|---|---|---|---|
+| 800 | 1/4 | 200 | 5.6 s | −8.7 dB |
+| 400 | 1/2 | 200 | 6.3 s | −9.0 dB |
+| 400 | 1/3 | 133 | 7.4 s | −10.6 dB |
+| 400 | 1/4 | 100 | 8.6 s | −11.7 dB |
+| 200 | 1/2 | 100 | 9.9 s | −11.3 dB |
+| 200 | 1/3 | 67 | 12.2 s | −12.4 dB (frame detection fails first) |
+| 200 | 1/4 | 50 | 14.5 s | −12.5 dB (frame detection fails first) |
+
+Limited by echo (little noise, 24 rooms per point), texts read out of 24:
+
+| Bit rate, code rate | Message bit/s | Frame | DRR −12 | −14 | −16 | −18 | −20 | −22 | −24 dB |
+|---|---|---|---|---|---|---|---|---|---|
+| 400, 1/2 | 200 | 6.3 s | 19 | 2 | 0 | 0 | 0 | 0 | 0 |
+| 400, 1/3 | 133 | 7.4 s | 22 | 16 | 2 | 1 | 3 | 1 | 1 |
+| 400, 1/4 | 100 | 8.6 s | 23 | 22 | 11 | 7 | 9 | 8 | 5 |
+| 200, 1/2 | 100 | 9.9 s | 24 | 22 | 13 | 16 | 16 | 16 | 17 |
+| 200, 1/3 | 67 | 12.2 s | 24 | 24 | 21 | 23 | 24 | 24 | 24 |
+| 200, 1/4 | 50 | 14.5 s | 24 | 24 | 24 | 24 | 24 | 24 | 24 |
+
+- **Noise:** at the same bit rate, rates 1/3 and 1/4 tolerate 1.6 and 2.7 dB more noise than rate 1/2, but the frame lasts longer. Spending the same airtime on a lower bit rate does as well: 400 bit/s at rate 1/4 and 200 bit/s at rate 1/2 both carry 100 message bits per second and are 0.4 dB apart; 800 bit/s at 1/4 and 400 bit/s at 1/2 both carry 200 and are 0.3 dB apart. The 1 dB that rate 1/4 gains on the textbook channel is lost here, probably because a non-coherent detector loses more when each channel bit carries less energy: at low SNR the information it extracts per bit falls with the square of the SNR, where a coherent detector's falls in proportion.
+- **Echo:** far beyond the critical distance the bit rate counts more than the code rate. In the same airtime, from DRR −16 to −24 dB, 200 bit/s at rate 1/2 read 78 of 120 texts and 400 bit/s at rate 1/4 read 40. 800 bit/s at 1/4 did worse than 400 bit/s at 1/2 (1 of 12 texts at DRR −12 dB, against 8 of 12, in a separate run). Below about −16 dB the counts stop falling. The phone then hears mostly reverberation, whose first milliseconds still carry the current symbol, and the interference is the reverberation of the earlier symbols sent on the same tone pair. Probably, then, what matters is how long a pair waits before it is used again: H symbols, 40 ms at 400 bit/s (16 pairs) and 160 ms at 200 bit/s (32 pairs), by which time the reverberation has decayed by 4 and 16 dB (60 dB per RT60). Halving the bit rate doubles that wait; lowering the code rate does not change it.
+- **Both:** 200 bit/s with rate 1/3 or 1/4 read 116 and 120 of these 120 far texts, at 12.2 and 14.5 s for 57 characters.
+- **Preamble:** with the 127-bit preamble the frame itself is lost at about the noise (SNR −9 to −10 dB) and echo (DRR −12 to −14 dB) where rate 1/2 already fails, so rates 1/3 and 1/4 only help with the 511-bit preamble.
+- **For the farthest phones**, in a reverberant room: hopping, 200 bit/s, 511 preamble, turbo 1/3, or 1/4 for the last bit of margin. When airtime is short, halve the bit rate before lowering the code rate; in a quiet, dry room the two are worth the same.
+- **Tests (simulation):** all 108 turbo settings (fixed tones and hopping, 4 bit rates, 3 preambles, 3 code rates) decode with the settings read from the header; the page and `audiocomm_v1.py` give byte-identical WAVs at rates 1/3 and 1/4, and the script decodes the page's; rate-1/2 codewords, decisions and iteration counts are identical to before; the previous page and script ignore the new frames (in Chromium the previous page stays on "Listening"); the page shows the rate row only for Turbo, keeps the rate in its address, and reads a rate-1/4 frame in Chromium. Not yet tried with real speakers and phones.

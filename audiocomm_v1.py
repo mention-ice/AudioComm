@@ -14,8 +14,9 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            rate: 200 400 800 1600;  tones: low (4/8 kHz), high (8/16 kHz), hop (tone hopping, 3.2 to 16 kHz)
   code   : 0 none, 1 Hamming (7,4) + interleaver, 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
-           rate 1/2, as in 4G) + interleaver;
-           code 4 is sent as 0 with the CRC inverted (as 4G masks a CRC), so receivers that predate it ignore it
+           rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
+           codes 4, 5, 6 are sent as 0, 1, 2 with the CRC inverted (as 4G masks a CRC), so receivers that predate
+           them ignore them
   data   : text = 8 bits per character (Latin-1, MSB first);
            image = pixels in column-major order (MATLAB img(:)), 1 = white
   scrambling: XOR with the LFSR x^15 + x^14 + 1 sequence, all-ones seed
@@ -34,13 +35,13 @@ decoded by the other. The receiver needs no settings: they travel in the header.
 Usage
   python audiocomm_v1.py tx --text "Hello" -o hello.wav     # write a WAV (add --play to play it)
   python audiocomm_v1.py tx --image bartS.png --step 2 -o img.wav
-  python audiocomm_v1.py tx --text "Hello" --code conv -o coded.wav   # codes: none hamming conv rs
+  python audiocomm_v1.py tx --text "Hello" --code conv -o coded.wav   # codes: none hamming conv turbo turbo3 turbo4
   python audiocomm_v1.py rx recording.wav                    # decode a recording
   python audiocomm_v1.py rx recording.wav --soft ratio       # soft output ln(E1/E0) instead of the calibrated LLR
   python audiocomm_v1.py tx --text "Hello" --code conv --rate 200 --pre 511 -o far.wav   # long range
   python audiocomm_v1.py tx --text "Hello" --tones high --rate 800 -o fast.wav
   python audiocomm_v1.py tx --text "Hello" --tones hop --code conv -o hop.wav   # tone hopping, for reverberant rooms
-  python audiocomm_v1.py tx --text "Hello" --tones hop --code turbo -o turbo.wav   # turbo code
+  python audiocomm_v1.py tx --text "Hello" --tones hop --code turbo -o turbo.wav   # turbo code (turbo3, turbo4: rates 1/3, 1/4)
   python audiocomm_v1.py rx --listen 20                      # record 20 s from the mic, then decode
   python audiocomm_v1.py tx --sound -o sound.wav             # room sounding: MLS of 0.68 s, 4 periods averaged
   python audiocomm_v1.py tx --sound --order 16 --periods 8 --pre 511 -o sound.wav   # large or reverberant room
@@ -101,7 +102,8 @@ def msb(v, nb):
 
 # ---------------------------------------------------------------- channel codes
 # Same codes as acoustic_modem.html; the code is announced in the header, so the receiver finds it there.
-CODES = ["none", "hamming", "conv", "rs", "turbo"]
+CODES = ["none", "hamming", "conv", "rs", "turbo", "turbo3", "turbo4"]
+TURBO_R = {"turbo": 2, "turbo3": 3, "turbo4": 4}   # turbo codes: rate 1/r
 RS_K, RS_P = 223, 32
 
 
@@ -110,6 +112,10 @@ def coded_length(code, n0):
         return 7 * math.ceil(n0 / 4)
     if code in ("conv", "turbo"):
         return 2 * (n0 + 6)
+    if code == "turbo3":
+        return 3 * n0 + 12
+    if code == "turbo4":
+        return 4 * n0 + 18
     if code == "rs":
         K = math.ceil(n0 / 8)
         return 8 * (K + RS_P * math.ceil(K / RS_K))
@@ -194,15 +200,19 @@ def conv_decode(llr, n0, lim=4):
 
 
 # Turbo code (as in 4G): two 8-state recursive systematic encoders, feedback 1 + D^2 + D^3 and parity 1 + D + D^3
-# (13 and 15 octal); the second one encodes the message in the order of a spread pseudo-random interleaver. Parity bits
-# are taken alternately from each (rate 1/2), and each encoder returns to state 0 with 3 tail steps:
+# (13 and 15 octal); the second one encodes the message in the order of a spread pseudo-random interleaver. Each encoder
+# returns to state 0 with 3 tail steps. Rate 1/2: parity bits taken alternately from each encoder,
 # k bits -> [k message bits | k parity bits | 12 tail bits] = 2k + 12 bits, as long as with the convolutional code.
+# Rate 1/3 sends every parity bit of both encoders (as cdma2000, and 4G before rate matching), [k | k | k | 12 tail bits];
+# 1/4 also sends cdma2000's second parity, 1 + D + D^2 + D^3 (17 octal), taken alternately from each encoder,
+# [k | k | k | k | 18 tail bits]. The three rates are nested: each one's bits include those of the higher rates.
 # The decoder runs two log-MAP (BCJR) decoders in turn, each passing the other what it learnt (extrinsic LLRs).
-TB_NEXT, TB_PAR = np.zeros((8, 2), dtype=int), np.zeros((8, 2), dtype=int)   # next state, parity bit (state, input)
+TB_NEXT, TB_PAR, TB_PAR2 = (np.zeros((8, 2), dtype=int) for _ in range(3))   # next state, parity bits 15, 17 (state, input)
 for _s in range(8):
     for _u in (0, 1):
         _a = _u ^ ((_s >> 1) & 1) ^ (_s & 1)
         TB_PAR[_s, _u], TB_NEXT[_s, _u] = _a ^ (_s >> 2) ^ (_s & 1), (_a << 2) | (_s >> 1)
+        TB_PAR2[_s, _u] = _a ^ (_s >> 2) ^ ((_s >> 1) & 1) ^ (_s & 1)
 _TB_PERMS = {}
 
 
@@ -229,30 +239,43 @@ def turbo_perm(k):
 
 
 def _rsc(u):
-    """Parity bits, then the 3 tail inputs that bring the register back to 0 and their parity bits."""
-    s, p, tu, tp = 0, [], [], []
+    """Parity bits (15 and 17 octal), then the 3 tail inputs that bring the register back to 0 and their parity bits."""
+    s, p, q, tu, tp, tq = 0, [], [], [], [], []
     for b in u:
         p.append(TB_PAR[s, b])
+        q.append(TB_PAR2[s, b])
         s = TB_NEXT[s, b]
     for _ in range(3):
         b = ((s >> 1) & 1) ^ (s & 1)
         tu.append(b)
         tp.append(TB_PAR[s, b])
+        tq.append(TB_PAR2[s, b])
         s = TB_NEXT[s, b]
-    return np.array(p, dtype=int), tu, tp
+    return np.array(p, dtype=int), np.array(q, dtype=int), tu, tp, tq
 
 
-def turbo_encode(d):
+def turbo_encode(d, r=2):
+    """Rate 1/r, r = 2, 3 or 4."""
     d = np.asarray(d, dtype=int)
-    p1, tu1, tp1 = _rsc(d)
-    p2, tu2, tp2 = _rsc(d[turbo_perm(len(d))])
-    return np.concatenate([d, np.where(np.arange(len(d)) % 2 == 0, p1, p2), tu1, tp1, tu2, tp2]).astype(int)
+    p1, q1, tu1, tp1, tq1 = _rsc(d)
+    p2, q2, tu2, tp2, tq2 = _rsc(d[turbo_perm(len(d))])
+    even = np.arange(len(d)) % 2 == 0
+    if r == 2:
+        parts = [d, np.where(even, p1, p2), tu1, tp1, tu2, tp2]
+    elif r == 3:
+        parts = [d, p1, p2, tu1, tp1, tu2, tp2]
+    else:
+        parts = [d, p1, p2, np.where(even, q1, q2), tu1, tp1, tq1, tu2, tp2, tq2]
+    return np.concatenate(parts).astype(int)
 
 
-def _bcjr(ls, la, lp):
-    """Log-MAP over the steps of ls, from state 0 to state 0; LLRs are ln P(0)/P(1) here. A-posteriori LLR of each input."""
+def _bcjr(ls, la, lp, lq=None):
+    """Log-MAP over the steps of ls, from state 0 to state 0; LLRs are ln P(0)/P(1) here. A-posteriori LLR of each input.
+    lq: LLRs of the second parity bits (17 octal), at rate 1/4 only."""
     T = len(ls)
     g = 0.5 * ((ls + la)[:, None, None] * np.array([1, -1]) + lp[:, None, None] * (1 - 2 * TB_PAR))   # (T, 8, 2)
+    if lq is not None:
+        g += 0.5 * lq[:, None, None] * (1 - 2 * TB_PAR2)
     pred = [[(s, u) for s in range(8) for u in (0, 1) if TB_NEXT[s, u] == n] for n in range(8)]
     ps, pu = np.array([[q[0][0], q[1][0]] for q in pred]), np.array([[q[0][1], q[1][1]] for q in pred])
     A = np.full((T + 1, 8), -1e9)
@@ -272,19 +295,26 @@ def _bcjr(ls, la, lp):
     return out
 
 
-def turbo_decode(llr, n0, lim=np.inf, iters=8):
-    """llr > 0 means 1. Returns the n0 message bits and the number of iterations run (it stops when the decisions
-    no longer change)."""
+def turbo_decode(llr, n0, lim=np.inf, iters=8, r=2):
+    """llr > 0 means 1; rate 1/r. Returns the n0 message bits and the number of iterations run (it stops when the
+    decisions no longer change)."""
     k, pi = n0, turbo_perm(n0)
     L = -np.clip(np.clip(np.asarray(llr, dtype=float), -lim, lim), -30, 30)
-    ls, lp, tl, z3 = L[:k], L[k:2 * k], L[2 * k:], np.zeros(3)
+    part = lambda j: L[j * k:(j + 1) * k]
+    ls, tl, z3, t2 = L[:k], L[r * k:], np.zeros(3), 9 if r == 4 else 6   # t2: tail of encoder 2
     odd = np.arange(k) % 2 == 1
-    lp1, lp2, ls2 = np.where(odd, 0, lp), np.where(odd, lp, 0), ls[pi]
+    if r == 2:
+        lp1, lp2 = np.where(odd, 0, part(1)), np.where(odd, part(1), 0)
+    else:
+        lp1, lp2 = part(1), part(2)
+    lq1 = np.r_[np.where(odd, 0, part(3)), tl[6:9]] if r == 4 else None
+    lq2 = np.r_[np.where(odd, part(3), 0), tl[15:18]] if r == 4 else None
+    ls2 = ls[pi]
     le2, x = np.zeros(k), None
     for it in range(1, iters + 1):
-        a1 = _bcjr(np.r_[ls, tl[0:3]], np.r_[le2, z3], np.r_[lp1, tl[3:6]])[:k]
+        a1 = _bcjr(np.r_[ls, tl[0:3]], np.r_[le2, z3], np.r_[lp1, tl[3:6]], lq1)[:k]
         le1 = a1 - ls - le2
-        a2 = _bcjr(np.r_[ls2, tl[6:9]], np.r_[le1[pi], z3], np.r_[lp2, tl[9:12]])[:k]
+        a2 = _bcjr(np.r_[ls2, tl[t2:t2 + 3]], np.r_[le1[pi], z3], np.r_[lp2, tl[t2 + 3:t2 + 6]], lq2)[:k]
         le2, xn = np.empty(k), np.empty(k, dtype=int)
         le2[pi], xn[pi] = a2 - ls2 - le1[pi], a2 < 0
         same = x is not None and np.array_equal(xn, x)
@@ -429,8 +459,8 @@ def encode_fec(code, d):
         return interleave(ham_encode(d))
     if code == "conv":
         return interleave(conv_encode(d))
-    if code == "turbo":
-        return interleave(turbo_encode(d))
+    if code in TURBO_R:
+        return interleave(turbo_encode(d, TURBO_R[code]))
     if code == "rs":
         return rs_encode(d)
     return np.asarray(d, dtype=int)
@@ -443,8 +473,8 @@ def decode_fec(code, n0, llr, lim=4):
         return ham_decode((deinterleave(llr) > 0).astype(int), n0), None
     if code == "conv":
         return conv_decode(deinterleave(llr), n0, lim), None
-    if code == "turbo":
-        return turbo_decode(deinterleave(llr), n0, lim)[0], None
+    if code in TURBO_R:
+        return turbo_decode(deinterleave(llr), n0, lim, 8, TURBO_R[code])[0], None
     if code == "rs":
         bits, fails, _ = rs_decode((llr > 0).astype(int), n0)
         return bits, fails
@@ -1205,7 +1235,7 @@ def main():
             p.add_argument("--image")
             p.add_argument("--step", type=int, default=1)
             p.add_argument("--code", choices=[c for c in CODES if c != "rs"], default="none",
-                           help="Reed-Solomon (v0) is still decoded but no longer sent")
+                           help="turbo, turbo3, turbo4: turbo code of rate 1/2, 1/3, 1/4; Reed-Solomon (v0) is still decoded but no longer sent")
             p.add_argument("--sound", action="store_true", help="room sounding frame instead of a message")
             p.add_argument("--order", type=int, choices=sorted(SOUND_TAPS), default=15, help="sounding period 2^order - 1 samples at 48 kHz")
             p.add_argument("--periods", type=int, choices=range(1, 9), default=4, help="sounding periods averaged")

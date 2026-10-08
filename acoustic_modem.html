@@ -47,7 +47,7 @@ header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,
 .opts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
 .opts>.muted:nth-child(odd){white-space:nowrap}
 .opts>.seg{justify-self:start}
-.opts:not(.sounding) .so,.opts.sounding .mo{display:none}
+.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr{display:none}
 @media (max-width:520px){.opts{grid-template-columns:1fr;gap:4px}.opts>.seg{margin-bottom:6px}}
 .card h2{border-left:4px solid var(--accent);padding-left:8px}
 main{max-width:1200px;margin:0 auto;padding:8px 16px 40px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -132,6 +132,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   </div>
   <div class="opts" id="txOpts">
     <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="turbo">Turbo</button></span>
+    <span class="muted mo tr">Turbo code rate</span><span class="seg mo tr" id="trSeg"><button data-v="turbo">1/2</button><button data-v="turbo3">1/3</button><button data-v="turbo4">1/4</button></span>
     <span class="muted">Tones</span><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
     <span class="muted mo">Rate, bit/s</span><span class="seg mo" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button></span>
     <span class="muted so">Period</span><span class="seg so" id="ordSeg"><button data-v="14">0.34 s</button><button data-v="15">0.68 s</button><button data-v="16">1.37 s</button></span>
@@ -239,19 +240,24 @@ function textCodes(text) { return Array.from(text).slice(0, 1023).map(ch => { co
 
 // ---- channel coding: bits are arrays of 0/1, LLRs are > 0 for a 1 ----
 // The code is announced in the header (see headerBits), so receivers pick it up automatically.
-const CODES = ['none', 'hamming', 'conv', 'rs', 'turbo'];
+const CODES = ['none', 'hamming', 'conv', 'rs', 'turbo', 'turbo3', 'turbo4'];
 const CODE_INFO = {
   none:    { name: 'no code', short: 'no code', rate: '1' },
   hamming: { name: 'Hamming (7,4) + interleaver', short: 'Hamming (7,4)', rate: '4/7' },
   conv:    { name: 'convolutional (171,133), K = 7, soft Viterbi + interleaver', short: 'convolutional code', rate: '1/2' },
   rs:      { name: 'Reed–Solomon (255,223) over bytes', short: 'Reed–Solomon', rate: '≈ 7/8' },
-  turbo:   { name: 'turbo (two 8-state codes, 13 and 15 octal), iterative log-MAP + interleaver', short: 'turbo code', rate: '1/2' }
+  turbo:   { name: 'turbo (two 8-state codes, 13 and 15 octal), iterative log-MAP + interleaver', short: 'turbo code', rate: '1/2' },
+  turbo3:  { name: 'turbo, every parity bit of both codes sent', short: 'turbo code', rate: '1/3' },
+  turbo4:  { name: 'turbo, plus a second parity (17 octal) from each code in turn', short: 'turbo code', rate: '1/4' }
 };
+const TURBO_R = { turbo: 2, turbo3: 3, turbo4: 4 };   // turbo codes: rate 1/r
 const RS_K = 223, RS_P = 32;
 
 function codedLength(code, n0) {
   if (code === 'hamming') return 7 * Math.ceil(n0 / 4);
   if (code === 'conv' || code === 'turbo') return 2 * (n0 + 6);
+  if (code === 'turbo3') return 3 * n0 + 12;
+  if (code === 'turbo4') return 4 * n0 + 18;
   if (code === 'rs') { const K = Math.ceil(n0 / 8), B = Math.ceil(K / RS_K); return 8 * (K + RS_P * B); }
   return n0;
 }
@@ -317,14 +323,17 @@ function convDecode(llr, n0, lim = 4) {
 }
 
 // Turbo code (as in 4G): two 8-state recursive systematic encoders, feedback 1 + D^2 + D^3 and parity 1 + D + D^3
-// (13 and 15 octal); the second one encodes the message in the order of a spread pseudo-random interleaver. Parity bits
-// are taken alternately from each (rate 1/2), and each encoder returns to state 0 with 3 tail steps:
+// (13 and 15 octal); the second one encodes the message in the order of a spread pseudo-random interleaver. Each encoder
+// returns to state 0 with 3 tail steps. Rate 1/2: parity bits taken alternately from each encoder,
 // k bits -> [k message bits | k parity bits | 12 tail bits] = 2k + 12 bits, as long as with the convolutional code.
+// Rate 1/3 sends every parity bit of both encoders (as cdma2000, and 4G before rate matching), [k | k | k | 12 tail bits];
+// 1/4 also sends cdma2000's second parity, 1 + D + D^2 + D^3 (17 octal), taken alternately from each encoder,
+// [k | k | k | k | 18 tail bits]. The three rates are nested: each one's bits include those of the higher rates.
 // The decoder runs two log-MAP (BCJR) decoders in turn, each passing the other what it learnt (extrinsic LLRs).
-const TB_NEXT = [], TB_PAR = [];   // index 2 s + u: next state and parity bit from state s with input u
+const TB_NEXT = [], TB_PAR = [], TB_PAR2 = [];   // index 2 s + u: next state and parity bits (15, 17 octal) from state s with input u
 for (let s = 0; s < 8; s++) {
   const s1 = (s >> 2) & 1, s2 = (s >> 1) & 1, s3 = s & 1;
-  for (let u = 0; u < 2; u++) { const a = u ^ s2 ^ s3; TB_PAR.push(a ^ s1 ^ s3); TB_NEXT.push((a << 2) | (s1 << 1) | s2); }
+  for (let u = 0; u < 2; u++) { const a = u ^ s2 ^ s3; TB_PAR.push(a ^ s1 ^ s3); TB_PAR2.push(a ^ s1 ^ s2 ^ s3); TB_NEXT.push((a << 2) | (s1 << 1) | s2); }
 }
 const TURBO_PERMS = new Map();
 function turboPerm(k) {   // Fisher-Yates shuffle driven by xorshift32 seeded with k, then spread (S-random): positions
@@ -345,20 +354,26 @@ function turboPerm(k) {   // Fisher-Yates shuffle driven by xorshift32 seeded wi
   TURBO_PERMS.set(k, p);
   return p;
 }
-function rscEncode(u) {   // parity bits, then the 3 tail inputs that bring the register back to 0 and their parity bits
-  let s = 0; const p = [], tu = [], tp = [];
-  for (const b of u) { p.push(TB_PAR[2 * s + b]); s = TB_NEXT[2 * s + b]; }
-  for (let i = 0; i < 3; i++) { const b = ((s >> 1) & 1) ^ (s & 1); tu.push(b); tp.push(TB_PAR[2 * s + b]); s = TB_NEXT[2 * s + b]; }
-  return { p, tu, tp };
+function rscEncode(u) {   // parity bits (15 and 17 octal), then the 3 tail inputs that bring the register back to 0 and their parity bits
+  let s = 0; const p = [], q = [], tu = [], tp = [], tq = [];
+  for (const b of u) { p.push(TB_PAR[2 * s + b]); q.push(TB_PAR2[2 * s + b]); s = TB_NEXT[2 * s + b]; }
+  for (let i = 0; i < 3; i++) {
+    const b = ((s >> 1) & 1) ^ (s & 1); tu.push(b); tp.push(TB_PAR[2 * s + b]); tq.push(TB_PAR2[2 * s + b]); s = TB_NEXT[2 * s + b];
+  }
+  return { p, q, tu, tp, tq };
 }
-function turboEncode(d) {
-  const pi = turboPerm(d.length), e1 = rscEncode(d), e2 = rscEncode(pi.map(i => d[i]));
-  return [...d, ...d.map((_, i) => i % 2 ? e2.p[i] : e1.p[i]), ...e1.tu, ...e1.tp, ...e2.tu, ...e2.tp];
+function turboEncode(d, r = 2) {   // rate 1/r, r = 2, 3 or 4
+  const pi = turboPerm(d.length), e1 = rscEncode(d), e2 = rscEncode(pi.map(i => d[i])), alt = (a, b) => d.map((_, i) => i % 2 ? b[i] : a[i]);
+  if (r === 2) return [...d, ...alt(e1.p, e2.p), ...e1.tu, ...e1.tp, ...e2.tu, ...e2.tp];
+  if (r === 3) return [...d, ...e1.p, ...e2.p, ...e1.tu, ...e1.tp, ...e2.tu, ...e2.tp];
+  return [...d, ...e1.p, ...e2.p, ...alt(e1.q, e2.q), ...e1.tu, ...e1.tp, ...e1.tq, ...e2.tu, ...e2.tp, ...e2.tq];
 }
-function bcjr(ls, la, lp) {   // log-MAP over the steps of ls, from state 0 to state 0; LLRs are ln P(0)/P(1) here
+function bcjr(ls, la, lp, lq = null) {   // log-MAP over the steps of ls, from state 0 to state 0; LLRs are ln P(0)/P(1) here
+  // lq: LLRs of the second parity bits (17 octal), at rate 1/4 only
   const T = ls.length, A = new Float64Array(8 * (T + 1)).fill(-1e9), g = new Float64Array(16 * T), out = new Float64Array(T);
   const lse = (a, b) => a > b ? a + Math.log1p(Math.exp(b - a)) : b + Math.log1p(Math.exp(a - b));   // ln(e^a + e^b)
-  for (let t = 0; t < T; t++) for (let q = 0; q < 16; q++) g[16 * t + q] = 0.5 * ((ls[t] + la[t]) * (1 - 2 * (q & 1)) + lp[t] * (1 - 2 * TB_PAR[q]));
+  for (let t = 0; t < T; t++) for (let q = 0; q < 16; q++)
+    g[16 * t + q] = 0.5 * ((ls[t] + la[t]) * (1 - 2 * (q & 1)) + lp[t] * (1 - 2 * TB_PAR[q]) + (lq ? lq[t] * (1 - 2 * TB_PAR2[q]) : 0));
   A[0] = 0;
   for (let t = 0; t < T; t++) {   // forward: alpha
     const a = 8 * t, n = a + 8;
@@ -379,16 +394,18 @@ function bcjr(ls, la, lp) {   // log-MAP over the steps of ls, from state 0 to s
   }
   return out;
 }
-function turboDecode(llr, n0, lim = Infinity, iters = 8) {   // llr > 0 means 1; returns the message bits and the iterations run
+function turboDecode(llr, n0, lim = Infinity, iters = 8, r = 2) {   // llr > 0 means 1; rate 1/r; returns the message bits and the iterations run
   const k = n0, pi = turboPerm(k), L = llr.map(v => -Math.max(-lim, Math.min(lim, Math.max(-30, Math.min(30, v)))));
-  const ls = L.slice(0, k), lp = L.slice(k, 2 * k), tl = L.slice(2 * k), z3 = [0, 0, 0];
-  const lp1 = lp.map((v, i) => i % 2 ? 0 : v), lp2 = lp.map((v, i) => i % 2 ? v : 0), ls2 = pi.map(i => ls[i]);
+  const part = j => L.slice(j * k, (j + 1) * k), keep = (a, o) => a.map((v, i) => i % 2 === o ? v : 0);   // keep: bits sent at i mod 2 = o
+  const ls = part(0), tl = L.slice(r * k), z3 = [0, 0, 0], t2 = r === 4 ? 9 : 6, ls2 = pi.map(i => ls[i]);   // t2: tail of encoder 2
+  const lp1 = r === 2 ? keep(part(1), 0) : part(1), lp2 = r === 2 ? keep(part(1), 1) : part(2);
+  const lq1 = r === 4 ? [...keep(part(3), 0), ...tl.slice(6, 9)] : null, lq2 = r === 4 ? [...keep(part(3), 1), ...tl.slice(15, 18)] : null;
   let le2 = new Float64Array(k), x = null, it = 0;
   while (it < iters) {
     it++;
-    const a1 = bcjr([...ls, ...tl.slice(0, 3)], [...le2, ...z3], [...lp1, ...tl.slice(3, 6)]);
+    const a1 = bcjr([...ls, ...tl.slice(0, 3)], [...le2, ...z3], [...lp1, ...tl.slice(3, 6)], lq1);
     const le1 = Float64Array.from({ length: k }, (_, i) => a1[i] - ls[i] - le2[i]);
-    const a2 = bcjr([...ls2, ...tl.slice(6, 9)], [...pi.map(i => le1[i]), ...z3], [...lp2, ...tl.slice(9, 12)]);
+    const a2 = bcjr([...ls2, ...tl.slice(t2, t2 + 3)], [...pi.map(i => le1[i]), ...z3], [...lp2, ...tl.slice(t2 + 3, t2 + 6)], lq2);
     const n2 = new Float64Array(k), xn = new Uint8Array(k);
     pi.forEach((j, i) => { n2[j] = a2[i] - ls2[i] - le1[j]; xn[j] = a2[i] < 0 ? 1 : 0; });
     const same = x !== null && xn.every((v, i) => v === x[i]);
@@ -462,7 +479,7 @@ function rsDecode(c, n0) {
 function encodeFEC(code, d) {
   if (code === 'hamming') return interleave(hamEncode(d));
   if (code === 'conv') return interleave(convEncode(d));
-  if (code === 'turbo') return interleave(turboEncode(d));
+  if (TURBO_R[code]) return interleave(turboEncode(d, TURBO_R[code]));
   if (code === 'rs') return rsEncode(d);
   return Array.from(d);
 }
@@ -471,7 +488,7 @@ function decodeFEC(code, n0, llr, lim = 4) {   // lim: clipping of the soft valu
   const hard = a => a.map(r => r > 0 ? 1 : 0);
   if (code === 'hamming') return { bits: hamDecode(hard(deinterleave(llr)), n0) };
   if (code === 'conv') return { bits: convDecode(deinterleave(llr), n0, lim) };
-  if (code === 'turbo') return turboDecode(deinterleave(llr), n0, lim);
+  if (TURBO_R[code]) return turboDecode(deinterleave(llr), n0, lim, 8, TURBO_R[code]);
   if (code === 'rs') return rsDecode(hard(llr), n0);
   return { bits: hard(llr) };
 }
@@ -649,8 +666,9 @@ function drawQR(cv, text, px = 8) {
 // then the message part, in the tones and rate the header announces:
 //   coded and scrambled message | MLS postamble (same sequence as the preamble)
 // Header: type 2 | a 11 | b 11 | code 2 | rate 2 | tones 2 | 0 0, then CRC-8, all through the convolutional code.
-// Code: 0 none, 1 Hamming, 2 convolutional, 3 Reed–Solomon (received only, from v0); the turbo code (4) is sent as 0 with the CRC inverted,
-// the way 4G signals the number of antennas by masking a CRC, so receivers that predate it simply ignore the frame.
+// Code: 0 none, 1 Hamming, 2 convolutional, 3 Reed–Solomon (received only, from v0); the turbo codes of rate 1/2, 1/3 and 1/4
+// (4, 5, 6) are sent as 0, 1 and 2 with the CRC inverted, the way 4G signals the number of antennas by masking a CRC,
+// so receivers that predate them simply ignore the frame.
 // Tones: 0 low (4 / 8 kHz), 1 high (8 / 16 kHz), 2 tone hopping (3.2 to 16 kHz, see hopSet).
 // Types: 0 text (a = characters), 1 image (a = height, b = width), 2 room sounding (a = MLS order, b = periods).
 const CTRL = { tones: 'low', rate: 400 };
@@ -1253,7 +1271,7 @@ function demoPixels() {
 }
 if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
   SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
-  turboPerm, turboEncode, turboDecode, bcjr };
+  turboPerm, turboEncode, turboDecode, bcjr, TURBO_R };
 </script>
 
 <script>
@@ -1330,7 +1348,11 @@ function txInfo() {
   $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, message at ${cfg.rate} bit/s` + (cfg.tones === 'hop' ? `, ${toneDesc('hop', cfg.rate)}` : '');
 }
 seg($('msgSeg'), msgMode, v => { msgMode = v; showTx(); });
-seg($('codeSeg'), cfg.code, v => { cfg.code = v; syncUrl(); txInfo(); });
+let turboCode = TURBO_R[cfg.code] ? cfg.code : 'turbo';   // the turbo rate last chosen
+const showTurbo = () => $('txOpts').classList.toggle('turbo', !!TURBO_R[cfg.code]);
+seg($('codeSeg'), TURBO_R[cfg.code] ? 'turbo' : cfg.code, v => { cfg.code = v === 'turbo' ? turboCode : v; showTurbo(); syncUrl(); txInfo(); });
+seg($('trSeg'), turboCode, v => { cfg.code = turboCode = v; syncUrl(); txInfo(); });
+showTurbo();
 seg($('ordSeg'), snd.order, v => { snd.order = +v; txInfo(); });
 seg($('perSeg'), snd.periods, v => { snd.periods = +v; txInfo(); });
 seg($('penSeg'), 0, v => { pen = +v; });
@@ -1432,7 +1454,7 @@ function showStats(res) {
     st.push([CODE_INFO[code].rate, `code rate, ${CODE_INFO[code].short}`]);
     st.push([res.chErr, `channel bit errors corrected (of ${res.hdr.nc} bits)`]);
     if (code === 'rs') st.push([`${res.rsFails} / ${res.rsBlocks}`, 'Reed–Solomon blocks with too many errors']);
-    if (code === 'turbo') st.push([res.iters, 'iterations of the turbo decoder (at most 8; it stops when its decisions no longer change)']);
+    if (TURBO_R[code]) st.push([res.iters, 'iterations of the turbo decoder (at most 8; it stops when its decisions no longer change)']);
   }
   const { t0, t1 } = res.cal;
   if (res.hdr.tones === 'hop') {
