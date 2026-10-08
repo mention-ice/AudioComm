@@ -1,0 +1,1426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Acoustic Modem v1</title>
+<style>
+/* CentraleSupélec colours, taken from the logo: crimson #96023C, grey-violet #857894, black */
+:root{
+  --brand:#96023c; --brand-ink:#ffffff; --brand2:#857894;
+  --bg:#f5f4f7; --card:#ffffff; --ink:#141216; --muted:#5f5a6b; --line:#e2dfe8;
+  --accent:#96023c; --accent-ink:#ffffff; --ok:#1d7a4e; --warn:#a66300; --bad:#b0122f;
+  --f0:#857894; --f1:#d61f63; --plot-bg:#120f15; --plot-grid:#2c2733;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --brand:#7a0231; --brand-ink:#ffffff; --brand2:#a99dbb;
+    --bg:#0f0d12; --card:#1a1620; --ink:#ece9f1; --muted:#a69fb3; --line:#2f2937;
+    --accent:#e0457f; --accent-ink:#16070d; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
+    --f0:#a99dbb; --f1:#ff5c92;
+  }
+}
+:root[data-theme="dark"]{
+  --brand:#7a0231; --brand-ink:#ffffff; --brand2:#a99dbb;
+  --bg:#0f0d12; --card:#1a1620; --ink:#ece9f1; --muted:#a69fb3; --line:#2f2937;
+  --accent:#e0457f; --accent-ink:#16070d; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
+  --f0:#a99dbb; --f1:#ff5c92;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+header{background:var(--brand);color:var(--brand-ink);border-bottom:4px solid var(--brand2);margin-bottom:12px}
+.hd{max-width:1200px;margin:0 auto;padding:16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+h1{font-size:22px;margin:0 0 2px;letter-spacing:-.01em}
+.sub{color:var(--brand-ink);opacity:.85;margin:0}
+header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,255,255,.55)}
+.opts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
+.opts>.muted:nth-child(odd){white-space:nowrap}
+.opts>.seg{justify-self:start}
+.opts:not(.sounding) .so,.opts.sounding .mo{display:none}
+@media (max-width:520px){.opts{grid-template-columns:1fr;gap:4px}.opts>.seg{margin-bottom:6px}}
+.card h2{border-left:4px solid var(--accent);padding-left:8px}
+main{max-width:1200px;margin:0 auto;padding:8px 16px 40px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:860px){main{grid-template-columns:1fr}}
+.roles{display:none;max-width:1200px;margin:0 auto;padding:4px 16px}
+@media (max-width:860px){.roles{display:block} main[data-role="tx"] #rxCard, main[data-role="rx"] #txCard{display:none}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-width:0}
+.card h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:8px;line-height:1.2}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;background:transparent;color:var(--ink);padding:7px 12px;font:inherit;font-size:14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.roles .seg{display:flex}.roles .seg button{flex:1;padding:10px}
+textarea{width:100%;min-height:76px;font:inherit;font-size:17px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:9px 14px;font:inherit;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;font-size:16px;padding:12px 22px}
+.btn:disabled{opacity:.45;cursor:default}
+.muted{color:var(--muted);font-size:13px}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.pill.ok{background:var(--ok);color:#fff}.pill.warn{background:var(--warn);color:#fff}.pill.bad{background:var(--bad);color:#fff}.pill.live{background:var(--accent);color:var(--accent-ink)}
+canvas{display:block;max-width:100%}
+.plot{width:100%;height:150px;background:var(--plot-bg);border-radius:10px}
+.plot.small{height:90px}
+.imgbox{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.pix{image-rendering:pixelated;image-rendering:crisp-edges;background:#888;border-radius:6px;border:1px solid var(--line)}
+.pad{touch-action:none;cursor:crosshair}
+.progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.progress>div{height:100%;width:0;background:var(--accent);transition:width .1s linear}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:12px}
+.rxtext{font-size:24px;font-weight:600;min-height:38px;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:4px 0 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+details{margin-top:12px}summary{cursor:pointer;color:var(--muted)}
+.hidden{display:none!important}
+figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
+.pad,#txCanvas{user-select:none;-webkit-user-select:none;touch-action:none}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px;cursor:pointer}
+.qrbox{background:#fff;color:#111;border-radius:16px;padding:20px;text-align:center;max-width:100%}
+.qrbox canvas{width:min(78vmin,560px);height:auto;image-rendering:pixelated;margin:0 auto}
+.qrbox p{margin:8px 0 0;color:#444;font-size:14px;word-break:break-all}
+.rawtext{font-size:15px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-word;margin-top:4px}
+</style>
+</head>
+<body>
+<header><div class="hd">
+  <div>
+    <h1>Acoustic modem <span style="font-weight:500;opacity:.75">v1</span></h1>
+    <p class="sub">Binary FSK over the air: one device transmits through its speaker, any device in the room decodes through its microphone.</p>
+  </div>
+  <button class="btn" id="qrBtn">QR code for phones</button>
+</div></header>
+<div id="qrOverlay" class="overlay hidden"><div class="qrbox"><canvas id="qrCanvas"></canvas><p id="qrUrl"></p><p>Scan to open the receiver. It needs no settings. Click to close.</p></div></div>
+<div class="roles"><span class="seg" id="roleSeg"><button data-v="tx">Transmit</button><button data-v="rx">Receive</button></span></div>
+
+<main id="main" data-role="rx">
+<section class="card" id="txCard">
+  <h2>Transmit</h2>
+  <span class="seg" id="msgSeg"><button data-v="text">Text</button><button data-v="demo">Demo image</button><button data-v="draw">Draw</button><button data-v="photo">Photo</button><button data-v="sound">Sound the room</button></span>
+  <div id="txText" class="row"><textarea id="txtIn" maxlength="1023">Hello CentraleSupélec!</textarea></div>
+  <div id="txImg" class="row hidden">
+    <div class="imgbox">
+      <canvas id="txCanvas" class="pix" width="57" height="74"></canvas>
+      <div id="drawTools" class="hidden">
+        <div class="row"><span class="seg" id="penSeg"><button data-v="0">Pen</button><button data-v="1">Eraser</button></span><button class="btn" id="clearPad">Clear</button></div>
+        <div class="muted">Draw on the 32×32 grid.</div>
+      </div>
+      <div id="photoTools" class="hidden">
+        <input type="file" id="photoIn" accept="image/*">
+        <div class="muted">Scaled to at most 64 pixels and turned black and white.</div>
+      </div>
+    </div>
+  </div>
+  <div class="opts" id="txOpts">
+    <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="rs">Reed–Solomon</button></span>
+    <span class="muted">Tones</span><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
+    <span class="muted mo">Rate, bit/s</span><span class="seg mo" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button></span>
+    <span class="muted so">Period</span><span class="seg so" id="ordSeg"><button data-v="14">0.34 s</button><button data-v="15">0.68 s</button><button data-v="16">1.37 s</button></span>
+    <span class="muted so">Periods averaged</span><span class="seg so" id="perSeg"><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button></span>
+    <span class="muted">Preamble, bits</span><span class="seg" id="preSeg"><button data-v="127">127</button><button data-v="255">255</button><button data-v="511">511</button></span>
+    <span class="mo"></span><span class="muted mo">A longer preamble and a lower rate reach farther; in a reverberant room, beyond a few metres, use Hopping. Receivers need no settings: they read all of these from the header of each frame.</span>
+    <span class="so"></span><span class="muted so">Plays a loud hiss (a maximum-length sequence, MLS) from which every receiver measures the room: impulse response, reverberation time, frequency response, noise. The period must outlast the room's echo: take 1.37 s in a large or reverberant room. Each doubling of the periods averaged gives 3 dB less noise on the measurement. With Hopping, the preamble and header hop too, so that receivers far away still find the sounding.</span>
+  </div>
+  <p class="muted" id="txInfo"></p>
+  <div class="row">
+    <button class="btn primary" id="sendBtn">▶ Send</button>
+    <button class="btn" id="wavBtn">Download WAV</button>
+  </div>
+  <div class="progress"><div id="txProg"></div></div>
+  <p class="muted" id="txStatus">Start listening on the receiver first, then press Send.</p>
+  <details>
+    <summary>What is being sent</summary>
+    <p class="muted">A frame has two parts. The <b>control part</b> is sent at 400 bit/s, at 4 / 8 kHz or hopping, two modes every receiver knows in advance: 0.1 s warm-up · MLS preamble · header. The <b>message part</b> uses the tones and rate chosen on the transmitter: coded and scrambled message · MLS postamble (the same sequence as the preamble).
+    The header carries the type (text, image or room sounding) and size of the message, the code, the rate and the tones, protected by a CRC-8 and the convolutional code, so the receivers need no settings, as with the SIGNAL field of Wi-Fi. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone. <code>audiocomm.py</code> produces and decodes the same frames.</p>
+    <p class="muted">The receivers find a frame by correlating what they hear with the three possible preambles (maximum-length sequences of 127, 255 or 511 bits).
+    A longer preamble gathers more energy before deciding that a frame starts: each doubling of its length gives about 3 dB of margin, so phones farther away, or in a noisier room, still find the frame; the header is then sent 2 or 4 times so that it is read as far away.
+    Neither helps once the message itself is too weak: for that, also lower the rate (200 bit/s gives the message 3 dB more) and use a code.</p>
+    <p class="muted">The receivers read the code from the header, so only the transmitter chooses it.
+    <b>Hamming (7,4)</b>: 3 parity bits per 4 bits, corrects 1 wrong bit in each block of 7 (hard decisions).
+    <b>Convolutional</b>: rate 1/2, constraint length 7 (generators 171, 133 octal), decoded by the Viterbi algorithm on the soft outputs.
+    <b>Reed–Solomon (255,223)</b>: works on bytes, corrects up to 16 wrong bytes in each block of 255, good against bursts.
+    Hamming and convolutional bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.</p>
+    <p class="muted"><b>Tone hopping.</b> In a room, the sound of each bit rings on for a large part of a second, far longer than the bit (2.5 ms at 400 bit/s). With only two tones, the echo of the earlier bits sits on both tones all the time; beyond the critical distance, where the echo is louder than the direct sound, it buries the bit. Hopping spreads the bits over 6400 / R pairs of adjacent tones from 1.6 to 14 kHz (16 pairs at 400 bit/s, R the rate): bit k uses pair 7k mod 16 (s k mod H in general), so a pair is used again only H bits later and the echo on each tone is H/2 times weaker, about 3 dB per doubling of the pairs. The preamble and header hop too (at 400 bit/s), otherwise far receivers would not find the frame. Each tone has its own level (speaker, room, microphone), so the receiver levels the tones before deciding.</p>
+  </details>
+</section>
+
+<section class="card" id="rxCard">
+  <h2>Receive <span class="pill" id="rxPill">Idle</span></h2>
+  <div class="row">
+    <button class="btn primary" id="listenBtn">● Start listening</button>
+    <span class="muted" id="rxFs"></span>
+  </div>
+  <div class="row"><span class="muted">Soft output</span><span class="seg" id="softSeg"><button data-v="cal">Calibrated LLR</button><button data-v="ratio">ln(E₁/E₀)</button></span></div>
+  <canvas id="spec" class="plot"></canvas>
+  <div class="legend"><span><i style="background:var(--f0)"></i>bit 0 tone</span><span><i style="background:var(--f1)"></i>bit 1 tone</span><span>live spectrogram, last ~5 s; hopping: band edges</span></div>
+  <canvas id="corr" class="plot small" style="margin-top:10px"></canvas>
+  <div class="legend"><span>match with the known preamble (frame detected above the dashed line)</span></div>
+  <div style="margin-top:14px">
+    <div class="progress"><div id="rxProg"></div></div>
+    <div id="rxOutText" class="rxtext" style="margin-top:10px"></div>
+    <div id="rxRawText" class="rawtext hidden"></div>
+    <div class="imgbox" style="margin-top:10px">
+      <figure id="rxFig" class="hidden"><canvas id="rxCanvas" class="pix" width="1" height="1"></canvas><figcaption>received</figcaption></figure>
+      <figure id="rawFig" class="hidden"><canvas id="rawCanvas" class="pix" width="1" height="1"></canvas><figcaption>same channel errors, without the code</figcaption></figure>
+      <figure id="refFig" class="hidden"><canvas id="refCanvas" class="pix" width="1" height="1"></canvas><figcaption>sent (demo image)</figcaption></figure>
+    </div>
+  </div>
+  <div id="sndOut" class="hidden" style="margin-top:10px">
+    <canvas id="irPlot" class="plot"></canvas>
+    <div class="legend"><span><i style="background:var(--f1)"></i>impulse response energy</span><span><i style="background:var(--f0)"></i>energy decay curve</span><span>dashed: slope → RT60</span></div>
+    <canvas id="frPlot" class="plot" style="margin-top:10px"></canvas>
+    <div class="legend"><span><i style="background:var(--f1)"></i>frequency response (1/6 octave)</span><span><i style="background:var(--f0)"></i>SNR of the sounding</span><span>dotted: the modem's tones</span></div>
+  </div>
+  <div class="stats" id="stats"></div>
+  <canvas id="hist" class="plot small hidden" style="margin-top:10px"></canvas>
+  <div class="legend hidden" id="histLegend"><span>soft output log(E<sub>high</sub>/E<sub>low</sub>) per bit: two well separated humps mean a clean channel</span></div>
+  <div class="row"><button class="btn hidden" id="irBtn">Download impulse response (WAV)</button><button class="btn hidden" id="recBtn">Download received recording (WAV)</button></div>
+  <details>
+    <summary>Soft output</summary>
+    <p class="muted"><b>ln(E₁/E₀)</b> compares the energies received on the two tones. Its sign is the right decision when both tones arrive equally strong, but its size says little about reliability: a bit drowned in noise can look as sure as a clean one.</p>
+    <p class="muted"><b>Calibrated LLR</b> measures, on the known bits of the postamble (sent at the message's tones and rate), the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². It corrects an imbalance between the tones (speaker, microphone, room) and gives the Viterbi decoder reliabilities on the right scale. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal. Switch after a reception to decode the same recording both ways.</p>
+  </details>
+  <details>
+    <summary>Room sounding</summary>
+    <p class="muted">Choose <b>Sound the room</b> on the transmitter. After the usual control part (preamble and header, so that the receivers know what follows) it plays a maximum-length sequence of 2<sup>n</sup>−1 samples of ±1 at 48 kHz, several times in a row. The circular autocorrelation of an MLS is a single spike, so correlating one received period with the sequence gives the impulse response h(t) of the whole chain: speaker, room and microphone. Averaging the periods lowers the noise; the first period is skipped, so that the room already rings in its steady state.</p>
+    <p class="muted">From h(t): the <b>reverberation time</b> RT60, the time the sound energy takes to fall by 60 dB, from the slope of the Schroeder energy decay curve (the backward integral of h²) between −5 and −25 dB (T20) or −15 dB (T10); the <b>direct-to-reverberant ratio</b> (energy within 2.5 ms of the direct sound against the rest); <b>C50</b> (first 50 ms against the rest); the <b>rms delay spread</b> τ<sub>rms</sub>, to compare with the duration of a bit (2.5 ms at 400 bit/s): echoes much longer than a bit cause intersymbol interference. The <b>frequency response</b> shows how strongly each tone arrives, and the noise heard just before the frame gives the <b>SNR</b> per frequency, turned into the E<sub>s</sub>/N<sub>0</sub> a tone of the modem would get.</p>
+    <p class="muted">These are the parameters of a room model: a direct path, an exponentially decaying diffuse tail with the measured RT60, per-frequency gains and noise. <code>audiocomm_v1.py sim</code> plays any frame through a measured impulse response (downloaded above) to try the modem offline in that room.</p>
+  </details>
+</section>
+</main>
+
+<script id="modem-core">
+// ---- modem core (no DOM): shared by the page and the offline tests ----
+const PILOT = Array.from("0000000111111011111001111010111000011011101001100010101100000101111000111011011001001010010000100111001011010001000110011010101", Number);
+// Longer preambles for longer distances: maximum-length sequences of 255 and 511 bits (the 127-bit one is unchanged)
+function mls(deg, taps) {   // Fibonacci LFSR, all-ones seed; taps: exponents of the feedback polynomial
+  let s = (1 << deg) - 1; const out = [];
+  for (let i = 0; i < (1 << deg) - 1; i++) {
+    out.push(s & 1);
+    let fb = 0; for (const t of taps) fb ^= (s >> (deg - t)) & 1;
+    s = (s >> 1) | (fb << (deg - 1));
+  }
+  return out;
+}
+const PILOTS = { 127: PILOT, 255: mls(8, [8, 6, 5, 4]), 511: mls(9, [9, 5]) };
+const HREPS = { 127: 1, 255: 2, 511: 4 };   // copies of the header: more with a longer preamble, so that it is read as far away
+const NP = 127, HBITS = 40, NHC = 2 * (HBITS + 6);   // header: 32 bits + CRC-8, through the convolutional code
+const TONES = { low: [4000, 8000], high: [8000, 16000] };
+const FS_TX = 48000;
+
+function prbs(n) {            // LFSR x^15 + x^14 + 1, all-ones seed
+  let s = 0x7fff; const k = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { const fb = ((s >> 14) ^ (s >> 13)) & 1; s = ((s << 1) | fb) & 0x7fff; k[i] = fb; }
+  return k;
+}
+function msb(v, nb) { const o = []; for (let i = nb - 1; i >= 0; i--) o.push((v >> i) & 1); return o; }
+function textCodes(text) { return Array.from(text).slice(0, 1023).map(ch => { const c = ch.codePointAt(0); return c < 256 ? c : 63; }); }
+
+// ---- channel coding: bits are arrays of 0/1, LLRs are > 0 for a 1 ----
+// The code is announced in the header (top 2 bits of the 11-bit field b), so receivers pick it up automatically.
+const CODES = ['none', 'hamming', 'conv', 'rs'];
+const CODE_INFO = {
+  none:    { name: 'no code', short: 'no code', rate: '1' },
+  hamming: { name: 'Hamming (7,4) + interleaver', short: 'Hamming (7,4)', rate: '4/7' },
+  conv:    { name: 'convolutional (171,133), K = 7, soft Viterbi + interleaver', short: 'convolutional code', rate: '1/2' },
+  rs:      { name: 'Reed–Solomon (255,223) over bytes', short: 'Reed–Solomon', rate: '≈ 7/8' }
+};
+const RS_K = 223, RS_P = 32;
+
+function codedLength(code, n0) {
+  if (code === 'hamming') return 7 * Math.ceil(n0 / 4);
+  if (code === 'conv') return 2 * (n0 + 6);
+  if (code === 'rs') { const K = Math.ceil(n0 / 8), B = Math.ceil(K / RS_K); return 8 * (K + RS_P * B); }
+  return n0;
+}
+
+// Rectangular interleaver: write row by row into ceil(sqrt(n)) columns, read column by column.
+function ilvPerm(n) {
+  const C = Math.max(1, Math.ceil(Math.sqrt(n))), R = Math.ceil(n / C), p = [];
+  for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) { const i = r * C + c; if (i < n) p.push(i); }
+  return p;
+}
+const interleave = x => ilvPerm(x.length).map(i => x[i]);
+function deinterleave(y) { const p = ilvPerm(y.length), x = new Array(y.length); p.forEach((i, k) => { x[i] = y[k]; }); return x; }
+
+// Hamming (7,4), systematic: [d0 d1 d2 d3 p0 p1 p2]
+const HAM_P = [[1, 1, 0], [1, 0, 1], [0, 1, 1], [1, 1, 1]];          // parity bits each data bit enters
+const HAM_COL = [...HAM_P, [1, 0, 0], [0, 1, 0], [0, 0, 1]];          // columns of H
+function hamEncode(d) {
+  const out = [];
+  for (let i = 0; i < d.length; i += 4) {
+    const u = [0, 1, 2, 3].map(j => d[i + j] || 0), p = [0, 0, 0];
+    u.forEach((b, j) => { if (b) for (let k = 0; k < 3; k++) p[k] ^= HAM_P[j][k]; });
+    out.push(...u, ...p);
+  }
+  return out;
+}
+function hamDecode(c, n0) {
+  const out = [];
+  for (let i = 0; i < c.length; i += 7) {
+    const w = c.slice(i, i + 7), s = [0, 0, 0];
+    w.forEach((b, j) => { if (b) for (let k = 0; k < 3; k++) s[k] ^= HAM_COL[j][k]; });
+    const e = HAM_COL.findIndex(col => col[0] === s[0] && col[1] === s[1] && col[2] === s[2]);
+    if (e >= 0) w[e] ^= 1;
+    out.push(...w.slice(0, 4));
+  }
+  return out.slice(0, n0);
+}
+
+// Convolutional code, rate 1/2, K = 7, generators 171 and 133 (octal), 6 zero tail bits
+const CC_G = [0o171, 0o133];
+const parity = v => { v ^= v >> 4; v ^= v >> 2; v ^= v >> 1; return v & 1; };
+function convEncode(d) {
+  let s = 0; const out = [];
+  for (const b of [...d, 0, 0, 0, 0, 0, 0]) { const reg = (b << 6) | s; out.push(parity(reg & CC_G[0]), parity(reg & CC_G[1])); s = reg >> 1; }
+  return out;
+}
+function convDecode(llr, n0, lim = 4) {
+  const T = llr.length / 2, NS = 64, clip = v => Math.max(-lim, Math.min(lim, v));
+  let pm = new Float64Array(NS).fill(-1e18); pm[0] = 0;
+  const dec = new Uint8Array(T * NS), o0 = new Int8Array(128), o1 = new Int8Array(128);
+  for (let reg = 0; reg < 128; reg++) { o0[reg] = 2 * parity(reg & CC_G[0]) - 1; o1[reg] = 2 * parity(reg & CC_G[1]) - 1; }
+  for (let t = 0; t < T; t++) {
+    const l0 = clip(llr[2 * t]), l1 = clip(llr[2 * t + 1]), nm = new Float64Array(NS);
+    for (let ns = 0; ns < NS; ns++) {
+      const b = ns >> 5, sa = (ns & 31) << 1, ra = (b << 6) | sa, rb = ra | 1;
+      const ma = pm[sa] + o0[ra] * l0 + o1[ra] * l1, mb = pm[sa | 1] + o0[rb] * l0 + o1[rb] * l1;
+      if (mb > ma) { nm[ns] = mb; dec[t * NS + ns] = 1; } else nm[ns] = ma;
+    }
+    pm = nm;
+  }
+  const out = new Array(T); let ns = 0;
+  for (let t = T - 1; t >= 0; t--) { out[t] = ns >> 5; ns = ((ns & 31) << 1) | dec[t * NS + ns]; }
+  return out.slice(0, n0);
+}
+
+// Reed–Solomon over GF(256) (primitive polynomial 0x11d), 32 parity bytes: corrects up to 16 wrong bytes per codeword
+const GF_EXP = new Uint8Array(512), GF_LOG = new Uint8Array(256);
+(() => { let x = 1; for (let i = 0; i < 255; i++) { GF_EXP[i] = x; GF_LOG[x] = i; x <<= 1; if (x & 256) x ^= 0x11d; } for (let i = 255; i < 512; i++) GF_EXP[i] = GF_EXP[i - 255]; })();
+const gmul = (a, b) => (a && b) ? GF_EXP[GF_LOG[a] + GF_LOG[b]] : 0;
+const gdiv = (a, b) => a ? GF_EXP[(GF_LOG[a] + 255 - GF_LOG[b]) % 255] : 0;
+const gpow = e => GF_EXP[((e % 255) + 255) % 255];
+const RS_GEN = (() => { let g = [1]; for (let i = 0; i < RS_P; i++) { const r = gpow(i), h = new Array(g.length + 1).fill(0); g.forEach((c, j) => { h[j] ^= c; h[j + 1] ^= gmul(c, r); }); g = h; } return g; })();
+function rsEncodeBlock(msg) {                       // systematic: message bytes, then 32 parity bytes
+  const r = new Array(RS_P).fill(0);
+  for (const m of msg) { const f = m ^ r[0]; r.shift(); r.push(0); if (f) for (let j = 0; j < RS_P; j++) r[j] ^= gmul(RS_GEN[j + 1], f); }
+  return [...msg, ...r];
+}
+const polyEval = (p, x) => p.reduce((acc, c) => gmul(acc, x) ^ c, 0);          // p[0] = highest degree
+function rsDecodeBlock(cw) {                        // returns { msg, nerr } or { msg (uncorrected), fail: true }
+  const n = cw.length, S = []; let any = 0;
+  for (let j = 0; j < RS_P; j++) { S.push(polyEval(cw, gpow(j))); any |= S[j]; }
+  const k = n - RS_P;
+  if (!any) return { msg: cw.slice(0, k), nerr: 0 };
+  let C = [1], B = [1], L = 0, m = 1, b = 1;          // Berlekamp–Massey, C[0] = 1 (ascending powers)
+  for (let i = 0; i < RS_P; i++) {
+    let d = S[i]; for (let j = 1; j <= L; j++) d ^= gmul(C[j] || 0, S[i - j]);
+    if (!d) { m++; continue; }
+    const T = C.slice(), coef = gdiv(d, b), need = B.length + m;
+    while (C.length < need) C.push(0);
+    B.forEach((v, j) => { C[j + m] ^= gmul(coef, v); });
+    if (2 * L <= i) { L = i + 1 - L; B = T; b = d; m = 1; } else m++;
+  }
+  const lam = C.slice(0, L + 1), lamEval = x => lam.reduce((acc, c, j) => acc ^ gmul(c, gpow(GF_LOG[x] * j)), 0);
+  const omega = new Array(RS_P).fill(0);              // Omega = S(x) Lambda(x) mod x^32
+  for (let i = 0; i < RS_P; i++) for (let j = 0; j <= L && j <= i; j++) omega[i] ^= gmul(lam[j], S[i - j]);
+  const out = cw.slice(); let found = 0;
+  for (let p = 0; p < n; p++) {
+    const X = gpow(p), Xi = gpow(-p);
+    if (lamEval(Xi)) continue;
+    let om = 0, dl = 0;
+    for (let i = 0; i < RS_P; i++) om ^= gmul(omega[i], gpow(-p * i));
+    for (let j = 1; j <= L; j += 2) dl ^= gmul(lam[j], gpow(-p * (j - 1)));
+    if (!dl) return { msg: cw.slice(0, k), fail: true };
+    out[n - 1 - p] ^= gmul(X, gdiv(om, dl)); found++;
+  }
+  if (found !== L) return { msg: cw.slice(0, k), fail: true };
+  for (let j = 0; j < RS_P; j++) if (polyEval(out, gpow(j))) return { msg: cw.slice(0, k), fail: true };
+  return { msg: out.slice(0, k), nerr: L };
+}
+// Bytes are split over B codewords and sent byte-interleaved, so a long burst is shared between codewords.
+function rsLayout(K) { const B = Math.ceil(K / RS_K), ks = []; for (let i = 0; i < B; i++) ks.push(Math.floor(K / B) + (i < K % B ? 1 : 0)); return ks; }
+function rsOrder(lens) { const o = [], mx = Math.max(...lens); for (let j = 0; j < mx; j++) lens.forEach((n, i) => { if (j < n) o.push([i, j]); }); return o; }
+const toBytes = bits => { const o = []; for (let i = 0; i < bits.length; i += 8) { let v = 0; for (let j = 0; j < 8; j++) v = 2 * v + (bits[i + j] || 0); o.push(v); } return o; };
+const toBits = bytes => bytes.flatMap(v => msb(v, 8));
+function rsEncode(d) {
+  const by = toBytes(d), ks = rsLayout(by.length); let s = 0;
+  const cws = ks.map(k => rsEncodeBlock(by.slice(s, s += k)));
+  return toBits(rsOrder(cws.map(c => c.length)).map(([i, j]) => cws[i][j]));
+}
+function rsDecode(c, n0) {
+  const ks = rsLayout(Math.ceil(n0 / 8)), lens = ks.map(k => k + RS_P), cws = lens.map(n => new Array(n)), by = toBytes(c);
+  rsOrder(lens).forEach(([i, j], q) => { cws[i][j] = by[q]; });
+  const res = cws.map(rsDecodeBlock);
+  return { bits: toBits(res.flatMap(r => r.msg)).slice(0, n0), fails: res.filter(r => r.fail).length, blocks: res.length };
+}
+
+function encodeFEC(code, d) {
+  if (code === 'hamming') return interleave(hamEncode(d));
+  if (code === 'conv') return interleave(convEncode(d));
+  if (code === 'rs') return rsEncode(d);
+  return Array.from(d);
+}
+// llr: channel LLRs after descrambling (> 0 means 1). Returns the n0 message bits.
+function decodeFEC(code, n0, llr, lim = 4) {   // lim: clipping of the soft values in the Viterbi decoder
+  const hard = a => a.map(r => r > 0 ? 1 : 0);
+  if (code === 'hamming') return { bits: hamDecode(hard(deinterleave(llr)), n0) };
+  if (code === 'conv') return { bits: convDecode(deinterleave(llr), n0, lim) };
+  if (code === 'rs') return rsDecode(hard(llr), n0);
+  return { bits: hard(llr) };
+}
+
+// ---- soft output: the plain ratio ln(E1/E0), or the LLR of non-coherent FSK calibrated on the preamble ----
+function lnI0(x) {                                  // ln I0(x), modified Bessel function (Abramowitz & Stegun 9.8.1-2)
+  if (x < 3.75) { const t = (x / 3.75) ** 2; return Math.log(1 + t * (3.5156229 + t * (3.0899424 + t * (1.2067492 + t * (0.2659732 + t * (0.0360768 + t * 0.0045813)))))); }
+  const t = 3.75 / x;
+  return x - 0.5 * Math.log(x) + Math.log(0.39894228 + t * (0.01328592 + t * (0.00225319 + t * (-0.00157565 + t * (0.00916281 + t * (-0.02057706 + t * (0.02635537 + t * (-0.01647633 + t * 0.00392377))))))));
+}
+// For each tone, level A and noise variance s2 (per real dimension) from the tone energies E on the preamble:
+// E[E^2] = A^2 + 2 s2 when the tone is sent (Rician), 2 s2 when it is not (Rayleigh).
+function calibrate(pe0, pe1) {
+  const P = PILOTS[pe0.length] || PILOT;
+  const tone = (e, on) => {
+    let sOn = 0, nOn = 0, sOff = 0, nOff = 0;
+    e.forEach((v, j) => { if (P[j] === on) { sOn += v * v; nOn++; } else { sOff += v * v; nOff++; } });
+    const pOn = sOn / nOn, pOff = sOff / nOff, a2 = Math.max(pOn - pOff, 1e-6 * pOn), s2 = Math.max(pOff / 2, 1e-12 * pOn);
+    return { mu: Math.sqrt(a2), s2, snrDb: 10 * Math.log10(a2 / (2 * s2)) };
+  };
+  return { t0: tone(pe0, 0), t1: tone(pe1, 1) };
+}
+// g: local signal level relative to the preamble. In a room most of the disturbance is the echo of the signal itself,
+// so it rises and falls with the signal: dividing the energies by g keeps the preamble's levels and noise valid.
+function softLLR(soft, cal, E0, E1, g = 1) {
+  if (soft === 'ratio') return Math.log((E1 + 1e-9) / (E0 + 1e-9));
+  const { t0, t1 } = cal; E0 /= g; E1 /= g;
+  return lnI0(t1.mu * E1 / t1.s2) - t1.mu * t1.mu / (2 * t1.s2) - lnI0(t0.mu * E0 / t0.s2) + t0.mu * t0.mu / (2 * t0.s2);
+}
+// Level tracking: the signal level (whichever tone is on), averaged over +-W symbols, relative to the preamble.
+function levelTrack(res, W = 24) {
+  const { t0, t1 } = res.cal, q = (E0, E1) => Math.max(E0 * E0 / (t0.mu * t0.mu), E1 * E1 / (t1.mu * t1.mu));
+  const qref = res.pe0.reduce((s, E0, j) => s + q(E0, res.pe1[j]), 0) / res.pe0.length;
+  const n = res.e0.length, cs = new Float64Array(n + 1);
+  for (let j = 0; j < n; j++) cs[j + 1] = cs[j] + q(res.e0[j], res.e1[j]);
+  return Array.from({ length: n }, (_, j) => { const a = Math.max(0, j - W), b = Math.min(n, j + W + 1); return Math.sqrt(Math.min(4, Math.max(0.01, (cs[b] - cs[a]) / (b - a) / qref))); });
+}
+// Decode a received frame with either soft output ('cal' or 'ratio'); returns the fields that depend on that choice.
+function decodeFrame(res, soft) {
+  const g = soft === 'ratio' ? null : levelTrack(res);
+  const { hdr, key } = res, llr = res.e0.map((E0, j) => softLLR(soft, res.cal, E0, res.e1[j], g ? g[j] : 1));
+  const dec = decodeFEC(hdr.code, hdr.n0, llr.map((r, j) => key[j] ? -r : r), soft === 'ratio' ? 4 : Infinity);
+  const bits = Uint8Array.from(dec.bits), sent = Uint8Array.from(encodeFEC(hdr.code, bits), (x, j) => x ^ key[j]);
+  const chErr = llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0);    // channel errors the code corrected
+  return { soft, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks };
+}
+
+// ---- QR code (byte mode, error level M, versions 1-9), built here so the page needs no network ----
+function qrMatrix(text) {
+  const data = Array.from(new TextEncoder().encode(text));
+  const EC = [null, [10, 1, 16, 0, 0], [16, 1, 28, 0, 0], [26, 1, 44, 0, 0], [18, 2, 32, 0, 0], [24, 2, 43, 0, 0],
+              [16, 4, 27, 0, 0], [18, 4, 31, 0, 0], [22, 2, 38, 2, 39], [22, 3, 36, 2, 37]];   // ec bytes per block, blocks x data bytes
+  const ALIGN = [null, [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46]];
+  let ver = 1; while (ver < 10 && EC[ver][1] * EC[ver][2] + EC[ver][3] * EC[ver][4] < data.length + 2) ver++;
+  if (ver > 9) throw new Error('text too long for the QR code');
+  const [ecLen, n1, k1, n2, k2] = EC[ver], cap = n1 * k1 + n2 * k2, size = 17 + 4 * ver;
+  // data codewords: mode 0100, 8-bit length, bytes, terminator, pad bytes
+  const bits = [0, 1, 0, 0, ...msb(data.length, 8), ...data.flatMap(b => msb(b, 8))];
+  for (let i = 0; i < 4 && bits.length < 8 * cap; i++) bits.push(0);
+  while (bits.length % 8) bits.push(0);
+  const cw = []; for (let i = 0; i < bits.length; i += 8) cw.push(bits.slice(i, i + 8).reduce((v, b) => 2 * v + b, 0));
+  for (let p = 0; cw.length < cap; p ^= 1) cw.push(p ? 0x11 : 0xec);
+  // Reed–Solomon parity per block (same GF(256) as the modem), then interleave the blocks
+  let gen = [1]; for (let i = 0; i < ecLen; i++) { const h = new Array(gen.length + 1).fill(0); gen.forEach((c, j) => { h[j] ^= c; h[j + 1] ^= gmul(c, gpow(i)); }); gen = h; }
+  const blocks = []; let s = 0;
+  for (let i = 0; i < n1 + n2; i++) {
+    const d = cw.slice(s, s += i < n1 ? k1 : k2), r = new Array(ecLen).fill(0);
+    for (const m of d) { const f = m ^ r.shift(); r.push(0); for (let j = 0; j < ecLen; j++) r[j] ^= gmul(gen[j + 1], f); }
+    blocks.push([d, r]);
+  }
+  const all = [];
+  for (let i = 0; i < Math.max(k1, k2); i++) blocks.forEach(([d]) => { if (i < d.length) all.push(d[i]); });
+  for (let i = 0; i < ecLen; i++) blocks.forEach(([, r]) => all.push(r[i]));
+  // function patterns
+  const M = Array.from({ length: size }, () => new Array(size).fill(false)), F = M.map(r => r.map(() => false));
+  const set = (x, y, v) => { M[y][x] = v; F[y][x] = true; };
+  for (let i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+  for (const [cx, cy] of [[3, 3], [size - 4, 3], [3, size - 4]])
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+      const x = cx + dx, y = cy + dy, dist = Math.max(Math.abs(dx), Math.abs(dy));
+      if (x >= 0 && y >= 0 && x < size && y < size) set(x, y, dist !== 2 && dist !== 4);
+    }
+  const al = ALIGN[ver];
+  al.forEach((ax, i) => al.forEach((ay, j) => {
+    if ((i === 0 && j === 0) || (i === 0 && j === al.length - 1) || (i === al.length - 1 && j === 0)) return;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) set(ax + dx, ay + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+  }));
+  const formatBits = mask => {                       // level M = 00
+    let r = mask; for (let i = 0; i < 10; i++) r = (r << 1) ^ ((r >> 9) * 0x537);
+    const b = ((mask << 10) | r) ^ 0x5412, bit = i => ((b >> i) & 1) === 1;
+    for (let i = 0; i <= 5; i++) set(8, i, bit(i));
+    set(8, 7, bit(6)); set(8, 8, bit(7)); set(7, 8, bit(8));
+    for (let i = 9; i < 15; i++) set(14 - i, 8, bit(i));
+    for (let i = 0; i < 8; i++) set(size - 1 - i, 8, bit(i));
+    for (let i = 8; i < 15; i++) set(8, size - 15 + i, bit(i));
+    set(8, size - 8, true);
+  };
+  formatBits(0);
+  if (ver >= 7) {
+    let r = ver; for (let i = 0; i < 12; i++) r = (r << 1) ^ ((r >> 11) * 0x1f25);
+    const b = (ver << 12) | r;
+    for (let i = 0; i < 18; i++) { const v = ((b >> i) & 1) === 1, a = size - 11 + i % 3, c = Math.floor(i / 3); set(a, c, v); set(c, a, v); }
+  }
+  // data in the zigzag order
+  let i = 0;
+  for (let right = size - 1; right >= 1; right -= 2) {
+    if (right === 6) right = 5;
+    for (let v = 0; v < size; v++) for (let j = 0; j < 2; j++) {
+      const x = right - j, y = ((right + 1) & 2) === 0 ? size - 1 - v : v;
+      if (!F[y][x] && i < all.length * 8) { M[y][x] = ((all[i >> 3] >> (7 - (i & 7))) & 1) === 1; i++; }
+    }
+  }
+  // pick the mask with the lowest penalty
+  const MASKS = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, x => x % 3 === 0, (x, y) => (x + y) % 3 === 0,
+    (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => x * y % 2 + x * y % 3 === 0,
+    (x, y) => (x * y % 2 + x * y % 3) % 2 === 0, (x, y) => ((x + y) % 2 + x * y % 3) % 2 === 0];
+  const applyMask = k => { for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!F[y][x] && MASKS[k](x, y)) M[y][x] = !M[y][x]; };
+  const penalty = () => {
+    let p = 0, dark = 0;
+    const line = get => { let run = 1; for (let k = 1; k < size; k++) { if (get(k) === get(k - 1)) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } };
+    for (let y = 0; y < size; y++) { line(k => M[y][k]); line(k => M[k][y]); }
+    for (let y = 0; y < size - 1; y++) for (let x = 0; x < size - 1; x++) { const c = M[y][x]; if (c === M[y][x + 1] && c === M[y + 1][x] && c === M[y + 1][x + 1]) p += 3; }
+    const pat = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0], tap = [...pat].reverse();
+    for (let y = 0; y < size; y++) for (let x = 0; x + 11 <= size; x++) for (const q of [pat, tap]) {
+      if (q.every((b, k) => M[y][x + k] === !!b)) p += 40;
+      if (q.every((b, k) => M[x + k][y] === !!b)) p += 40;
+    }
+    M.forEach(r => r.forEach(v => { dark += v; }));
+    return p + 10 * Math.floor(Math.abs(20 * dark / (size * size) - 10));
+  };
+  let best = 0, bestP = Infinity;
+  for (let k = 0; k < 8; k++) { applyMask(k); formatBits(k); const p = penalty(); if (p < bestP) { bestP = p; best = k; } applyMask(k); }
+  applyMask(best); formatBits(best);
+  return M;
+}
+function drawQR(cv, text, px = 8) {
+  const M = qrMatrix(text), q = 4, n = M.length + 2 * q;
+  cv.width = cv.height = n * px; const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = '#000';
+  M.forEach((row, y) => row.forEach((v, x) => { if (v) g.fillRect((x + q) * px, (y + q) * px, px, px); }));
+}
+
+
+// ---- frame ----
+// Control part, in a mode every receiver knows in advance (like the SIGNAL field of Wi-Fi), 4 / 8 kHz at 400 bit/s,
+// or tone hopping at 400 bit/s when the message hops:
+//   0.1 s warm-up | MLS preamble (127, 255 or 511 bits) | header, sent 1, 2 or 4 times
+// then the message part, in the tones and rate the header announces:
+//   coded and scrambled message | MLS postamble (same sequence as the preamble)
+// Header: type 2 | a 11 | b 11 | code 2 | rate 2 | tones 2 | 0 0, then CRC-8, all through the convolutional code.
+// Tones: 0 low (4 / 8 kHz), 1 high (8 / 16 kHz), 2 tone hopping (1.6 to 14 kHz, see hopSet).
+// Types: 0 text (a = characters), 1 image (a = height, b = width), 2 room sounding (a = MLS order, b = periods).
+const CTRL = { tones: 'low', rate: 400 };
+const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high', 'hop'];
+function crc8(bits) {   // CRC-8, generator x^8 + x^2 + x + 1
+  let r = 0;
+  for (const b of bits) { const fb = ((r >> 7) & 1) ^ b; r = (r << 1) & 0xff; if (fb) r ^= 0x07; }
+  return msb(r, 8);
+}
+function headerBits(h) {
+  const v = [...msb(h.type, 2), ...msb(h.a, 11), ...msb(h.b, 11), ...msb(CODES.indexOf(h.code), 2),
+             ...msb(RATES.indexOf(h.rate), 2), ...msb(TONE_SETS.indexOf(h.tones), 2), 0, 0];
+  return encodeFEC('conv', [...v, ...crc8(v)]);
+}
+// msg = {type:'text', text} | {type:'image', h, w, pixels (col-major, 1 = white)} | {type:'sound', order, periods}
+function buildFrame(msg, cfg) {
+  if (msg.type === 'sound') return buildSounding(msg, cfg);
+  const code = cfg.code || 'none', tones = TONE_SETS.includes(cfg.tones) ? cfg.tones : 'low', rate = cfg.rate || 400, pre = PILOTS[cfg.pre] ? +cfg.pre : 127;
+  let type, a, b, data;
+  if (msg.type === 'text') { const c = textCodes(msg.text); type = 0; a = c.length; b = 0; data = c.flatMap(v => msb(v, 8)); }
+  else { type = 1; a = msg.h; b = msg.w; data = Array.from(msg.pixels); }
+  const P = PILOTS[pre], hdr = headerBits({ type, a, b, code, rate, tones });
+  const ch = encodeFEC(code, data), key = prbs(ch.length);
+  const warm = Array.from({ length: Math.round(0.1 * CTRL.rate) }, (_, i) => (i + 1) % 2);
+  const ctrl = [...warm, ...P, ...Array(HREPS[pre]).fill(hdr).flat()], body = [...ch.map((x, i) => x ^ key[i]), ...P];
+  const ctl = tones === 'hop' ? 'hop' : CTRL.tones;   // a hopping message has a hopping control part
+  const segs = [{ bits: ctrl, tones: ctl, rate: CTRL.rate, k0: -warm.length }, { bits: body, tones, rate }];
+  return { segs, bits: [...ctrl, ...body], data, n0: data.length, nc: ch.length, warm: warm.length, dur: ctrl.length / CTRL.rate + body.length / rate };
+}
+function modulate(frame, fs = FS_TX) {
+  const len = g => g.wave ? Math.round(g.wave.length * fs / FS_TX) : g.bits.length * Math.round(fs / g.rate);
+  const pad = Math.round(0.2 * fs), n = frame.segs.reduce((s, g) => s + len(g), 0);
+  const x = new Float32Array(2 * pad + n);
+  let o = pad;
+  for (const g of frame.segs) {
+    if (g.wave) {   // a waveform at FS_TX (room sounding), linearly resampled if needed
+      const r = FS_TX / fs, m = len(g);
+      for (let i = 0; i < m; i++) { const t = i * r, k = Math.floor(t), u = t - k; x[o + i] = (1 - u) * g.wave[k] + u * (g.wave[k + 1] || 0); }
+      o += m; continue;
+    }
+    if (g.tones === 'hop') {   // tone hopping: symbol j of the segment on the pair of k0 + j (k0 < 0 for the warm-up)
+      const hs = hopSet(g.rate), L = Math.round(fs / g.rate);
+      g.bits.forEach((bt, j) => { const f = hs.tones(hs.pair((g.k0 || 0) + j))[bt]; for (let i = 0; i < L; i++) x[o + i] = 0.9 * Math.sin(2 * Math.PI * f * i / fs); o += L; });
+      continue;
+    }
+    const [F0, F1] = TONES[g.tones], L = Math.round(fs / g.rate), w0 = new Float32Array(L), w1 = new Float32Array(L);
+    for (let j = 0; j < L; j++) { w0[j] = 0.9 * Math.sin(2 * Math.PI * F0 * j / fs); w1[j] = 0.9 * Math.sin(2 * Math.PI * F1 * j / fs); }
+    for (const bt of g.bits) { x.set(bt ? w1 : w0, o); o += L; }
+  }
+  return x;
+}
+function parseHeader(hb) {   // hb: the 40 decoded header bits; null unless the CRC and the fields are valid
+  if (crc8(hb.slice(0, 32)).join('') !== hb.slice(32, 40).join('')) return null;
+  const val = (s, n) => hb.slice(s, s + n).reduce((v, x) => 2 * v + x, 0);
+  const type = val(0, 2), a = val(2, 11), b = val(13, 11), code = CODES[val(24, 2)], rate = RATES[val(26, 2)], tones = TONE_SETS[val(28, 2)];
+  if (!tones) return null;
+  let h = null;
+  if (type === 0 && a >= 1 && b === 0) h = { type: 'text', len: a, n0: 8 * a };
+  if (type === 1 && a >= 1 && b >= 1 && a <= 256 && b <= 256 && a * b <= 20000) h = { type: 'image', h: a, w: b, n0: a * b };
+  if (type === 2 && SOUND_TAPS[a] && b >= 1 && b <= 8) h = { type: 'sound', order: a, periods: b, n0: 0 };
+  if (h) Object.assign(h, { code, nc: codedLength(code, h.n0), rate, tones });
+  return h;
+}
+
+// ---- channel sounding (header type 2): a periodic MLS at the full sample rate, then the postamble ----
+// The room's impulse response h is the circular cross-correlation of one received period with the MLS:
+// the MLS autocorrelation is N at lag 0 and -1 elsewhere, so h[t] = (c[t] + sum r) / (N + 1).
+const SOUND_TAPS = { 14: [14, 13, 12, 2], 15: [15, 14], 16: [16, 15, 13, 4] }, SOUND_AMP = 0.35;
+function buildSounding(msg, cfg) {
+  const pre = PILOTS[cfg.pre] ? +cfg.pre : 127, order = SOUND_TAPS[msg.order] ? msg.order : 15, periods = msg.periods || 3;
+  const ctl = cfg.tones === 'hop' ? 'hop' : CTRL.tones;   // control part and postamble: hopping or 4 / 8 kHz
+  const P = PILOTS[pre], hdr = headerBits({ type: 2, a: order, b: periods, code: 'none', rate: CTRL.rate, tones: ctl });
+  const warm = Array.from({ length: Math.round(0.1 * CTRL.rate) }, (_, i) => (i + 1) % 2);
+  const ctrl = [...warm, ...P, ...Array(HREPS[pre]).fill(hdr).flat()];
+  const s = mls(order, SOUND_TAPS[order]), N = s.length, wave = new Float32Array((periods + 1) * N);   // one extra period first: the room reaches its periodic steady state
+  for (let i = 0; i < wave.length; i++) wave[i] = s[i % N] ? SOUND_AMP : -SOUND_AMP;
+  const segs = [{ bits: ctrl, tones: ctl, rate: CTRL.rate, k0: -warm.length }, { wave }, { bits: P, tones: ctl, rate: CTRL.rate }];
+  return { segs, data: [], n0: 0, nc: 0, dur: (ctrl.length + P.length) / CTRL.rate + wave.length / FS_TX, sound: { order, periods, N } };
+}
+function fft(re, im, inv = false) {   // in place, radix 2
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) { let b = n >> 1; for (; j & b; b >>= 1) j ^= b; j ^= b; if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const a = (inv ? 2 : -2) * Math.PI / len, wr = Math.cos(a), wi = Math.sin(a);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let j = 0; j < len / 2; j++) {
+        const k = i + j, l = k + len / 2, tr = re[l] * cr - im[l] * ci, ti = re[l] * ci + im[l] * cr;
+        re[l] = re[k] - tr; im[l] = im[k] - ti; re[k] += tr; im[k] += ti;
+        const t = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = t;
+      }
+    }
+  }
+  if (inv) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+}
+function welch(x, nfft = 2048) {   // power spectral density (arbitrary scale), Hann window, 50 % overlap
+  const p = new Float64Array(nfft / 2 + 1), w = Float64Array.from({ length: nfft }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / nfft));
+  let cnt = 0;
+  for (let o = 0; o + nfft <= x.length; o += nfft / 2) {
+    const re = Float64Array.from(w, (v, i) => v * x[o + i]), im = new Float64Array(nfft); fft(re, im);
+    for (let k = 0; k <= nfft / 2; k++) p[k] += re[k] * re[k] + im[k] * im[k];
+    cnt++;
+  }
+  return cnt ? p.map(v => v / cnt) : null;
+}
+// average a spectrum p (bins of df Hz) over 1/frac octave around each frequency of the grid
+function octSmooth(p, df, grid, frac) {
+  return grid.map(f => { const lo = Math.max(1, Math.floor(f * 2 ** (-0.5 / frac) / df)), hi = Math.min(p.length - 1, Math.ceil(f * 2 ** (0.5 / frac) / df)); let s = 0; for (let k = lo; k <= hi; k++) s += p[k]; return s / (hi - lo + 1); });
+}
+// y[t - base]: recording at fs; first: receiver time of the first chip; step: receiver samples per chip; noise: recording before the frame
+function analyseSounding(y, base, fs, first, step, order, periods, noise) {
+  const s = mls(order, SOUND_TAPS[order]), N = s.length, L = 1 << (order + 2);
+  const Sr = new Float64Array(L), Si = new Float64Array(L);
+  s.forEach((v, i) => { Sr[i] = 2 * v - 1; }); fft(Sr, Si);
+  const lanczos = t => {   // band-limited interpolation of the recording at time t (Lanczos, a = 6)
+    const i0 = Math.floor(t); let v = 0;
+    for (let i = i0 - 5; i <= i0 + 6; i++) { const x = t - i, k = x === 0 ? 1 : 6 * Math.sin(Math.PI * x) * Math.sin(Math.PI * x / 6) / (Math.PI * Math.PI * x * x); v += (y[i - base] || 0) * k; }
+    return v;
+  };
+  const period = (j, st, o = 0) => Float64Array.from({ length: N }, (_, k) => lanczos(first + (j * N + k + o) * st));
+  const ir = r => {
+    const re = new Float64Array(L), im = new Float64Array(L); let sum = 0;
+    for (let k = 0; k < N; k++) { re[k] = re[k + N] = r[k]; sum += r[k]; }
+    fft(re, im);
+    for (let k = 0; k < L; k++) { const a = re[k], b = im[k]; re[k] = a * Sr[k] + b * Si[k]; im[k] = b * Sr[k] - a * Si[k]; }   // times conj(S)
+    fft(re, im, true);
+    return Float64Array.from({ length: N }, (_, t) => (re[t] + sum) / (N + 1));
+  };
+  const lowpass = (x, fc) => {   // circular windowed-sinc (Blackman) filter, cutoff fc in cycles per sample: the band above 20 kHz only carries interpolation errors
+    const K = 48, w = Float64Array.from({ length: 2 * K + 1 }, (_, i) => { const u = i - K; return (u ? Math.sin(2 * Math.PI * fc * u) / (Math.PI * u) : 2 * fc) * (0.42 + 0.5 * Math.cos(Math.PI * u / K) + 0.08 * Math.cos(2 * Math.PI * u / K)); });
+    const g = w.reduce((a, b) => a + b, 0), n = x.length, xp = new Float64Array(n + 2 * K), y = new Float64Array(n);
+    for (let i = 0; i < n + 2 * K; i++) xp[i] = x[(i - K + n) % n];
+    for (let t = 0; t < n; t++) { let v = 0; for (let i = 0; i <= 2 * K; i++) v += w[i] * xp[t + i]; y[t] = v / g; }
+    return y;
+  };
+  const peak = h => { let m = 0; for (let i = 1; i < h.length; i++) if (Math.abs(h[i]) > Math.abs(h[m])) m = i;
+    const a = Math.abs(h[(m + N - 1) % N]), b = Math.abs(h[m]), c = Math.abs(h[(m + 1) % N]), den = a - 2 * b + c; return m + (den ? 0.5 * (a - c) / den : 0); };
+  // pass 1: the direct-path peak of each period. Its drift from one period to the next measures the residual clock offset;
+  // a jump (samples lost or repeated by the audio system) is absorbed by realigning each period on its own peak
+  let drift = 0, glitch = false, use = Array.from({ length: periods }, (_, j) => j + 1), pk = [];
+  const off = new Float64Array(periods + 1);
+  if (periods >= 2) {
+    for (let j = 1; j <= periods; j++) pk.push(peak(ir(period(j, step))));
+    for (let j = 1; j < pk.length; j++) { while (pk[j] - pk[0] > N / 2) pk[j] -= N; while (pk[j] - pk[0] < -N / 2) pk[j] += N; }
+    const mj = (pk.length - 1) / 2, mp = pk.reduce((u, v) => u + v, 0) / pk.length;
+    drift = pk.reduce((u, v, j) => u + (j - mj) * (v - mp), 0) / pk.reduce((u, _, j) => u + (j - mj) ** 2, 0);   // chips per period
+    if (Math.abs(drift) > 50 || pk.some((v, j) => Math.abs(v - mp - (j - mj) * drift) > 1)) {
+      glitch = true;
+      const dd = pk.slice(1).map((v, j) => v - pk[j]).filter(v => Math.abs(v) <= 50).sort((a, b) => a - b);
+      drift = dd.length ? (dd[(dd.length - 1) >> 1] + dd[dd.length >> 1]) / 2 : 0;
+      pk.forEach((v, j) => { off[j + 1] = v - pk[0] - j * drift; });
+    }
+  }
+  let st = step * (1 + drift / N);
+  const r = new Float64Array(N);
+  if (glitch) {   // the period cut by the jump holds two partial responses: drop the periods far from the median response
+    const hs = use.map(j => ir(period(j, st, off[j]))), dev = hs.map(() => 0), col = new Float64Array(hs.length);
+    for (let t = 0; t < N; t++) { hs.forEach((h, i) => { col[i] = h[t]; }); col.sort(); const m = hs.length % 2 ? col[hs.length >> 1] : (col[hs.length / 2 - 1] + col[hs.length / 2]) / 2; hs.forEach((h, i) => { dev[i] += (h[t] - m) ** 2; }); }
+    if (hs.length >= 3) { const md = [...dev].sort((a, b) => a - b)[Math.floor(dev.length / 2)]; use = use.filter((_, i) => dev[i] <= 3 * md); }
+    else { const pe = hs.map(h => { const p = Math.round(peak(h)); let s = 0; for (let k = -48; k <= 48; k++) s += h[(p + k + N) % N] ** 2; return s; }); use = [use[pe[0] >= pe[1] ? 0 : 1]]; }
+    // the clock drift again, from consecutive periods that are both kept and have no jump between them
+    const dd = use.filter(j => use.includes(j + 1) && Math.abs(pk[j] - pk[j - 1] - drift) < 5).map(j => pk[j] - pk[j - 1]);
+    if (dd.length) { drift = dd.reduce((a, b) => a + b, 0) / dd.length; pk.forEach((v, j) => { off[j + 1] = v - pk[0] - j * drift; }); st = step * (1 + drift / N); }
+  }
+  for (const j of use) period(j, st, off[j]).forEach((v, k) => { r[k] += v / use.length; });
+  const h0 = lowpass(ir(r), Math.min(20000, 0.45 * fs) / FS_TX), pre = Math.round(0.005 * FS_TX), p = Math.round(peak(h0));
+  const h = Float32Array.from({ length: N }, (_, i) => h0[(i + p - pre + 2 * N) % N]), e = Float64Array.from(h, v => v * v);
+  // noise floor of the response: the last 10 % of the period (just before the direct sound)
+  const floor = e.subarray(Math.round(0.9 * N)).reduce((u, v) => u + v, 0) / (N - Math.round(0.9 * N));
+  const W = Math.round(0.002 * FS_TX), cs = new Float64Array(N + 1); for (let i = 0; i < N; i++) cs[i + 1] = cs[i] + e[i];
+  const env = Float64Array.from({ length: N }, (_, i) => { const a = Math.max(0, i - W), b = Math.min(N, i + W + 1); return (cs[b] - cs[a]) / (b - a); });
+  let iend = Math.round(0.9 * N); for (let i = pre + W; i < 0.9 * N; i++) if (env[i] < 2 * floor) { iend = i; break; }
+  // Schroeder backward integration (noise floor removed), and the reverberation time from its slope.
+  // The decay hidden under the noise after iend is added back from the fitted slope (as in Lundeby's method), then the slope is fitted again.
+  let edc, edcDb, comp = 0;
+  const schroeder = () => {
+    edc = new Float64Array(iend + 1); edc[iend] = comp;
+    for (let i = iend - 1; i >= 0; i--) edc[i] = edc[i + 1] + Math.max(0, e[i] - floor);
+    edcDb = Array.from(edc, v => 10 * Math.log10(v / edc[0] + 1e-30));
+  };
+  schroeder();
+  const fit = (hiDb, loDb) => {
+    const idx = []; edcDb.forEach((v, i) => { if (i > pre && v <= hiDb && v >= loDb) idx.push(i); });
+    if (idx.length < 10) return null;
+    const tm = idx.reduce((u, i) => u + i, 0) / idx.length, vm = idx.reduce((u, i) => u + edcDb[i], 0) / idx.length;
+    const sl = idx.reduce((u, i) => u + (i - tm) * (edcDb[i] - vm), 0) / idx.reduce((u, i) => u + (i - tm) ** 2, 0);   // dB per sample
+    return sl < 0 ? { rt60: -60 / sl / FS_TX, slope: sl, at: vm - sl * tm, i0: idx[0], i1: idx[idx.length - 1] } : null;
+  };
+  const inr = 10 * Math.log10(env[pre] / floor);   // decay range above the noise: T20 needs about 35 dB, T10 about 25 dB
+  const reverb = () => { const f20 = inr >= 35 ? fit(-5, -25) : null, f10 = !f20 && inr >= 25 ? fit(-5, -15) : null; return f20 ? { ...f20, method: 'T20' } : f10 ? { ...f10, method: 'T10' } : null; };
+  let rt = reverb();
+  for (let it = 0; it < 2 && rt; it++) { comp = edc[0] * 10 ** ((rt.at + rt.slope * iend) / 10); schroeder(); rt = reverb(); }
+  const sum = (a, b) => cs[Math.min(N, Math.max(0, b))] - cs[Math.min(N, Math.max(0, a))];
+  const d25 = Math.round(0.0025 * FS_TX), d50 = Math.round(0.05 * FS_TX);
+  const direct = sum(pre - d25, pre + d25), late = Math.max(1e-30, sum(pre + d25, iend) - floor * (iend - pre - d25) + comp);
+  const drr = 10 * Math.log10(direct / late);
+  const c50 = 10 * Math.log10(Math.max(1e-30, sum(pre - d25, pre + d50) - floor * (d50 + d25)) / Math.max(1e-30, sum(pre + d50, iend) - floor * (iend - pre - d50) + comp));
+  let m0 = 0, m1 = 0, m2 = 0; for (let i = pre - d25; i < iend; i++) { const v = Math.max(0, e[i] - floor), t = (i - pre) / FS_TX; m0 += v; m1 += v * t; m2 += v * t * t; }
+  if (rt && comp) {   // moments of the exponential decay after iend
+    const ts = -10 / (rt.slope * Math.LN10) / FS_TX, te = (iend - pre) / FS_TX;
+    m0 += comp; m1 += comp * (te + ts); m2 += comp * (te * te + 2 * te * ts + 2 * ts * ts);
+  }
+  const tauRms = Math.sqrt(Math.max(0, m2 / m0 - (m1 / m0) ** 2));
+  // frequency response of the whole chain (speaker, room, microphone), 1/6 octave
+  const nf = 1 << Math.ceil(Math.log2(iend + 1)), hr = new Float64Array(nf), hi = new Float64Array(nf);
+  for (let i = 0; i <= iend && i < N; i++) hr[i] = h[i];
+  fft(hr, hi);
+  const pw = Float64Array.from({ length: nf / 2 + 1 }, (_, k) => hr[k] * hr[k] + hi[k] * hi[k]);
+  const fmax = Math.min(20000, 0.45 * fs), grid = []; for (let f = 100; f <= fmax; f *= 2 ** (1 / 24)) grid.push(f);
+  const H = octSmooth(pw, FS_TX / nf, grid, 6), Hmax = Math.max(...H), Hdb = H.map(v => 10 * Math.log10(v / Hmax + 1e-30));
+  // signal-to-noise ratio per frequency: received sounding versus the noise heard before the frame
+  let snr = null;
+  if (noise && noise.length >= 4096) {
+    const seg = Float64Array.from({ length: Math.round(periods * N * step) }, (_, i) => y[Math.round(first + N * step) + i - base] || 0);
+    const ps = welch(seg), pn = welch(noise);
+    if (ps && pn) { const a = octSmooth(ps, fs / 2048, grid, 3), b = octSmooth(pn, fs / 2048, grid, 3); snr = a.map((v, i) => 10 * Math.log10(Math.max(1e-12, v - b[i]) / b[i])); }
+  }
+  const at = (arr, f) => { if (!arr) return null; let k = 0; grid.forEach((g, i) => { if (Math.abs(Math.log(g / f)) < Math.abs(Math.log(grid[k] / f))) k = i; }); return f <= fmax ? arr[k] : null; };
+  const tones = [4000, 8000, 16000].map(f => ({ f, gain: at(Hdb, f), snr: at(snr, f) }));
+  return { fsIR: FS_TX, h, pre, iend, inr, env, edcDb, rt, drr, c50, tauRms, grid, Hdb, snr, tones, drift, glitch, used: use.length, N };
+}
+
+// ---- tone hopping (tones 'hop'): many tone pairs, visited in turn, so that the echo of a bit lands on idle tones ----
+// At R bit/s there are H = 6400 / R pairs of adjacent tones, bit 0 -> 1600 + 2pR Hz and bit 1 -> 1600 + (2p + 1)R Hz,
+// p = 0 .. H - 1 (1.6 to 14 kHz). Symbol k of a segment (counted from the first preamble bit, from the first message bit
+// through the postamble, or from the first bit of a sounding's postamble) uses pair p = s k mod H, s = H/2 - 1 (1 if H = 4):
+// a pair comes back only every H symbols, so the echo it hears is the one left after H bits of decay. The control
+// part hops too (at 400 bit/s, 16 pairs), otherwise far receivers would never find the frame.
+const HOP_F0 = 1600, HOP_BAND = 12800;
+function hopSet(rate) {
+  const H = HOP_BAND / (2 * rate), s = H > 4 ? H / 2 - 1 : 1;
+  return { H, s, rate, pair: k => ((s * k) % H + H) % H, tones: p => [HOP_F0 + 2 * p * rate, HOP_F0 + (2 * p + 1) * rate] };
+}
+function toneDesc(tones, rate) {   // for the page: the tones of a frame, in words
+  if (tones !== 'hop') return `${TONES[tones].map(f => f / 1000).join(' / ')} kHz`;
+  const hs = hopSet(rate);
+  return `tone hopping, ${hs.H} pairs from ${HOP_F0 / 1000} to ${(HOP_F0 + (2 * hs.H - 1) * rate) / 1000} kHz`;
+}
+const TONE_TABS = new Map();
+function toneTab(f, fs, L) {   // cos and sin of a tone over a window of L samples
+  const key = `${f}/${fs}/${L}`;
+  let t = TONE_TABS.get(key);
+  if (!t) {
+    t = { c: new Float64Array(L), s: new Float64Array(L) };
+    for (let n = 0; n < L; n++) { t.c[n] = Math.cos(2 * Math.PI * f * n / fs); t.s[n] = Math.sin(2 * Math.PI * f * n / fs); }
+    TONE_TABS.set(key, t);
+  }
+  return t;
+}
+function energyAt(y, i, t) {   // |sum of y[i + n] exp(-j 2 pi f n / fs)| over the window of the tone table t
+  const c = t.c, s = t.s, L = c.length; let re = 0, im = 0;
+  for (let n = 0; n < L; n++) { const v = y[i + n]; re += v * c[n]; im += v * s[n]; }
+  return Math.sqrt(re * re + im * im);
+}
+// Speaker, room and microphone give each tone its own level. Each tone's energies are divided by their rms over the
+// symbols that used its pair (half of them carry the tone, half only the echo), so that one model fits all the tones.
+function hopNormalize(hs, e0, e1) {   // e0, e1: energies of symbols 0, 1, 2 ... of a hopped segment
+  const H = hs.H, s0 = new Float64Array(H), s1 = new Float64Array(H), n = new Float64Array(H);
+  e0.forEach((v, k) => { const p = hs.pair(k); s0[p] += v * v; s1[p] += e1[k] * e1[k]; n[p]++; });
+  const g0 = Array.from(s0, (v, p) => Math.sqrt(v / Math.max(1, n[p])) || 1), g1 = Array.from(s1, (v, p) => Math.sqrt(v / Math.max(1, n[p])) || 1);
+  const lv = [...g0, ...g1].filter((v, i) => n[i % H] > 0);
+  return { e0: e0.map((v, k) => v / g0[hs.pair(k)]), e1: e1.map((v, k) => v / g1[hs.pair(k)]), g0, g1,
+           spread: 20 * Math.log10(Math.max(...lv) / Math.min(...lv)) };
+}
+function searchMax(f, lo, hi, Lw) {   // largest f(m), lo <= m <= hi: on a grid of Lw/8 samples, then sample by sample around the best
+  const c = Math.max(1, Math.floor(Lw / 8)); let b = { v: -2, m: lo };
+  for (let m = lo; m <= hi; m += c) { const v = f(m); if (v > b.v) b = { v, m }; }
+  const a = b.m;
+  for (let m = Math.max(lo, a - c + 1); m <= Math.min(hi, a + c - 1); m++) { const v = f(m); if (v > b.v) b = { v, m }; }
+  return b;
+}
+
+// Sliding non-coherent energies at two tones over a window of Lw samples, for every window start m >= m0
+class ToneEnergies {
+  constructor(fs, tones, Lw, m0, len) {
+    const [F0, F1] = TONES[tones];
+    Object.assign(this, { Lw, m0, len, next: m0, nz: m0, w0: 2 * Math.PI * F0 / fs, w1: 2 * Math.PI * F1 / fs });
+    this.z0 = new Float32Array(len); this.z1 = new Float32Array(len); this.d = new Float32Array(len);
+    this.C = new Float64Array(4); this.H = new Float64Array(4 * Lw);
+  }
+  feed(y, base, n) {   // y[t - base] holds sample t; consume up to sample n - 1
+    const { C, H, Lw, m0 } = this, end = Math.min(n, m0 + this.len + Lw - 1);
+    for (let t = this.next; t < end; t++) {
+      const v = y[t - base], u = t - m0, p0 = this.w0 * u, p1 = this.w1 * u;
+      C[0] += v * Math.cos(p0); C[1] += v * Math.sin(p0); C[2] += v * Math.cos(p1); C[3] += v * Math.sin(p1);
+      const h = 4 * (u % Lw), r0 = C[0] - H[h], i0 = C[1] - H[h + 1], r1 = C[2] - H[h + 2], i1 = C[3] - H[h + 3];
+      H[h] = C[0]; H[h + 1] = C[1]; H[h + 2] = C[2]; H[h + 3] = C[3];
+      if (u >= Lw - 1) { const m = u - Lw + 1, e0 = Math.hypot(r0, i0), e1 = Math.hypot(r1, i1); this.z0[m] = e0; this.z1[m] = e1; this.d[m] = (e1 - e0) / (e1 + e0 + 1e-12); }
+    }
+    this.next = Math.max(this.next, end); this.nz = this.next - Lw + 1;
+  }
+}
+
+// Streaming receiver: needs no settings. push() Float32 chunks; callbacks: onState(s, info), onProgress(info), onDone(res)
+class Receiver {
+  constructor(fs, cfg = {}, cb = {}) {
+    this.fs = fs; this.cfg = cfg; this.cb = cb;
+    [this.F0, this.F1] = TONES[CTRL.tones];
+    this.Lr = fs / CTRL.rate; this.Lw = Math.round(this.Lr);
+    // one correlator per preamble length, each with the same false-alarm rate: the noise on the correlation falls as 1/sqrt(length)
+    this.dets = Object.entries(PILOTS).map(([n, P]) => ({ NP: +n, P, a: Float32Array.from(P, x => 2 * x - 1),
+      offs: Int32Array.from(P, (_, j) => Math.round(j * this.Lr)), thr: 0.3 * Math.sqrt(127 / n) }));
+    this.look = Math.max(...this.dets.map(t => t.offs[t.NP - 1]));
+    this.cap = Math.ceil(fs * 160);
+    this.y = new Float32Array(this.cap); this.z0 = new Float32Array(this.cap); this.z1 = new Float32Array(this.cap); this.d = new Float32Array(this.cap);
+    this.base = 0; this.n = 0; this.nz = 0;
+    this.C = new Float64Array(4); this.H = new Float64Array(4 * this.Lw);
+    this.w0 = 2 * Math.PI * this.F0 / fs; this.w1 = 2 * Math.PI * this.F1 / fs; this.ph0 = 0; this.ph1 = 0;
+    this.thr = 0.3; this.state = 'search'; this.sp = 0; this.cand = -1;   // thr: detection line of the plot (scores are scaled to it)
+    this.cstep = Math.max(2, Math.floor(this.Lw / 12));   // step of the coarse search: the correlation peak is about 2 Lw wide
+    this.corrHist = new Float32Array(500); this.corrPos = 0; this.blk = 0; this.blkMax = 0; this.blkLen = Math.round(fs / 100);
+    // tone hopping: sliding energies of the 2H control tones; the contrast of each pair goes into a ring buffer of
+    // 2^18 windows, and the same three correlators run on the contrast of whichever pair each preamble bit uses
+    const hs = this.hs = hopSet(CTRL.rate), T2 = 2 * hs.H;
+    Object.assign(this, { RB: 18, hmask: (1 << 18) - 1, hd: new Float32Array(hs.H << 18), T2, hC: new Float64Array(2 * T2), hH: new Float64Array(2 * T2 * this.Lw),
+      hE: new Float64Array(T2), hc: new Float64Array(T2), hs_: new Float64Array(T2), hw: Float64Array.from({ length: T2 }, (_, i) => 2 * Math.PI * (HOP_F0 + i * CTRL.rate) / fs) });
+    this.hrc = this.hw.map(Math.cos); this.hrs = this.hw.map(Math.sin);
+    this.hdets = this.dets.map(t => ({ ...t, hop: true, pair: Int32Array.from(t.P, (_, j) => hs.pair(j)) }));
+  }
+  push(chunk) {
+    const { C, H, Lw } = this;
+    for (let t = 0; t < chunk.length; t++) {
+      if (this.n - this.base >= this.cap) { this.compact(true); }
+      const v = chunk[t], n = this.n, i = n - this.base;
+      this.y[i] = v;
+      this.ph0 += this.w0; if (this.ph0 > 6.283185307179586) this.ph0 -= 6.283185307179586;
+      this.ph1 += this.w1; if (this.ph1 > 6.283185307179586) this.ph1 -= 6.283185307179586;
+      C[0] += v * Math.cos(this.ph0); C[1] += v * Math.sin(this.ph0); C[2] += v * Math.cos(this.ph1); C[3] += v * Math.sin(this.ph1);
+      const h = 4 * (n % Lw);
+      const r0 = C[0] - H[h], i0 = C[1] - H[h + 1], r1 = C[2] - H[h + 2], i1 = C[3] - H[h + 3];
+      H[h] = C[0]; H[h + 1] = C[1]; H[h + 2] = C[2]; H[h + 3] = C[3];
+      if (n >= Lw - 1) {
+        const m = n - Lw + 1 - this.base;   // window [m, m+Lw-1]
+        if (m >= 0) {
+          const e0 = Math.hypot(r0, i0), e1 = Math.hypot(r1, i1);
+          this.z0[m] = e0; this.z1[m] = e1; this.d[m] = (e1 - e0) / (e1 + e0 + 1e-12);
+        }
+        this.nz = n - Lw + 2;
+      }
+      const T2 = this.T2, hC = this.hC, hH = this.hH, hE = this.hE, hc = this.hc, hsn = this.hs_, ho = 2 * T2 * (n % Lw);
+      if ((n & 1023) === 0) for (let k = 0; k < T2; k++) { const ph = (this.hw[k] * n) % 6.283185307179586; hc[k] = Math.cos(ph); hsn[k] = Math.sin(ph); }
+      for (let k = 0; k < T2; k++) {
+        const c = hc[k], s = hsn[k], re = (hC[2 * k] += v * c), im = (hC[2 * k + 1] += v * s), q = ho + 2 * k;
+        const dr = re - hH[q], di = im - hH[q + 1]; hH[q] = re; hH[q + 1] = im;
+        hE[k] = Math.sqrt(dr * dr + di * di);
+        hc[k] = c * this.hrc[k] - s * this.hrs[k]; hsn[k] = c * this.hrs[k] + s * this.hrc[k];
+      }
+      if (n >= Lw - 1) { const m = (n - Lw + 1) & this.hmask, RB = this.RB; for (let p = 0; 2 * p < T2; p++) { const a = hE[2 * p], b = hE[2 * p + 1]; this.hd[(p << RB) | m] = (b - a) / (b + a + 1e-12); } }
+      this.n++;
+    }
+    this.process();
+  }
+  corrAt(t, m) { let s = 0; const d = this.d, o = t.offs, a = t.a, b = m - this.base; for (let j = 0; j < t.NP; j++) s += a[j] * d[b + o[j]]; return s / t.NP; }
+  corrAtHop(t, m) { let s = 0; const d = this.hd, o = t.offs, a = t.a, p = t.pair, RB = this.RB, mk = this.hmask; for (let j = 0; j < t.NP; j++) s += a[j] * d[(p[j] << RB) | ((m + o[j]) & mk)]; return s / t.NP; }
+  hopTabs(hs, k, Lw) { return hs.tones(hs.pair(k)).map(f => toneTab(f, this.fs, Lw)); }
+  hopCorr(m, hs, k0, P, Ld, Lw) {   // correlation of a hopping preamble or postamble whose first bit is symbol k0, computed from the signal
+    let s = 0;
+    for (let j = 0; j < P.length; j++) {
+      const [t0, t1] = this.hopTabs(hs, k0 + j, Lw), i = Math.round(m + j * Ld) - this.base, e0 = energyAt(this.y, i, t0), e1 = energyAt(this.y, i, t1);
+      s += (2 * P[j] - 1) * (e1 - e0) / (e1 + e0 + 1e-12);
+    }
+    return s / P.length;
+  }
+  logCorr(c, step) {
+    if (c > this.blkMax) this.blkMax = c;
+    if ((this.blk += step) >= this.blkLen) { this.corrHist[this.corrPos++ % this.corrHist.length] = this.blkMax; this.blk = 0; this.blkMax = -1; }
+  }
+  compact(force) {
+    // keep only what the search still needs, plus 1.2 s of noise before a frame (room sounding measures the SNR on it)
+    const keepFrom = Math.max(this.base, this.sp - 2 * this.Lw - Math.round(1.2 * this.fs));
+    const shift = keepFrom - this.base;
+    if (shift <= 0) { if (force) this.reset(); return; }
+    for (const arr of [this.y, this.z0, this.z1, this.d]) arr.copyWithin(0, shift, this.n - this.base);
+    this.base = keepFrom;
+  }
+  reset() { this.base = this.n; this.sp = this.n; this.nz = this.n; this.state = 'search'; this.cand = -1; this.dt = null; }
+  process() {
+    if (this.state === 'search') {
+      const last = this.nz - 1 - this.look;
+      while (this.sp <= last) {
+        if (this.sp < this.base) { this.sp = this.base; continue; }
+        let s = 0, det = null;   // best score relative to its threshold, over the three preamble lengths
+        for (const t of this.dets) { const v = this.corrAt(t, this.sp) / t.thr; if (v > s) { s = v; det = t; } }
+        if (this.sp >= this.nz - (1 << this.RB)) for (const t of this.hdets) { const v = this.corrAtHop(t, this.sp) / t.thr; if (v > s) { s = v; det = t; } }
+        const step = this.cand >= 0 ? 1 : this.cstep;   // coarse search, then sample by sample from just before a candidate
+        this.logCorr(this.thr * s, step);
+        if (this.cand < 0 && s > 0.85) { this.cand = this.sp; this.cbest = 0; this.sp = Math.max(this.base, this.sp - this.cstep + 1); continue; }
+        if (this.cand >= 0) {
+          if (s > this.cbest) { this.cbest = s; this.pbest = this.sp; this.dbest = det; }
+          if (this.sp > this.cand + 2 * this.Lw) {
+            if (this.cbest > 1) { this.startFrame(this.pbest, this.dbest); break; }
+            this.cand = -1;   // the peak stayed below the line
+          }
+        }
+        this.sp += step;
+      }
+      if (this.state === 'search' && this.n - this.base > this.fs * 20) this.compact(false);
+    }
+    if (this.state === 'frame') this.track();
+    if (this.state === 'final') this.finalize();
+    if (this.state === 'sound') this.finishSounding();
+  }
+  startFrame(p1, det) {
+    const NP = det.NP, HR = HREPS[NP], NH = HR * NHC;
+    Object.assign(this, { state: 'frame', p1, det, NP, HR, NH, cmax: det.hop ? this.corrAtHop(det, p1) : this.corrAt(det, p1), pos: p1, k: 0, hdrLLR: [], hdr: null, dt: null,
+                          llr: [], e0: [], e1: [], cand: -1, hop: !!det.hop, ce0: [], ce1: [], mhs: null });
+    this.cb.onState && this.cb.onState('detected', { t: p1 / this.fs, cmax: this.cmax, pre: NP, hop: this.hop });
+  }
+  readHeader() {   // add up the copies, then the Viterbi decoder and the CRC
+    const L = new Float64Array(NHC);
+    if (this.hop) {   // tone hopping: each tone's level normalized over the preamble and header, then ln(E1/E0)
+      const { e0, e1 } = hopNormalize(this.hs, this.ce0, this.ce1);
+      for (let k = this.NP; k < e0.length; k++) L[(k - this.NP) % NHC] += Math.log((e1[k] + 1e-9) / (e0[k] + 1e-9));
+    } else this.hdrLLR.forEach((r, i) => { L[i % NHC] += r; });
+    const hb = Array.from(decodeFEC('conv', HBITS, Array.from(L)).bits), hdr = parseHeader(hb);
+    const fail = why => { this.cb.onState && this.cb.onState('lost', { reason: why }); this.state = 'search'; this.sp = this.p1 + this.Lw; };
+    if (!hdr) return fail('unreadable header');
+    if (hdr.type === 'sound') {   // room sounding: no tones to track, wait for the MLS and the postamble
+      Object.assign(this, { hdr, state: 'sound', chip0: this.pos + this.Lr, frac: 0 });
+      this.cb.onState && this.cb.onState('header', hdr);
+      return;
+    }
+    const Ld = this.fs / hdr.rate, Lwd = Math.round(Ld), start = this.pos + this.Lr;   // first message bit
+    const span = (hdr.nc + this.NP) * Ld, tol = Math.round(0.005 * (span + this.NH * this.Lr)) + Lwd;
+    const m0 = Math.max(this.base, Math.round(start) - 2 * Lwd - tol), len = Math.ceil(1.01 * span) + 2 * tol + 6 * Lwd;
+    if (m0 + len + Lwd - this.base >= this.cap) return fail('message too long');
+    Object.assign(this, { hdr, Ld, Lwd, key: prbs(hdr.nc), bits: new Uint8Array(hdr.n0) });
+    if (hdr.tones === 'hop') this.mhs = hopSet(hdr.rate);   // energies computed symbol by symbol from the signal
+    else this.dt = new ToneEnergies(this.fs, hdr.tones, Lwd, m0, len);
+    this.cb.onState && this.cb.onState('header', hdr);
+  }
+  track() {
+    const mu = 0.05, eps = 1e-9;
+    while (this.state === 'frame') {
+      const ctl = this.k < this.NP + this.NH, k = this.k;
+      if (this.hdr && k >= this.NP + this.NH + this.hdr.nc) { this.state = 'final'; return; }
+      // control part on the receiver's own energies, message part on energies at the announced tones and rate;
+      // with tone hopping, the energies of the symbol's pair, computed from the stored signal
+      const hop = ctl ? this.hop : this.hdr.tones === 'hop', L = ctl ? this.Lr : this.Ld, Lw = ctl ? this.Lw : this.Lwd;
+      const delta = Math.max(1, Math.round(Lw / 4)), m = Math.round(this.pos), gate = k !== 0 && k !== this.NP + this.NH;
+      let E0, E1, dl = 0, dr = 0;
+      if (hop) {
+        if (m + delta + Lw > this.n) return;
+        const [t0, t1] = this.hopTabs(ctl ? this.hs : this.mhs, ctl ? k : k - this.NP - this.NH, Lw), b = m - this.base, y = this.y;
+        const ct = i => { const a = energyAt(y, i, t0), c = energyAt(y, i, t1); return (c - a) / (c + a + 1e-12); };
+        E0 = energyAt(y, b, t0); E1 = energyAt(y, b, t1);
+        if (gate) { dl = ct(b - delta); dr = ct(b + delta); }
+      } else {
+        const src = ctl ? this : this.dt, off = ctl ? this.base : this.dt.m0;
+        if (!ctl) this.dt.feed(this.y, this.base, this.n);
+        if (m + delta >= src.nz) return;
+        const b = m - off; E0 = src.z0[b]; E1 = src.z1[b];
+        if (gate) { dl = src.d[b - delta]; dr = src.d[b + delta]; }
+      }
+      const r = Math.log((E1 + eps) / (E0 + eps));
+      if (gate) this.pos += mu * (Math.abs(dr) - Math.abs(dl)) * delta;
+      if (ctl) {
+        if (this.hop) { this.ce0.push(E0); this.ce1.push(E1); }
+        if (k >= this.NP) { this.hdrLLR.push(r); if (k === this.NP + this.NH - 1) { this.readHeader(); if (!this.hdr) return; } }
+      } else {
+        const j = k - this.NP - this.NH, plain = this.hdr.code === 'none'; this.llr.push(r); this.e0.push(E0); this.e1.push(E1);
+        if (plain) this.bits[j] = (r > 0 ? 1 : 0) ^ this.key[j];   // coded frames are decoded at the end
+        if (j % 32 === 31 || j === this.hdr.nc - 1) this.cb.onProgress && this.cb.onProgress({ hdr: this.hdr, bits: plain ? this.bits : null, done: j + 1 });
+      }
+      this.pos += L; this.k++;
+    }
+  }
+  finalize() {
+    if (this.mhs) return this.finalizeHop();
+    const { hdr, Lr, Ld, p1, NP, NH, dt, det } = this;
+    dt.feed(this.y, this.base, this.n);
+    const Delta = (NP + NH) * Lr + hdr.nc * Ld, tol = Math.round(0.005 * Delta) + this.Lwd;   // nominal p1 -> postamble
+    const offs = Int32Array.from({ length: NP }, (_, j) => Math.round(j * Ld)), hi = Math.round(p1 + Delta) + tol;
+    if (hi + offs[NP - 1] >= Math.min(dt.nz, dt.m0 + dt.len)) {   // wait for more samples, unless the buffer is full
+      if (dt.nz < dt.m0 + dt.len) return;
+    }
+    const corr = m => { let s = 0; for (let j = 0; j < NP; j++) s += det.a[j] * (dt.d[m + offs[j] - dt.m0] || 0); return s / NP; };
+    let best = -2, p2 = 0;
+    for (let m = Math.round(p1 + Delta) - tol; m <= hi; m++) { const c = corr(m); if (c > best) { best = c; p2 = m; } }
+    const found = best >= 0.5 * this.cmax, rho = found ? (p2 - p1) / Delta : 1;
+    let e0 = this.e0, e1 = this.e1, pilotErr = null;
+    const at = x => Math.round(x) - dt.m0, q2 = found ? p2 : p1 + Delta;
+    if (found) {   // re-read the tone energies at the instants corrected for the clock offset
+      e0 = []; e1 = [];
+      for (let j = 0; j < hdr.nc; j++) { const b = at(p1 + ((NP + NH) * Lr + j * Ld) * rho); e0.push(dt.z0[b]); e1.push(dt.z1[b]); }
+    }
+    // the postamble is sent at the message's tones and rate: it calibrates the soft output
+    const pe0 = [], pe1 = [];
+    for (let j = 0; j < NP; j++) { const b = at(q2 + j * Ld * rho); pe0.push(dt.z0[b] || 0); pe1.push(dt.z1[b] || 0); }
+    if (found) pilotErr = pe0.reduce((s, v, j) => s + ((pe1[j] > v ? 1 : 0) !== det.P[j]), 0);
+    const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(p1 + Delta + NP * Ld + 0.3 * this.fs));
+    const res = { hdr, NP, e0, e1, pe0, pe1, cal: calibrate(pe0, pe1), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
+                  t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
+    Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
+    this.state = 'search'; this.sp = Math.round(p1 + Delta + NP * Ld); this.dt = null;
+    this.cb.onDone && this.cb.onDone(res);
+  }
+  finalizeHop() {   // tone hopping: postamble searched near where the tracking expects it, then everywhere within 0.5 %
+    const { hdr, Lr, Ld, Lwd, p1, NP, NH, det, mhs } = this, nc = hdr.nc, P = det.P;
+    const Delta = (NP + NH) * Lr + nc * Ld, tol = Math.round(0.005 * Delta) + Lwd, mid = Math.round(p1 + Delta), here = Math.round(this.pos);
+    if (Math.max(mid + tol, here + 2 * Lwd) + Math.round((NP - 1) * Ld) + Lwd > this.n) return;   // wait for the postamble
+    const corr = m => this.hopCorr(m, mhs, nc, P, Ld, Lwd);
+    let best = searchMax(corr, here - 2 * Lwd, here + 2 * Lwd, Lwd);
+    if (best.v < 0.5 * this.cmax) { const b = searchMax(corr, mid - tol, mid + tol, Lwd); if (b.v > best.v) best = b; }
+    const found = best.v >= 0.5 * this.cmax, rho = found ? (best.m - p1) / Delta : 1, q2 = found ? best.m : here;
+    const at = (x, k) => { const i = Math.round(x) - this.base, [t0, t1] = this.hopTabs(mhs, k, Lwd); return [energyAt(this.y, i, t0), energyAt(this.y, i, t1)]; };
+    let e0 = this.e0, e1 = this.e1;
+    if (found) {   // re-read the tone energies at the instants corrected for the clock offset
+      e0 = []; e1 = [];
+      for (let j = 0; j < nc; j++) { const [a, b] = at(p1 + ((NP + NH) * Lr + j * Ld) * rho, j); e0.push(a); e1.push(b); }
+    }
+    const r0 = [], r1 = [];
+    for (let j = 0; j < NP; j++) { const [a, b] = at(q2 + j * Ld * rho, nc + j); r0.push(a); r1.push(b); }
+    const nm = hopNormalize(mhs, [...e0, ...r0], [...e1, ...r1]), pe0 = nm.e0.slice(nc), pe1 = nm.e1.slice(nc);
+    const pilotErr = found ? pe0.reduce((s, v, j) => s + ((pe1[j] > v ? 1 : 0) !== P[j]), 0) : null;
+    const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(q2 + NP * Ld * rho + 0.3 * this.fs));
+    const res = { hdr, NP, e0: nm.e0.slice(0, nc), e1: nm.e1.slice(0, nc), pe0, pe1, cal: calibrate(pe0, pe1), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null,
+                  cmax: this.cmax, cmax2: best.v, pilotErr, hopCtl: this.hop, spread: nm.spread, t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
+    Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
+    this.state = 'search'; this.sp = Math.round(q2 + NP * Ld * rho); this.mhs = null;
+    this.cb.onDone && this.cb.onDone(res);
+  }
+  finishSounding() {   // once the postamble is in: clock offset, then the room's impulse response
+    const { hdr, p1, NP, NH, Lr, det, fs } = this, N = (1 << hdr.order) - 1, sc = fs / FS_TX;
+    const Delta = (NP + NH) * Lr + (hdr.periods + 1) * N * sc, tol = Math.round(0.005 * Delta) + this.Lw, hi = Math.round(p1 + Delta) + tol;
+    if (hi + det.offs[NP - 1] >= this.nz) {
+      const frac = Math.max(0, Math.min(1, (this.nz - this.chip0) / (p1 + Delta + NP * Lr - this.chip0)));
+      if (frac - this.frac > 0.02) { this.frac = frac; this.cb.onProgress && this.cb.onProgress({ hdr, sound: true, frac }); }
+      return;
+    }
+    let best = -2, p2 = 0;   // the postamble is sent in the control mode (hopping from its first bit, or 4 / 8 kHz)
+    if (hdr.tones === 'hop') ({ v: best, m: p2 } = searchMax(m => this.hopCorr(m, this.hs, 0, det.P, Lr, this.Lw), Math.max(this.base, Math.round(p1 + Delta) - tol), hi, this.Lw));
+    else for (let m = Math.max(this.base, Math.round(p1 + Delta) - tol); m <= hi; m++) { const c = this.corrAt(det, m); if (c > best) { best = c; p2 = m; } }
+    const found = best >= 0.5 * this.cmax && Math.abs((p2 - p1) / Delta - 1) < 1e-3, rho = found ? (p2 - p1) / Delta : 1;   // clocks are within 1000 ppm
+    const first = found ? p1 + (NP + NH) * Lr * rho : this.chip0;
+    const n0 = Math.max(this.base, Math.round(p1 - 1.1 * fs)), n1 = Math.round(p1 - 0.15 * fs);   // noise: before the warm-up
+    const noise = n1 - n0 >= 4096 ? this.y.subarray(n0 - this.base, n1 - this.base) : null;
+    const sound = analyseSounding(this.y, this.base, fs, first, sc * rho, hdr.order, hdr.periods, noise);
+    const s0 = Math.max(this.base, Math.round(p1 - 0.3 * fs)), s1 = Math.min(this.n, Math.round(p1 + Delta * rho + NP * Lr + 0.3 * fs));
+    const res = { hdr, NP, found, ppm: found || hdr.periods >= 2 ? (rho * (1 + sound.drift / N) - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, t: p1 / fs, sound,
+                  recording: this.y.slice(s0 - this.base, s1 - this.base), fs };
+    this.state = 'search'; this.sp = Math.round(p1 + Delta * rho + NP * Lr);
+    this.cb.onDone && this.cb.onDone(res);
+  }
+}
+
+function decodeText(bits) { let s = ''; for (let i = 0; i + 8 <= bits.length; i += 8) { let v = 0; for (let j = 0; j < 8; j++) v = 2 * v + bits[i + j]; s += String.fromCharCode(v); } return s; }
+function wavBlob(x, fs) {
+  const buf = new ArrayBuffer(44 + 2 * x.length), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + 2 * x.length, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, fs, true); v.setUint32(28, 2 * fs, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, 2 * x.length, true);
+  for (let i = 0; i < x.length; i++) v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, x[i])) * 32767, true);
+  return new Blob([buf], { type: 'audio/wav' });
+}
+const DEMO = { h: 74, w: 57, b64: "//////////////////////////////////////////wB//////////4AH+H///////8AA8A///////gH8AAH//////gD/gAQ/////4AB/8B+H///8AAA//h/h///AAAGP/4f8f//gAD/j/8H/D//4A//w/GA/4//+D//8PxgP+P//wf//j8Yh/h//4H//4/+If8f/8D//+H/iH/H/+D///x/4z/wP/gf//8OOP/8B/+D///gAD//AP/g///8AA//xD/wf//+AAP/8Y/4P///h/B//GAeD///w/8P/xwHwP//4f/D/8eD+D//+P/4f/H//g///j//H/x//wf//w//x/8f/4P//8P88f/H/+B///D/HH/h//wP//4/zx/g///D//+P/4f4P8/h///h/+P/D/Hwf//8f/D/4fx8B///B/h//H8fAP//4Pg//5/H+D///AAf///h/h///4AP///4fw////gP///+P4B///////PwD/Af//////gAA/4H/////48AAf/j/////+PAH//w/////wDw///8B///+AAcf///AP//4AAAH///+H//gAHwB////h//AA/+A////wH8AD//5////8B4AP////////4QAf////////+AB//////////gD//////////4H//////////+P//////////////////////////////////A" };
+function demoPixels() {
+  const raw = atob(DEMO.b64), n = DEMO.h * DEMO.w, p = new Uint8Array(n);
+  for (let i = 0; i < n; i++) p[i] = (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
+  return { type: 'image', h: DEMO.h, w: DEMO.w, pixels: p };
+}
+if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0,
+  SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize };
+</script>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const params = new URLSearchParams(location.search);
+const cfg = { tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: [200, 400, 800, 1600].includes(+params.get('rate')) ? +params.get('rate') : 400,
+              code: CODES.includes(params.get('code')) ? params.get('code') : 'none', soft: params.get('soft') === 'ratio' ? 'ratio' : 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127 };
+const PAGE_URL = 'https://sheng-yang-cs.github.io/AudioComm/acoustic_modem_v1.html';
+let msgMode = 'text', pen = 0, actx = null;
+
+function seg(el, value, onPick) {
+  const set = v => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v))));
+  set(value);
+  el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); onPick(b.dataset.v); });
+}
+function ctx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }
+function syncUrl() { const u = new URL(location.href); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); history.replaceState(null, '', u); }
+// QR code: the online copy of this page (also when the laptop runs it from a local file); receivers need no settings
+function phoneUrl() { return location.protocol === 'https:' ? location.origin + location.pathname : PAGE_URL; }
+$('qrBtn').onclick = () => { const u = phoneUrl(); drawQR($('qrCanvas'), u); $('qrUrl').textContent = u; $('qrOverlay').classList.remove('hidden'); };
+$('qrOverlay').onclick = () => $('qrOverlay').classList.add('hidden');
+addEventListener('keydown', e => { if (e.key === 'Escape') $('qrOverlay').classList.add('hidden'); });
+
+seg($('tonesSeg'), cfg.tones, v => { cfg.tones = v; syncUrl(); txInfo(); });
+seg($('rateSeg'), cfg.rate, v => { cfg.rate = +v; syncUrl(); txInfo(); });
+seg($('preSeg'), cfg.pre, v => { cfg.pre = +v; syncUrl(); txInfo(); });
+const role = matchMedia('(max-width:860px)').matches && params.get('role') === 'tx' ? 'tx' : 'rx';
+$('main').dataset.role = role;
+seg($('roleSeg'), role, v => { $('main').dataset.role = v; });
+
+// ---------- transmitter ----------
+const pad = { h: 32, w: 32, pixels: new Uint8Array(32 * 32).fill(1) };
+let photo = null;
+const snd = { order: 15, periods: 4 };   // room sounding: MLS order (period 2^order - 1 samples at 48 kHz) and periods averaged
+function currentMsg() {
+  if (msgMode === 'sound') return { type: 'sound', ...snd };
+  if (msgMode === 'text') return { type: 'text', text: $('txtIn').value || ' ' };
+  if (msgMode === 'demo') return demoPixels();
+  if (msgMode === 'draw') return { type: 'image', ...pad };
+  return photo ? { type: 'image', ...photo } : demoPixels();
+}
+function drawPixels(cv, img, done = img.h * img.w, scale = 4) {
+  cv.width = img.w; cv.height = img.h;
+  const z = Math.max(2, Math.floor(Math.min(220 / img.h, 240 / img.w)));
+  cv.style.width = img.w * z + 'px'; cv.style.height = img.h * z + 'px';
+  const g = cv.getContext('2d'), id = g.createImageData(img.w, img.h);
+  for (let k = 0; k < img.h * img.w; k++) {
+    const r = k % img.h, c = Math.floor(k / img.h), o = 4 * (r * img.w + c);
+    const v = k < done ? (img.pixels[k] ? 255 : 0) : 136;
+    id.data[o] = id.data[o + 1] = id.data[o + 2] = v; id.data[o + 3] = 255;
+  }
+  g.putImageData(id, 0, 0);
+}
+function showTx() {
+  $('txText').classList.toggle('hidden', msgMode !== 'text');
+  $('txImg').classList.toggle('hidden', msgMode === 'text' || msgMode === 'sound');
+  $('txOpts').classList.toggle('sounding', msgMode === 'sound');
+  $('drawTools').classList.toggle('hidden', msgMode !== 'draw');
+  $('photoTools').classList.toggle('hidden', msgMode !== 'photo');
+  const m = currentMsg(); if (m.type === 'image') drawPixels($('txCanvas'), m);
+  txInfo();
+}
+function txInfo() {
+  const f = buildFrame(currentMsg(), cfg);
+  if (f.sound) { $('txInfo').textContent = `Room sounding · MLS of ${f.sound.N} samples (${(f.sound.N / FS_TX).toFixed(2)} s) played ${f.sound.periods + 1} times, the first to fill the room · preamble and header ${cfg.tones === 'hop' ? 'hopping' : 'at 4 / 8 kHz'} · ${(f.dur + 0.4).toFixed(1)} s of sound`; return; }
+  const desc = msgMode === 'text' ? `${textCodes($('txtIn').value).length} characters` : (() => { const m = currentMsg(); return `${m.w}×${m.h} image`; })();
+  const coded = cfg.code === 'none' ? '' : ` → ${f.nc} coded bits`;
+  $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, message at ${cfg.rate} bit/s` + (cfg.tones === 'hop' ? `, ${toneDesc('hop', cfg.rate)}` : '');
+}
+seg($('msgSeg'), msgMode, v => { msgMode = v; showTx(); });
+seg($('codeSeg'), cfg.code, v => { cfg.code = v; syncUrl(); txInfo(); });
+seg($('ordSeg'), snd.order, v => { snd.order = +v; txInfo(); });
+seg($('perSeg'), snd.periods, v => { snd.periods = +v; txInfo(); });
+seg($('penSeg'), 0, v => { pen = +v; });
+$('txtIn').addEventListener('input', txInfo);
+$('clearPad').onclick = () => { pad.pixels.fill(1); showTx(); };
+function padPaint(e) {
+  const r = $('txCanvas').getBoundingClientRect();
+  const c = Math.floor((e.clientX - r.left) / r.width * pad.w), rr = Math.floor((e.clientY - r.top) / r.height * pad.h);
+  if (c < 0 || rr < 0 || c >= pad.w || rr >= pad.h) return;
+  const [c0, r0] = lastCell || [c, rr], n = Math.max(Math.abs(c - c0), Math.abs(rr - r0), 1);
+  for (let s = 0; s <= n; s++) { const cc = Math.round(c0 + (c - c0) * s / n), r = Math.round(r0 + (rr - r0) * s / n); pad.pixels[cc * pad.h + r] = pen; }
+  lastCell = [c, rr]; drawPixels($('txCanvas'), pad);
+}
+let painting = false, lastCell = null;
+$('txCanvas').addEventListener('pointerdown', e => { if (msgMode !== 'draw') return; e.preventDefault(); painting = true; $('txCanvas').setPointerCapture(e.pointerId); padPaint(e); });
+$('txCanvas').addEventListener('pointermove', e => { if (painting) padPaint(e); });
+$('txCanvas').addEventListener('pointerup', () => { painting = false; lastCell = null; txInfo(); });
+$('photoIn').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const im = new Image();
+  im.onload = () => {
+    const s = 64 / Math.max(im.width, im.height), w = Math.max(1, Math.round(im.width * s)), h = Math.max(1, Math.round(im.height * s));
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.drawImage(im, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data, lum = new Float32Array(w * h); let mean = 0;
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) { const o = 4 * (r * w + c), L = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2]; lum[c * h + r] = L; mean += L; }
+    mean /= w * h; photo = { h, w, pixels: Uint8Array.from(lum, L => L > mean ? 1 : 0) }; showTx();
+  };
+  im.src = URL.createObjectURL(f);
+};
+let playing = null;
+// Each Send uses a fresh AudioContext, closed when playback ends. A long-lived context can end up
+// suspended or "interrupted" (sleep, idle, output device change) and then plays silence.
+$('sendBtn').onclick = async () => {
+  if (playing) { playing.stop(); return; }
+  const a = new (window.AudioContext || window.webkitAudioContext)();
+  try { await a.resume(); } catch (e) {}
+  const x = modulate(buildFrame(currentMsg(), cfg));
+  const buf = a.createBuffer(1, x.length, FS_TX); buf.copyToChannel(x, 0);
+  const src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination);
+  const dur = x.length / FS_TX; let t0 = a.currentTime;
+  playing = src; $('sendBtn').textContent = '■ Stop'; $('txStatus').textContent = `Sending ${dur.toFixed(1)} s… turn the volume up.`;
+  const tick = () => { if (playing !== src) return; $('txProg').style.width = Math.min(100, 100 * (a.currentTime - t0) / dur) + '%'; requestAnimationFrame(tick); };
+  const finish = msg => {
+    if (playing !== src) return;
+    playing = null; $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = msg;
+    a.close().catch(() => {});
+  };
+  src.onended = () => finish('Sent.');
+  src.start(); t0 = a.currentTime; tick();
+  // If the audio clock does not move, the browser is not playing anything: reset instead of hanging on "Stop".
+  setTimeout(() => { if (playing === src && a.currentTime - t0 < 0.1) finish('The browser gave no audio output. Click Send again.'); }, 1500);
+};
+function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+$('wavBtn').onclick = () => {
+  const m = currentMsg();
+  download(wavBlob(modulate(buildFrame(m, cfg)), FS_TX), m.type === 'sound' ? `acoustic_sounding_mls${m.order}_x${m.periods}.wav` : `acoustic_${m.type}_${cfg.tones}_${cfg.rate}bps.wav`);
+};
+showTx();
+
+// ---------- receiver ----------
+let rx = null, stream = null, proc = null, analyser = null, lastRec = null;
+const pill = (t, cls = '') => { $('rxPill').textContent = t; $('rxPill').className = 'pill ' + cls; };
+function makeRx() {
+  rx = new Receiver(actx.sampleRate, { ...cfg }, {
+    onState: (s, info) => {
+      if (s === 'detected') { pill('Frame detected', 'live'); clearOut(); }
+      if (s === 'header' && info.type === 'sound') pill(`Measuring the room · ${info.periods} × ${(((1 << info.order) - 1) / FS_TX).toFixed(2)} s`, 'live');
+      else if (s === 'header') { pill((info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`) + ` · ${info.rate} bit/s` + (info.tones === 'hop' ? ' · hopping' : '') + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`), 'live'); }
+      if (s === 'lost') { pill('Listening', 'live'); }
+    },
+    onProgress: p => { if (p.sound) { $('rxProg').style.width = (100 * p.frac) + '%'; return; } $('rxProg').style.width = (100 * p.done / p.hdr.nc) + '%'; if (p.bits) showOut(p.hdr, p.bits, p.done); },
+    onDone: res => {
+      lastRec = res;
+      if (res.sound) { $('rxProg').style.width = '100%'; showSounding(res); pill('Room measured ✓', 'ok'); }
+      else { showOut(res.hdr, res.bits, res.hdr.n0); showStats(res); pill('Received ✓', 'ok'); } setTimeout(() => { if (stream) pill('Listening', 'live'); }, 4000); }
+  });
+}
+function restartRx() { if (rx && actx) { makeRx(); clearOut(); } }
+function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('irBtn').classList.add('hidden'); $('sndOut').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); }
+function showOut(hdr, bits, done) {
+  if (hdr.type === 'text') { $('rxOutText').textContent = decodeText(bits.subarray(0, done - done % 8)); $('rxFig').classList.add('hidden'); }
+  else { $('rxOutText').textContent = ''; $('rxFig').classList.remove('hidden'); drawPixels($('rxCanvas'), { h: hdr.h, w: hdr.w, pixels: bits }, done); }
+}
+function showRaw(res) {
+  // what an uncoded frame would have shown with the same channel errors
+  const hdr = res.hdr; if (hdr.code === 'none') return;
+  const raw = Uint8Array.from(res.bits, (b, j) => b ^ ((res.llr[j] > 0 ? 1 : 0) ^ res.sent[j]));
+  if (hdr.type === 'text') { $('rxRawText').textContent = 'Without the code: ' + decodeText(raw); $('rxRawText').classList.remove('hidden'); }
+  else { drawPixels($('rawCanvas'), { h: hdr.h, w: hdr.w, pixels: raw }); $('rawFig').classList.remove('hidden'); }
+}
+function showStats(res) {
+  const st = [], code = res.hdr.code;
+  showRaw(res);
+  st.push([`${res.hdr.rate}`, `bit/s, ${toneDesc(res.hdr.tones, res.hdr.rate)}, preamble ${res.NP} (read from the header)`]);
+  st.push([res.hdr.n0, 'message bits']);
+  if (code !== 'none') {
+    st.push([CODE_INFO[code].rate, `code rate, ${CODE_INFO[code].short}`]);
+    st.push([res.chErr, `channel bit errors corrected (of ${res.hdr.nc} bits)`]);
+    if (code === 'rs') st.push([`${res.rsFails} / ${res.rsBlocks}`, 'Reed–Solomon blocks with too many errors']);
+  }
+  const { t0, t1 } = res.cal;
+  if (res.hdr.tones === 'hop') {
+    st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, 'SNR per symbol, bit-0 / bit-1 tones, after levelling each tone (from the postamble)']);
+    st.push([`${res.spread.toFixed(0)} dB`, 'spread of the tone levels across the band (speaker, room, microphone)']);
+  } else {
+    st.push([`${t0.snrDb.toFixed(0)} / ${t1.snrDb.toFixed(0)} dB`, 'SNR per symbol, low / high tone (from the postamble)']);
+    st.push([`${(20 * Math.log10(t1.mu / t0.mu)).toFixed(1)} dB`, 'level of the high tone relative to the low tone']);
+  }
+  st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
+  st.push([res.pilotErr === null ? 'not found' : `${res.pilotErr} / ${res.pe0.length}`, 'errors on the postamble']);
+  let truth = null;
+  if (res.hdr.type === 'image' && res.hdr.h === DEMO.h && res.hdr.w === DEMO.w) truth = demoPixels().pixels;
+  if (truth) {
+    let e = 0; for (let i = 0; i < truth.length; i++) e += truth[i] !== res.bits[i];
+    st.push([(e / truth.length).toExponential(1), `bit error rate${code === 'none' ? '' : ' after decoding'} (${e} errors)`]);
+    drawPixels($('refCanvas'), demoPixels()); $('refFig').classList.remove('hidden');
+  }
+  $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  drawHist(res, truth ? Uint8Array.from(encodeFEC(code, truth), (x, j) => x ^ res.key[j]) : res.sent);
+  $('recBtn').classList.remove('hidden');
+}
+function drawHist(res, sent) {   // sent: transmitted channel bits (known for the demo image, else the decoder's decision)
+  const cv = $('hist'); cv.classList.remove('hidden'); $('histLegend').classList.remove('hidden');
+  const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
+  g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H);
+  const a = res.llr.map(Math.abs).sort((x, y) => x - y), lim = res.soft === 'ratio' ? 6 : Math.max(6, 1.3 * (a[Math.floor(0.95 * (a.length - 1))] || 0));
+  $('histLegend').firstElementChild.innerHTML = res.soft === 'ratio' ? 'soft output ln(E<sub>high</sub>/E<sub>low</sub>) per bit: two well separated humps mean a clean channel'
+    : `calibrated LLR per bit (axis ±${lim.toFixed(0)}): two well separated humps mean a clean channel`;
+  const nb = 80, h0 = new Float32Array(nb), h1 = new Float32Array(nb);
+  res.llr.forEach((r, i) => {
+    const k = Math.max(0, Math.min(nb - 1, Math.floor((r + lim) / (2 * lim) * nb)));
+    (sent[i] ? h1 : h0)[k]++;
+  });
+  const mx = Math.max(...h0, ...h1, 1), bw = W / nb;
+  [[h0, css('--f0')], [h1, css('--f1')]].forEach(([h, col]) => { g.fillStyle = col; g.globalAlpha = .8; h.forEach((v, k) => g.fillRect(k * bw, H - v / mx * (H - 6), bw - 1, v / mx * (H - 6))); });
+  g.globalAlpha = 1; g.strokeStyle = '#fff8'; g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke();
+}
+seg($('softSeg'), cfg.soft, v => {   // re-decode the last message with the other soft output
+  cfg.soft = v; if (rx) rx.cfg.soft = v;
+  if (lastRec && !lastRec.sound) { Object.assign(lastRec, decodeFrame(lastRec, v)); clearOut(); $('rxProg').style.width = '100%'; showOut(lastRec.hdr, lastRec.bits, lastRec.hdr.n0); showStats(lastRec); }
+});
+$('recBtn').onclick = () => { if (lastRec) download(wavBlob(lastRec.recording, lastRec.fs), lastRec.sound ? `received_sounding_${Math.round(lastRec.fs)}Hz.wav` : `received_${lastRec.hdr.tones}_${lastRec.hdr.rate}bps_${Math.round(lastRec.fs)}Hz.wav`); };
+$('irBtn').onclick = () => {   // the measured response, peak at 0.9, from 5 ms before the direct sound to the end of the decay
+  if (!lastRec || !lastRec.sound) return;
+  const s = lastRec.sound, n = Math.min(s.N, s.iend + Math.round(0.05 * FS_TX)), pk = s.h.reduce((m, v) => Math.max(m, Math.abs(v)), 0) || 1;
+  download(wavBlob(Float32Array.from(s.h.subarray(0, n), v => 0.9 * v / pk), FS_TX), 'room_impulse_response_48kHz.wav');
+};
+
+// ---------- room sounding results ----------
+const ESN0_400 = 10 * Math.log10(0.405 / SOUND_AMP ** 2 * (FS_TX / 2) / 400);   // tone of amplitude 0.9 at 400 bit/s vs the MLS spread over 0..24 kHz
+function showSounding(res) {
+  const s = res.sound, db = v => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)} dB`, st = [];
+  $('sndOut').classList.remove('hidden');
+  $('rxOutText').textContent = (s.rt ? `RT60 ${s.rt.rt60.toFixed(2)} s · ` : '') + `DRR ${s.drr >= 0 ? '+' : '−'}${Math.abs(s.drr).toFixed(1)} dB`;
+  st.push(s.rt ? [`${s.rt.rt60.toFixed(2)} s`, `reverberation time RT60 (${s.rt.method})`] : ['—', 'reverberation time: the decay is too short above the noise']);
+  st.push([`${(1000 * s.tauRms).toFixed(1)} ms`, 'rms delay spread τ<sub>rms</sub> (a bit lasts 2.5 ms at 400 bit/s)']);
+  st.push([db(s.drr), 'direct-to-reverberant ratio']);
+  st.push([db(s.c50), 'clarity C50, first 50 ms vs the rest']);
+  const [t4, t8, t16] = s.tones;
+  st.push([db(t8.gain - t4.gain) + (t16.gain === null ? '' : ` / ${db(t16.gain - t8.gain)}`), 'gain of 8 vs 4 kHz' + (t16.gain === null ? '' : ' / 16 vs 8 kHz') + ' (speaker, room, microphone)']);
+  if (s.snr) { const t = s.tones.filter(x => x.snr !== null); st.push([t.map(x => (x.snr + ESN0_400).toFixed(0)).join(' / ') + ' dB', `E<sub>s</sub>/N<sub>0</sub> of a tone at 400 bit/s, ${t.map(x => x.f / 1000).join(' / ')} kHz (noise only)`]); }
+  st.push([`${s.inr.toFixed(0)} dB`, 'decay range above the noise']);
+  st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
+  if (s.glitch) st.push([`${s.used} / ${res.hdr.periods}`, 'periods used: the audio skipped or repeated samples, periods realigned']);
+  $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  drawIR(s); drawFR(s);
+  $('irBtn').classList.remove('hidden'); $('recBtn').classList.remove('hidden');
+}
+function plotArea(cv) {
+  const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
+  g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H); g.font = `${11 * devicePixelRatio}px system-ui,sans-serif`;
+  return { g, W, H, L: 34 * devicePixelRatio, B: 16 * devicePixelRatio };
+}
+function label(g, W, H, txt, x, y, base) {   // text kept inside the plot
+  g.textBaseline = base; const w = g.measureText(txt).width;
+  if (x + w <= W - 2) g.fillText(txt, x, base === 'middle' ? Math.max(7 * devicePixelRatio, Math.min(H - 7 * devicePixelRatio, y)) : y);
+}
+function curve(g, n, X, Y, col, w = 1.5) { g.strokeStyle = col; g.lineWidth = w * devicePixelRatio; g.beginPath(); let on = false; for (let i = 0; i < n; i++) { const y = Y(i); if (!isFinite(y)) { on = false; continue; } on ? g.lineTo(X(i), y) : g.moveTo(X(i), y); on = true; } g.stroke(); }
+function drawIR(s) {   // energy envelope and decay curve, in dB against time after the direct sound
+  const { g, W, H, L, B } = plotArea($('irPlot')), fs = s.fsIR, n = Math.min(s.N, Math.max(Math.round(0.1 * fs), Math.round(1.25 * s.iend)));
+  const t0 = -s.pre / fs, t1 = (n - s.pre) / fs, X = t => L + (t - t0) / (t1 - t0) * (W - L - 4), Y = d => 4 + -d / 70 * (H - B - 8);
+  const em = Math.max(...s.env);
+  g.strokeStyle = '#ffffff22'; g.fillStyle = '#ffffff99';
+  for (let d = 0; d >= -70; d -= 10) { g.beginPath(); g.moveTo(L, Y(d)); g.lineTo(W, Y(d)); g.stroke(); label(g, W, H, `${d}`, 4, Y(d), 'middle'); }
+  const step = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5].find(v => (t1 - t0) / v <= 8) || 1;
+  for (let t = 0; t <= t1; t += step) { g.beginPath(); g.moveTo(X(t), 0); g.lineTo(X(t), H - B); g.stroke(); label(g, W, H, `${Math.round(1000 * t)} ms`, X(t) + 2, H - B + 2, 'top'); }
+  const px = Math.max(1, Math.floor(n / (W - L)));   // one point per pixel column: the largest value in it
+  curve(g, Math.ceil(n / px), j => X((j * px - s.pre) / fs), j => { let m = 0; for (let i = j * px; i < Math.min(n, (j + 1) * px); i++) m = Math.max(m, s.env[i]); return Y(Math.max(-70, 10 * Math.log10(m / em + 1e-12))); }, css('--f1'), 1);
+  if (s.rt) {   // the fitted slope, extended to -65 dB, under the decay curve
+    g.setLineDash([5 * devicePixelRatio, 4 * devicePixelRatio]);
+    const i1 = Math.min(n, (-65 - s.rt.at) / s.rt.slope), ia = Math.max(s.pre, (0 - s.rt.at) / s.rt.slope);
+    curve(g, 2, k => X(((k ? i1 : ia) - s.pre) / fs), k => Y(s.rt.at + s.rt.slope * (k ? i1 : ia)), '#ffffffcc', 1);
+    g.setLineDash([]); g.fillStyle = '#fff'; g.textBaseline = 'top'; g.fillText(`RT60 ≈ ${s.rt.rt60.toFixed(2)} s`, W - 110 * devicePixelRatio, 8 * devicePixelRatio);
+  }
+  curve(g, Math.min(n, s.edcDb.length), i => X((i - s.pre) / fs), i => s.edcDb[i] < -70 ? NaN : Y(s.edcDb[i]), css('--f0'), 2.5);
+}
+function drawFR(s) {   // frequency response and SNR, in dB against frequency (log scale)
+  const { g, W, H, L, B } = plotArea($('frPlot')), f0 = s.grid[0], f1 = s.grid[s.grid.length - 1];
+  const top = s.snr ? Math.max(10, 10 * Math.ceil(Math.max(...s.snr) / 10)) : 10, bot = -40;
+  const X = f => L + Math.log(f / f0) / Math.log(f1 / f0) * (W - L - 4), Y = d => 4 + (top - d) / (top - bot) * (H - B - 8);
+  g.strokeStyle = '#ffffff22'; g.fillStyle = '#ffffff99';
+  for (let d = top; d >= bot; d -= 10) { g.beginPath(); g.moveTo(L, Y(d)); g.lineTo(W, Y(d)); g.stroke(); label(g, W, H, `${d}`, 4, Y(d), 'middle'); }
+  for (const f of [100, 200, 500, 1000, 2000, 5000, 10000, 20000]) if (f >= f0 && f <= f1) { g.beginPath(); g.moveTo(X(f), 0); g.lineTo(X(f), H - B); g.stroke(); label(g, W, H, f >= 1000 ? `${f / 1000}k` : `${f}`, X(f) + 2, H - B + 2, 'top'); }
+  g.setLineDash([2 * devicePixelRatio, 3 * devicePixelRatio]); g.strokeStyle = '#ffffffaa';
+  for (const t of s.tones) if (t.gain !== null) { g.beginPath(); g.moveTo(X(t.f), 0); g.lineTo(X(t.f), H - B); g.stroke(); }
+  g.setLineDash([]);
+  if (s.snr) curve(g, s.grid.length, i => X(s.grid[i]), i => Y(Math.max(bot, s.snr[i])), css('--f0'), 2);
+  curve(g, s.grid.length, i => X(s.grid[i]), i => Y(Math.max(bot, s.Hdb[i])), css('--f1'), 2);
+}
+
+$('listenBtn').onclick = async () => {
+  const a = ctx();
+  if (stream) { stream.getTracks().forEach(t => t.stop()); proc.disconnect(); stream = null; $('listenBtn').textContent = '● Start listening'; pill('Idle'); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  } catch (e) { pill('No microphone', 'bad'); $('rxFs').textContent = 'Microphone access was refused or the page is not served over https.'; return; }
+  const src = a.createMediaStreamSource(stream);
+  analyser = a.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0; analyser.minDecibels = -100; analyser.maxDecibels = -25;
+  proc = a.createScriptProcessor(4096, 1, 1);
+  const mute = a.createGain(); mute.gain.value = 0;
+  src.connect(analyser); src.connect(proc); proc.connect(mute); mute.connect(a.destination);
+  makeRx(); clearOut();
+  proc.onaudioprocess = e => rx.push(e.inputBuffer.getChannelData(0));
+  $('listenBtn').textContent = '■ Stop listening'; pill('Listening', 'live');
+  $('rxFs').textContent = `microphone at ${a.sampleRate} Hz`;
+  draw();
+};
+
+// live plots
+const fbin = new Uint8Array(1024);
+function draw() {
+  if (!stream) return;
+  const sp = $('spec'), W = Math.round(sp.clientWidth * devicePixelRatio), H = Math.round(sp.clientHeight * devicePixelRatio);
+  if (sp.width !== W || sp.height !== H) { sp.width = W; sp.height = H; sp._img = false; }
+  const g = sp.getContext('2d');
+  if (!sp._img) { sp._img = true; g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H); }
+  const col = Math.max(2, Math.round(W / 300));
+  g.drawImage(sp, -col, 0);
+  analyser.getByteFrequencyData(fbin);
+  const fmax = Math.min(actx.sampleRate / 2, 1.5 * TONES.high[1]), nb = Math.floor(fmax / (actx.sampleRate / 2) * analyser.frequencyBinCount);
+  for (let y = 0; y < H; y++) {
+    const v = Math.pow(fbin[Math.floor((1 - y / H) * (nb - 1))] / 255, 2.2);
+    g.fillStyle = `hsl(${230 - 230 * v},85%,${6 + 52 * v}%)`; g.fillRect(W - col, y, col, 1);
+  }
+  const tn = rx.state === 'search' ? null : rx.hdr ? rx.hdr.tones : rx.hop ? 'hop' : CTRL.tones;   // the tones being received
+  if (tn === 'hop') {   // tone hopping: the edges of the band
+    const hs = hopSet(rx.hdr ? rx.hdr.rate : CTRL.rate), fa = HOP_F0, fb = HOP_F0 + (2 * hs.H - 1) * hs.rate;
+    g.fillStyle = css('--f0'); g.fillRect(W - 6, H * (1 - fa / fmax) - 1, 6, 3);
+    g.fillStyle = css('--f1'); g.fillRect(W - 6, H * (1 - fb / fmax) - 1, 6, 3);
+  } else {
+    const [F0, F1] = TONES[tn || CTRL.tones];
+    g.fillStyle = css('--f0'); g.fillRect(W - 6, H * (1 - F0 / fmax) - 1, 6, 3);
+    g.fillStyle = css('--f1'); g.fillRect(W - 6, H * (1 - F1 / fmax) - 1, 6, 3);
+  }
+  // correlation history
+  const cv = $('corr'), CW = cv.width = cv.clientWidth * devicePixelRatio, CH = cv.height = cv.clientHeight * devicePixelRatio, c = cv.getContext('2d');
+  c.fillStyle = css('--plot-bg'); c.fillRect(0, 0, CW, CH);
+  const y = v => CH - 4 - Math.max(0, v) * (CH - 8);
+  c.setLineDash([4, 4]); c.strokeStyle = '#ffffff66'; c.beginPath(); c.moveTo(0, y(rx.thr)); c.lineTo(CW, y(rx.thr)); c.stroke(); c.setLineDash([]);
+  c.strokeStyle = css('--accent'); c.lineWidth = 1.5 * devicePixelRatio; c.beginPath();
+  const L = rx.corrHist.length;
+  for (let i = 0; i < L; i++) { const v = rx.corrHist[(rx.corrPos + i) % L]; const xx = i / (L - 1) * CW; i ? c.lineTo(xx, y(v)) : c.moveTo(xx, y(v)); }
+  c.stroke();
+  requestAnimationFrame(draw);
+}
+})();
+</script>
+</body>
+</html>
