@@ -1,4 +1,4 @@
-"""audiocomm_v4.py - acoustic modem (FSK with 2 or 4 tones, or OFDM with DQPSK, QPSK, 8PSK or 16QAM) and room
+"""audiocomm_v4.py - acoustic modem (FSK with 2 or 4 tones, or OFDM with DQPSK, QPSK, 8PSK, 16, 64 or 256QAM) and room
 sounding, Python version for the labs.
 
 Same frames as acoustic_modem_v4.html, so a WAV produced or recorded by either can be
@@ -21,8 +21,9 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            12.8 kHz, tone hopping with a single group); receivers older than 6400 bit/s ignore it
            v3: tone set 3 with rate field 0 or 1 = OFDM with the long or the short guard (see OFDM_MODES);
            receivers older than v3 ignore it
-           v4: an OFDM frame with a coherent mapping xors its CRC with 0x33 (QPSK), 0x55 (8PSK) or 0x66 (16QAM), on top of
-           the 0xFF of codes 4 to 6; receivers older than v4 ignore it
+           v4: an OFDM frame with a coherent mapping xors its CRC with 0x33 (QPSK), 0x55 (8PSK), 0x66 (16QAM), 0x3C (64QAM)
+           or 0x0F (256QAM), on top of the 0xFF of codes 4 to 6; receivers older than v4 ignore it (64QAM and 256QAM:
+           receivers older than their addition)
   code   : 0 none, 1 Hamming (7,4) + interleaver, 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
@@ -55,7 +56,8 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            reference symbol's value; the other subcarriers, in increasing frequency, symbol after symbol, carry m bits
            each (MSB first, Gray: neighbouring points differ in 1 bit): QPSK (1 - 2 b0 + j (1 - 2 b1)) / sqrt 2;
            8PSK exp(j 2 pi p / 8) with bits p xor (p >> 1); 16QAM (A[u] + j A[v]) / sqrt 10, A = (-3, -1, 1, 3), with
-           bits g(u) g(v), g = (00, 01, 11, 10). The last data symbol is filled up with scrambled zeros (the scrambling
+           bits g(u) g(v), g = (00, 01, 11, 10); 64QAM and 256QAM the same with A = (-7, -5, ..., 7) or (-15, ..., 15),
+           3 or 4 Gray bits per axis, divided by sqrt 42 or sqrt 170. The last data symbol is filled up with scrambled zeros (the scrambling
            sequence goes on), then the reference symbol ends the part. The receiver estimates each subcarrier's gain
            and phase from the reference symbols and the pilots (see ofdm_receive).
   The MATLAB scripts audioComm_tx.m / audioComm_rx.m use the earlier frame and do not read these frames.
@@ -63,6 +65,7 @@ decoded by the other. The receiver needs no settings: they travel in the header.
 Usage
   python audiocomm_v4.py tx --text "Hello" -o hello.wav     # write a WAV (add --play to play it)
   python audiocomm_v4.py tx --image bartS.png --step 2 -o img.wav   # the page's demo image (57x74); without --step, the large one (114x148)
+  python audiocomm_v4.py tx --image bartS.png --up 2 --mod ofdm --map 256qam --code turbo -o big.wav   # the 4x one (228x296)
   python audiocomm_v4.py tx --text "Hello" --code conv -o coded.wav   # codes: none hamming conv turbo turbo3 turbo4
   python audiocomm_v4.py rx recording.wav                    # decode a recording
   python audiocomm_v4.py rx recording.wav --soft ratio       # soft output ln(E1/E0) instead of the calibrated LLR
@@ -75,6 +78,7 @@ Usage
   python audiocomm_v4.py tx --image bartS.png --mod ofdm --code turbo -o ofdm.wav   # OFDM, 17 kbit/s before the code
   python audiocomm_v4.py tx --text "Hello" --mod ofdm --guard short --code turbo -o ofdm5.wav   # OFDM, 5 ms guard
   python audiocomm_v4.py tx --image bartS.png --mod ofdm --map 16qam --code turbo -o qam.wav   # 16QAM with pilots, 31 kbit/s
+  python audiocomm_v4.py tx --image bartS.png --mod ofdm --map 256qam --code turbo -o qam256.wav   # 256QAM, 63 kbit/s
   python audiocomm_v4.py rx --listen 20                      # record 20 s from the mic, then decode
   python audiocomm_v4.py tx --sound -o sound.wav             # room sounding: MLS of 0.68 s, 4 periods averaged
   python audiocomm_v4.py tx --sound --order 16 --periods 8 --pre 511 -o sound.wav   # large or reverberant room
@@ -804,10 +808,24 @@ def modulate(segs, fs=FS_TX):
     return np.concatenate(out)
 
 
-def load_image(path, step=1):
+def load_image(path, step=1, up=1):
+    """Black (False) or white (True) pixels around half the brightest grey: every step-th pixel, or up = 2 for twice
+    the width and height (the grey levels interpolated between pixels, then the threshold: smooth edges). The
+    page's demo images are bartS.png with step 2 (normal), step 1 (large, 2x) and up 2 (4x)."""
     from PIL import Image
     I = np.asarray(Image.open(path).convert("RGB"), dtype=float).mean(axis=2)[::step, ::step]
+    while up > 1:
+        I, up = upsample2(upsample2(I).T).T, up // 2
     return I > I.max() / 2
+
+
+def upsample2(I):
+    """Twice as many rows, interpolated linearly between rows (row r of the result sits at r / 2 - 1/4)."""
+    n = I.shape[0]
+    t = np.arange(2 * n) / 2 - 0.25
+    r0 = np.clip(np.floor(t).astype(int), 0, n - 1)
+    f = np.where(t < 0, 0, t - np.floor(t))[:, None]
+    return I[r0] * (1 - f) + I[np.minimum(r0 + 1, n - 1)] * f
 
 
 def write_wav(path, x, fs):
@@ -982,14 +1000,15 @@ def ofdm_rate(mode, omap="dqpsk"):
 # DQPSK needs no knowledge of the channel, but it pays for it: comparing two noisy symbols doubles the noise, and a
 # phase step carries 2 bits at most in practice. With pilots, known values on some subcarriers of every data symbol,
 # the receiver estimates each subcarrier's gain and phase (the room's frequency response) and decides on the symbol
-# itself: QPSK (2 bits, 2 dB less SNR than DQPSK), 8PSK (3 bits) or 16QAM (4 bits: the amplitude carries bits too).
+# itself: QPSK (2 bits, 2 dB less SNR than DQPSK), 8PSK (3 bits) or 16QAM (4 bits: the amplitude carries bits too),
+# 64QAM (6 bits) or 256QAM (8 bits; in simulation about 5 and 11 dB more SNR than 16QAM).
 #   pilots: subcarrier j of data symbol i (1 .. ns) carries the reference symbol's value if (j - 3 i) mod 12 = 0,
 #   1 subcarrier in 12, shifted by 3 from one symbol to the next (8% of the subcarriers)
 #   header: the CRC xor OFDM_MASKS[mapping] (and xor 0xFF for codes 4 to 6), so that older receivers ignore the frame
-OFDM_MAPS = ["dqpsk", "qpsk", "8psk", "16qam"]
-OFDM_NAMES = dict(dqpsk="DQPSK", qpsk="QPSK", **{"8psk": "8PSK", "16qam": "16QAM"})
-OFDM_MASKS = [0x00, 0x33, 0x55, 0x66]
-OFDM_BITS = {"dqpsk": 2, "qpsk": 2, "8psk": 3, "16qam": 4}
+OFDM_MAPS = ["dqpsk", "qpsk", "8psk", "16qam", "64qam", "256qam"]
+OFDM_NAMES = dict(dqpsk="DQPSK", qpsk="QPSK", **{"8psk": "8PSK", "16qam": "16QAM", "64qam": "64QAM", "256qam": "256QAM"})
+OFDM_MASKS = [0x00, 0x33, 0x55, 0x66, 0x3C, 0x0F]   # with xor 0xFF: 12 distinct masks, any two at least 4 bits apart
+OFDM_BITS = {"dqpsk": 2, "qpsk": 2, "8psk": 3, "16qam": 4, "64qam": 6, "256qam": 8}
 OFDM_PSTEP, OFDM_PSHIFT = 12, 3
 OFDM_DMAX = 8            # delay change of a symbol (moving phone) searched within +-8 samples
 OFDM_ITERS = 3           # rounds of channel estimate <-> per-symbol gain, phase and delay
@@ -1023,9 +1042,11 @@ def ofdm_points(omap):
     if omap == "8psk":
         p = np.arange(8)
         return np.exp(2j * np.pi * p / 8), p ^ (p >> 1)
-    A, g = np.array([-3, -1, 1, 3]), np.array([0, 1, 3, 2])   # 16QAM: 2 Gray bits for the real part, 2 for the imaginary
-    u, v = np.repeat(np.arange(4), 4), np.tile(np.arange(4), 4)
-    return (A[u] + 1j * A[v]) / math.sqrt(10), g[u] << 2 | g[v]
+    h = OFDM_BITS[omap] // 2                       # square QAM: h Gray bits for the real part, h for the imaginary
+    L = 1 << h
+    A, g = np.arange(-(L - 1), L, 2), np.arange(L) ^ (np.arange(L) >> 1)
+    u, v = np.repeat(np.arange(L), L), np.tile(np.arange(L), L)
+    return (A[u] + 1j * A[v]) / math.sqrt(2 * (L * L - 1) / 3), g[u] << h | g[v]
 
 
 def ofdm_pilots(K, i):
@@ -1320,7 +1341,7 @@ def parse_header(hb):
     h = None
     if typ == 0 and a >= 1 and b == 0:
         h = dict(type="text", n0=8 * a, len=a)
-    if typ == 1 and 1 <= a <= 256 and 1 <= b <= 256 and a * b <= 20000:
+    if typ == 1 and 1 <= a <= 512 and 1 <= b <= 512 and a * b <= 70000:   # v4: up to the 4x demo image, 228 x 296 (before: 20000 pixels)
         h = dict(type="image", n0=a * b, h=a, w=b)
     if typ == 2 and not four and a in SOUND_TAPS and 1 <= b <= 8:
         h = dict(type="sound", n0=0, order=a, periods=b)
@@ -1776,11 +1797,12 @@ def main():
             p.add_argument("--guard", choices=[m["name"] for m in OFDM_MODES], default="long",
                            help="OFDM: long (N 2048, guard 21 ms) or short (N 1024, guard 5 ms)")
             p.add_argument("--map", choices=OFDM_MAPS, default="dqpsk",
-                           help="OFDM: DQPSK (no pilots), or QPSK, 8PSK, 16QAM with pilots (2, 3, 4 bits per subcarrier)")
+                           help="OFDM: DQPSK (no pilots), or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots (2, 3, 4, 6, 8 bits per subcarrier)")
             p.add_argument("--tones", choices=TONE_SETS, default="low", help="hop: tone hopping, for reverberant rooms")
             p.add_argument("--pre", type=int, choices=sorted(PILOTS), default=127, help="preamble length, longer reaches farther")
             p.add_argument("--image")
-            p.add_argument("--step", type=int, default=1)
+            p.add_argument("--step", type=int, default=1, help="image: every step-th pixel")
+            p.add_argument("--up", type=int, choices=(1, 2, 4), default=1, help="image: up times the width and height (smooth edges)")
             p.add_argument("--code", choices=[c for c in CODES if c != "rs"], default="none",
                            help="turbo, turbo3, turbo4: turbo code of rate 1/2, 1/3, 1/4; Reed-Solomon (v0) is still decoded but no longer sent")
             p.add_argument("--sound", action="store_true", help="room sounding frame instead of a message")
@@ -1818,7 +1840,7 @@ def main():
         print(f"{a.wav} through {room}, SNR {a.snr:.0f} dB, {a.ppm:+.0f} ppm, {a.fs} Hz -> {a.out}")
         return
     if a.cmd == "tx":
-        img = load_image(a.image, a.step) if a.image else None
+        img = load_image(a.image, a.step, a.up) if a.image else None
         sound = (a.order, a.periods) if a.sound else None
         mod = a.mod if a.mod == "ofdm" else int(a.mod)
         segs, data = build_frame(text=a.text if img is None else None, img=img, code=a.code, rate=a.rate, tones=a.tones, pre=a.pre, sound=sound,

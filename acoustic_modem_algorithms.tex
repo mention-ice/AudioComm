@@ -50,7 +50,7 @@
 \title{\color{icemagenta}\textbf{An acoustic modem for the classroom}\\[4pt]
 \large Algorithms, equations and parameter choices of the demo, version~4}
 \author{Communication Theory (2A), CentraleSup\'elec\,---\,Mention ICE}
-\date{9 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py}; version~3, \code{acoustic\_modem\_v3.html} (also served as \code{acoustic\_modem.html}) and \code{audiocomm\_v3.py};\\ version~2, \code{acoustic\_modem\_v2.html} and \code{audiocomm\_v2.py}; and version~1, \code{acoustic\_modem\_v1.html} and \code{audiocomm\_v1.py}}
+\date{9 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v4.html} (also served as \code{acoustic\_modem.html}) and \code{audiocomm\_v4.py}; version~3, \code{acoustic\_modem\_v3.html} and \code{audiocomm\_v3.py};\\ version~2, \code{acoustic\_modem\_v2.html} and \code{audiocomm\_v2.py}; and version~1, \code{acoustic\_modem\_v1.html} and \code{audiocomm\_v1.py}}
 
 \begin{document}
 \maketitle
@@ -61,7 +61,7 @@ The demo sends text, images and room soundings from a laptop's speaker to the st
 This document describes every algorithm the modem implements, with the equations behind them, and explains the values chosen for its parameters.
 The transmitter uses frequency-shift keying (FSK) with two tones per symbol or, since version~2, four tones carrying two bits, either on fixed tones or hopping over up to 32 tone pairs or 16 groups of four tones; at 6400 bit/s, one group of four tones covers the whole band.
 Version~3 adds orthogonal frequency-division multiplexing (OFDM): 546 or 273 subcarriers carrying differential QPSK, with a guard interval of 21 or $5\ms$, at 17 or 20\,kbit/s before the code.
-Version~4 adds pilots and an estimate of the room's response, so that OFDM can also use coherent QPSK, 8PSK or 16QAM, up to 31 or 38\,kbit/s before the code.
+Version~4 adds pilots and an estimate of the room's response, so that OFDM can also use coherent QPSK, 8PSK, 16QAM, 64QAM or 256QAM, up to 63 or 75\,kbit/s before the code, and images at four times the size.
 Each frame is self-describing: a control part that every receiver knows in advance carries a maximum-length-sequence preamble and a protected header, so receivers need no settings.
 Four error-correcting codes can be sent: none, Hamming $(7,4)$, the $K=7$ convolutional code, and a turbo code of rate $1/2$, $1/3$ or $1/4$.
 Reed--Solomon $(255,223)$ is received but no longer sent.
@@ -84,7 +84,7 @@ Version~4 adds coherent detection for OFDM (\cref{sec:coh}): a channel estimate 
 
 \subsection{Files and scope}
 \begin{itemize}
-\item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK or 16QAM, and DQPSK that follows a moving phone (\cref{sec:coh}). They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
+\item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK, 16QAM, 64QAM or 256QAM, DQPSK that follows a moving phone (\cref{sec:coh}), and images at four times the size. Since 9 October 2026 \code{acoustic\_modem.html} is a copy of \code{acoustic\_modem\_v4.html}. They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
 \item \code{acoustic\_modem\_v3.html} and \code{audiocomm\_v3.py} are version~3: version~2 plus OFDM as a third modulation (\cref{sec:ofdm}). They send the same FSK frames and room soundings as version~2, bit for bit, and read all of version~2's frames; earlier pages and scripts ignore OFDM frames.
 \item \code{acoustic\_modem\_v2.html} is the web page of version~2: transmitter and receiver in one self-contained file, with no network access needed once loaded. The modem core is plain JavaScript, independent of the page's user interface. \code{acoustic\_modem\_v1.html} is version~1, and \code{acoustic\_modem.html} is a copy of the version that the GitHub Pages address serves, now version~3.
 \item \code{audiocomm\_v2.py} (numpy only) implements the same transmitter bit for bit and the same receiver in vectorised form, together with the room simulator of \cref{sec:roomsim}; \code{audiocomm\_v1.py} is its version~1. Their few differences from the page's receiver are listed in \cref{sec:pydiff}.
@@ -249,7 +249,7 @@ With the 32 header bits as the coefficients of $m(x)$ (first bit = highest power
 \begin{equation}
 c(x) = x^8\, m(x) \bmod g(x), \qquad g(x) = x^8 + x^2 + x + 1,
 \end{equation}
-computed by a shift register with zero initial state and no final inversion. The same generator protects ATM cell headers~\cite{itui432}. The CRC rejects false detections and misread headers: a random 40-bit word passes the test (direct or inverted CRC, see below) with probability $2 \cdot 2^{-8} = 2^{-7}$, and the receiver additionally checks that the fields are valid (a text has at least one character and $b = 0$; an image has $1 \le h, w \le 256$ and $hw \le 20\,000$; a sounding has order 14, 15 or 16 and 1 to 8 periods).
+computed by a shift register with zero initial state and no final inversion. The same generator protects ATM cell headers~\cite{itui432}. The CRC rejects false detections and misread headers: a random 40-bit word passes the test (direct or inverted CRC, see below) with probability $2 \cdot 2^{-8} = 2^{-7}$, and the receiver additionally checks that the fields are valid (a text has at least one character and $b = 0$; an image has $1 \le h, w \le 512$ and $hw \le 70\,000$ (before version~4's $4\times$ images: 256 and $20\,000$); a sounding has order 14, 15 or 16 and 1 to 8 periods).
 
 \paragraph{Signalling the turbo codes by masking the CRC.}
 The code field has only four values, all in use when the turbo code was added. The turbo codes of rate $1/2$, $1/3$ and $1/4$ (code numbers 4, 5 and 6) are therefore sent as codes 0, 1 and 2 with all eight CRC bits inverted. This is how 4G tells the number of transmit antennas, by masking the CRC of its broadcast channel~\cite{ts36212}. A receiver accepts a header if the CRC matches (codes 0--3) or matches after inversion (codes 4--7, of which 7 is unused). Receivers that predate the turbo code see a wrong CRC and ignore turbo frames instead of misdecoding them; receivers that predate rates $1/3$ and $1/4$ accept the inverted CRC but know no code 5 or 6, and ignore those frames too. Frames with the other codes are unchanged.
@@ -261,7 +261,7 @@ Four-tone frames set the tones field to 3, a value no earlier receiver accepts, 
 Tone set~3 with rate field~0 or~1 is OFDM with the long or the short guard (\cref{sec:ofdm}); rate field~2 is rejected. Receivers made before version~3 accept tone set~3 only with rate field~3 and ignore OFDM frames. The control part of an OFDM frame always hops.
 
 \paragraph{Signalling the OFDM mapping (version~4).}
-The header has no free field left for the mapping, so version~4 marks it the way the turbo codes are marked: the eight CRC bits are xored with a mask, 0x33 for QPSK, 0x55 for 8PSK and 0x66 for 16QAM (0x00 for DQPSK), on top of the 0xFF of codes 4 to 6. The eight masks $\{0, \mathrm{FF}\} \oplus \{00, 33, 55, 66\}$ are distinct. A version~4 receiver accepts a header whose CRC matches after one of them, and rejects a mapping mask on anything but an OFDM frame; a random word now passes with probability $8 \cdot 2^{-8}$ before the field checks, which only matter once a preamble has been found. Receivers made before version~4 see a wrong CRC and ignore the coherent frames; DQPSK frames are unchanged.
+The header has no free field left for the mapping, so version~4 marks it the way the turbo codes are marked: the eight CRC bits are xored with a mask, 0x33 for QPSK, 0x55 for 8PSK, 0x66 for 16QAM, 0x3C for 64QAM and 0x0F for 256QAM (0x00 for DQPSK), on top of the 0xFF of codes 4 to 6. The twelve masks $\{0, \mathrm{FF}\} \oplus \{00, 33, 55, 66, 3\mathrm{C}, 0\mathrm{F}\}$ are codewords of the $(8, 4)$ Reed--Muller code, so any two differ in at least 4 bits. A version~4 receiver accepts a header whose CRC matches after one of them, and rejects a mapping mask on anything but an OFDM frame; a random word now passes with probability $12 \cdot 2^{-8}$ before the field checks, which only matter once a preamble has been found. Receivers made before version~4 see a wrong CRC and ignore the coherent frames; DQPSK frames are unchanged.
 
 \paragraph{Coding and repetition.}
 The 40 bits go through the convolutional code of \cref{sec:conv}, with 6 tail bits: $2(40+6) = 92$ coded bits, sent $r$ times. The receiver adds the $r$ soft values of each coded bit before Viterbi decoding, which gains $10\log_{10} r$\,dB on the header (\cref{sec:hdrdec}).
@@ -269,7 +269,7 @@ The 40 bits go through the convolutional code of \cref{sec:conv}, with 6 tail bi
 \subsection{Message bits}
 \begin{itemize}
 \item \emph{Text}: each character is mapped to its Unicode code point if that is below 256 (Latin-1), else to \code{?}, and sent as 8 bits, most significant first. At most 1023 characters.
-\item \emph{Image}: $h \times w$ black-and-white pixels (1 = white), column by column. The demo image is $74 \times 57$ pixels. The page can also send it at twice the size, $148 \times 114$ pixels ($\nz = 16\,872$, the picture it is taken from), and likewise drawings ($64 \times 64$ instead of $32 \times 32$) and photos (at most 128 pixels instead of 64); with turbo $1/2$, the large demo image lasts $2.76$\,s with OFDM and $5.94$\,s with FSK at 6400 bit/s.
+\item \emph{Image}: $h \times w$ black-and-white pixels (1 = white), column by column. The demo image is $74 \times 57$ pixels. The page can also send it at twice the size, $148 \times 114$ pixels ($\nz = 16\,872$, the picture it is taken from), and likewise drawings ($64 \times 64$ instead of $32 \times 32$) and photos (at most 128 pixels instead of 64); with turbo $1/2$, the large demo image lasts $2.76$\,s with OFDM and $5.94$\,s with FSK at 6400 bit/s. Version~4 adds four times the size: $296 \times 228$ pixels ($\nz = 67\,488$), \code{bartS.png} at twice its size with its grey levels interpolated linearly between pixels (row $r$ of the result at $r/2 - 1/4$, then the same for the columns) before the threshold, so that the edges stay smooth (\code{-{}-up 2} in the script); drawings on a $128 \times 128$ grid, photos up to 256 pixels. Receivers made before it reject such headers. With turbo $1/2$ and the long guard the $4\times$ demo image lasts $2.95$\,s with 256QAM, $5.13$\,s with 16QAM and $8.71$\,s with DQPSK; $21.8$\,s with FSK at 6400 bit/s.
 \item \emph{Room sounding}: no message bits; a waveform follows the control part (\cref{sec:sounding}).
 \end{itemize}
 The $\nz$ message bits are encoded by the code announced in the header (\cref{sec:codes}), giving $\nc$ coded bits, and then scrambled.
@@ -663,23 +663,27 @@ and carries there the reference symbol's value $e^{j\theta_j}$: one subcarrier i
 \begin{itemize}
 \item QPSK ($m = 2$): $\bigl((1 - 2b_0) + j(1 - 2b_1)\bigr)/\sqrt2$;
 \item 8PSK ($m = 3$): $e^{j2\pi p/8}$, labelled with the bits of $p \oplus \lfloor p/2 \rfloor$;
-\item 16QAM ($m = 4$): $(A_u + jA_v)/\sqrt{10}$, $A = (-3, -1, 1, 3)$, labelled $g_u g_v$ with $g = (00, 01, 11, 10)$.
+\item 16QAM ($m = 4$): $(A_u + jA_v)/\sqrt{10}$, $A = (-3, -1, 1, 3)$, labelled $g_u g_v$ with $g = (00, 01, 11, 10)$;
+\item 64QAM ($m = 6$) and 256QAM ($m = 8$): $(A_u + jA_v)/\sqrt{2(L^2 - 1)/3}$ with $L = 8$ or 16 levels $A_u = 2u - L + 1$, labelled $g_u g_v$ with $g_u = u \oplus \lfloor u/2 \rfloor$ on $m/2$ bits ($\sqrt{42}$ and $\sqrt{170}$; 16QAM is the case $L = 4$).
 \end{itemize}
 The number of data symbols is the smallest $n_s$ with $m \sum_{i=1}^{n_s} (K - P_i) \ge \nc$, $P_i$ the number of pilots in symbol $i$. The last symbol is filled up with scrambled zeros (the scrambler of \cref{sec:scrambler} goes on past the coded bits): plain zeros would put the same point on hundreds of subcarriers, which add up to a peak and heavy clipping. Level and clipping are those of version~3; on the data symbols the clipping noise is about $21\dB$ below the signal.
 
 \begin{table}[ht]
 \centering
-\caption{OFDM mappings of version~4: bit rates before the code, $m K' \fsT/(N + C)$ with $K' = K$ for DQPSK and $K' = \tfrac{11}{12}K$ with pilots, and the duration of the demo image (normal and large, turbo $1/2$, preamble 127, without the silences).}
+\caption{OFDM mappings of version~4: bit rates before the code, $m K' \fsT/(N + C)$ with $K' = K$ for DQPSK and $K' = \tfrac{11}{12}K$ with pilots, and the duration of the demo image (normal, large and $4\times$, turbo $1/2$, preamble 127, without the silences).}
 \label{tab:cohmaps}
 \small
-\begin{tabular}{lccccc}
+\begin{tabular}{lcccccc}
 \toprule
-Mapping & bits per data subcarrier & long guard & short guard & image, long guard & large image\\
+& bits per & & & \multicolumn{3}{c}{demo image, long guard}\\
+Mapping & data subcarrier & long guard & short guard & normal & large & $4\times$\\
 \midrule
-DQPSK (v3) & 2 & 17.1\,kbit/s & 20.5\,kbit/s & 1.29\,s & 2.76\,s\\
-QPSK & 2 & 15.6\,kbit/s & 18.8\,kbit/s & 1.35\,s & 2.95\,s\\
-8PSK & 3 & 23.5\,kbit/s & 28.2\,kbit/s & 1.16\,s & 2.25\,s\\
-16QAM & 4 & 31.3\,kbit/s & 37.5\,kbit/s & 1.10\,s & 1.86\,s\\
+DQPSK (v3) & 2 & 17.1\,kbit/s & 20.5\,kbit/s & 1.29\,s & 2.76\,s & 8.71\,s\\
+QPSK & 2 & 15.6\,kbit/s & 18.8\,kbit/s & 1.35\,s & 2.95\,s & 9.42\,s\\
+8PSK & 3 & 23.5\,kbit/s & 28.2\,kbit/s & 1.16\,s & 2.25\,s & 6.54\,s\\
+16QAM & 4 & 31.3\,kbit/s & 37.5\,kbit/s & 1.10\,s & 1.86\,s & 5.13\,s\\
+64QAM & 6 & 46.9\,kbit/s & 56.3\,kbit/s & 0.97\,s & 1.54\,s & 3.66\,s\\
+256QAM & 8 & 62.6\,kbit/s & 75.1\,kbit/s & 0.97\,s & 1.35\,s & 2.95\,s\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -756,6 +760,8 @@ DQPSK & 8.5\,k & $8.6$ & $-2.5$ & $+0.5$\\
 QPSK & 7.8\,k & $6.5$ & $-3.4$ & $-0.6$\\
 8PSK & 11.7\,k & $9.5$ & $-0.5$ & $+3.0$\\
 16QAM & 15.6\,k & $11.6$ & $+0.5$ & $+5.0$\\
+64QAM & 23.5\,k & $16.5$ & $+1.5$ & $+9$\\
+256QAM & 31.3\,k & $22.4$ & $+2.5$ & $+14.5$\\
 D8PSK (not offered) & 12.8\,k & $13.7$ & $+0.5$ & $+4.5$\\
 \bottomrule
 \end{tabular}
@@ -764,8 +770,10 @@ D8PSK (not offered) & 12.8\,k & $13.7$ & $+0.5$ & $+4.5$\\
 \begin{itemize}
 \item Coherent QPSK needs $2\dB$ less SNR and about $1\dB$ less DRR than DQPSK, for $8\,\%$ less rate (the pilots): about $25\,\%$ more distance where noise limits the link.
 \item 16QAM carries $1.83$ times DQPSK's rate for about $3\dB$ more in noise and in room~A, $4.5\dB$ more in room~B, whose echo is all diffuse: roughly $70\,\%$ of the distance ($60\,\%$ in room~B).
+\item 64QAM carries $1.5$ times 16QAM's rate for about $5\dB$ more in noise, $1\dB$ in room~A and $4\dB$ in room~B; 256QAM twice 16QAM's rate for about $11\dB$ more in noise (a third of the distance where noise limits the link), $2\dB$ in room~A and $9.5\dB$ in room~B. With $H$ known, rate $1/2$ needs $5.3$, $9.5$ and $13.3\dB$ per subcarrier for 16, 64 and 256QAM, 4 and $8\dB$ apart; the rest of 256QAM's gap comes from the room's notches and from clipping.
+\item \emph{Clipping.} The clipping noise, about $21\dB$ below the signal on the data symbols, is harmless up to 16QAM, but 256QAM's points are so close (the nearest are $2/\sqrt{170} \approx 0.15$ apart for a mean energy of 1) that it alone flips about $4\,\%$ of the coded bits in a clean loopback, which the code corrects. A lower level (rms $0.35$ instead of $0.45$) removed most of these errors but did not move the thresholds of \cref{tab:cohres}, so the level is the same for every mapping.
 \item The estimate costs 1.2 to $1.6\dB$ against a receiver that knows $H$. With $H$ known, the BICM capacity at rate $1/2$ on a Gaussian channel is reached at an SNR per subcarrier of $3.4\dB$ for DQPSK, $0.2$ for QPSK, $3.2$ for 8PSK, $6.3$ for D8PSK, $5.2$ for 16QAM and $6.3$ for 16PSK; 16PSK needs $1\dB$ more than 16QAM for the same rate and is not offered.
-\item \emph{Moving phone} (the receive delay varying as a sine of amplitude 2 or 5\,cm and period $1.5$\,s, noise sweep in room~A; frames decoded out of 10 at high SNR, 2\,cm / 5\,cm): DQPSK with version~3's receiver 8 / 1--2, with \cref{eq:dqpsktrack} 10 / 4; QPSK 10 / 10; 16QAM 10 / 10, its half-SNR moving by at most $1\dB$.
+\item \emph{Moving phone} (the receive delay varying as a sine of amplitude 2 or 5\,cm and period $1.5$\,s, noise sweep in room~A; frames decoded out of 10 at high SNR, 2\,cm / 5\,cm): DQPSK with version~3's receiver 8 / 1--2, with \cref{eq:dqpsktrack} 10 / 4; QPSK 10 / 10; 16QAM 10 / 10, its half-SNR moving by at most $1\dB$; 256QAM 10 / 10.
 \end{itemize}
 
 %======================================================================
