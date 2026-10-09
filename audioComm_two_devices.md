@@ -1,6 +1,6 @@
 # Acoustic modem demo: web page, Python and MATLAB
 
-Each version's page and Python script (`acoustic_modem_v0.html` and `audiocomm.py` for v0, `acoustic_modem_v1.html` and `audiocomm_v1.py` for v1, `acoustic_modem_v2.html` and `audiocomm_v2.py` for v2) use the **same frame**: a WAV made or recorded by one is decoded by the other (the transmitted samples were checked to be identical). v1 also reads every v0 frame, and v2 every v1 frame. The MATLAB scripts still use the earlier frame (fixed settings, 127-bit preamble, no code) and do not read the current frames.
+Each version's page and Python script (`acoustic_modem_v0.html` and `audiocomm.py` for v0, `acoustic_modem_v1.html` and `audiocomm_v1.py` for v1, `acoustic_modem_v2.html` and `audiocomm_v2.py` for v2, `acoustic_modem_v3.html` and `audiocomm_v3.py` for v3) use the **same frame**: a WAV made or recorded by one is decoded by the other (the transmitted samples were checked to be identical). v1 also reads every v0 frame, v2 every v1 frame, and v3 every v2 frame. The MATLAB scripts still use the earlier frame (fixed settings, 127-bit preamble, no code) and do not read the current frames.
 
 | File | Role |
 |---|---|
@@ -9,7 +9,8 @@ Each version's page and Python script (`acoustic_modem_v0.html` and `audiocomm.p
 | `audiocomm.py` | Python version for the labs (v0). Uses numpy only (`sounddevice` is needed only for live play and record). It does not read hopping or turbo frames: use `audiocomm_v1.py` for those. |
 | `audioComm_tx.m`, `audioComm_rx.m`, `audioComm_params.m`, `audioComm_prbs.m` | MATLAB version (`audioComm_v4.m` is untouched) |
 | `acoustic_modem_v1.html`, `audiocomm_v1.py` | **v1**: v0 plus room sounding, tone hopping, a turbo code, a fix for cut-off endings, fine timing with a fitted LLR scale, a hop band starting at 3.2 kHz, Reed–Solomon received but no longer sent, and turbo code rates 1/3 and 1/4 (the eight "v1" sections below). v0 = `acoustic_modem_v0.html` and `audiocomm.py`, frozen. |
-| `acoustic_modem_v2.html`, `audiocomm_v2.py` | **v2**: v1 plus four tones per symbol (4-FSK) as a choice next to binary, 3200 and 6400 bit/s with four tones, and a narrower search for the postamble (see the last two sections). v1 is unchanged. |
+| `acoustic_modem_v2.html`, `audiocomm_v2.py` | **v2**: v1 plus four tones per symbol (4-FSK) as a choice next to binary, 3200 and 6400 bit/s with four tones, and a narrower search for the postamble (see the two "v2" sections). v1 is unchanged. |
+| `acoustic_modem_v3.html`, `audiocomm_v3.py` | **v3**: v2 plus OFDM as a third modulation, hundreds of subcarriers at once with a guard interval of 21 or 5 ms, 17 or 20 kbit/s before the code (see the last section). v2 is unchanged, and `acoustic_modem.html` still serves v2. |
 
 ## Running the live demo
 
@@ -23,7 +24,7 @@ Each version's page and Python script (`acoustic_modem_v0.html` and `audiocomm.p
 
 You get a link like `https://<user>.github.io/<repo>/`. Show it as a QR code in the slides.
 
-This demo is published at `https://mention-ice.github.io/AudioComm/` (repository `mention-ice/AudioComm`): `acoustic_modem.html` is the version to use in class (now v2), and `acoustic_modem_v0.html`, `acoustic_modem_v1.html` and `acoustic_modem_v2.html` keep each version. It was first published at `sheng-yang-cs.github.io/AudioComm`; GitHub does not redirect a Pages address when a repository moves, so links and QR codes printed before the move no longer work.
+This demo is published at `https://mention-ice.github.io/AudioComm/` (repository `mention-ice/AudioComm`): `acoustic_modem.html` is the version to use in class (now v2), and `acoustic_modem_v0.html` to `acoustic_modem_v3.html` keep each version (v3 once it is pushed). It was first published at `sheng-yang-cs.github.io/AudioComm`; GitHub does not redirect a Pages address when a repository moves, so links and QR codes printed before the move no longer work.
 
 Receivers need no settings: the rate, tones, code and preamble length travel in the header of each frame, so the plain link (or the page's QR code) is enough. On a phone, add `?role=tx` to open the Transmit tab.
 
@@ -328,7 +329,7 @@ Added to v2 (both `acoustic_modem.html` and `acoustic_modem_v2.html`, and `audio
 - Each earlier doubling of the 4-tone bit rate cost about 3 dB. In echo 6400 bit/s costs about the same, but in noise it costs 4.5 to 4.7 dB, because with a single group the echo of the earlier symbols always lands on the same 4 tones and adds to the noise. By the 6 dB per doubling of distance rule of thumb, 6400 bit/s reaches 60 to 70% of the distance of 3200 bit/s.
 - A clock offset of ±50 ppm and a 44.1 kHz microphone changed these counts by at most two texts in 16.
 - **Beyond 6400 bit/s:** a wider band (up to 20 kHz, if phones and laptops reproduce it) would add about 30%. After that comes OFDM, many tones at once with a phase on each. A simulation study in the same room model (`ofdm_study.md`: DQPSK on 546 subcarriers from 3.2 to 16 kHz, 64 ms symbols with a 21 ms cyclic prefix, peaks clipped 6 dB above the rms) found:
-  - in echo, about 2.7 times FSK's information rate for 1 dB less range: 4.3 kbit/s (turbo 1/4) read down to DRR −4.3 dB, against −5.2 dB for FSK at 3200 bit/s (1.6 kbit/s); 8.5 kbit/s (turbo 1/2) down to −0.5 dB, against −1.6 dB for FSK at 6400 bit/s (3.2 kbit/s);
+  - in echo, about 2.7 times FSK's information rate for 1 dB less range (in that model room, whose early reflections fall inside the guard; in a room whose echo is diffuse from the start the gain is smaller, see v3): 4.3 kbit/s (turbo 1/4) read down to DRR −4.3 dB, against −5.2 dB for FSK at 3200 bit/s (1.6 kbit/s); 8.5 kbit/s (turbo 1/2) down to −0.5 dB, against −1.6 dB for FSK at 6400 bit/s (3.2 kbit/s);
   - in noise, worse: 4.3 kbit/s needs an SNR of +6.0 dB, 3 dB more than FSK at 6400 bit/s, because OFDM plays 3.4 dB quieter for the same peaks and differential detection costs about 3 dB;
   - a phone moving at 0.1 m/s scales time by 300 ppm, which breaks OFDM unless the receiver estimates the scale and resamples the recording.
 - **Tests (simulation):**
@@ -336,3 +337,60 @@ Added to v2 (both `acoustic_modem.html` and `acoustic_modem_v2.html`, and `audio
   - The v2 page from before this change ignores all 16 WAVs at 6400 bit/s and decodes the other 56.
   - In Chromium, the page shows 6400 only with 4 tones, selects Hopping with it, goes back to 3200 with fixed tones and to 1600 with 2 tones, and receives a 6400 bit/s demo image (turbo code) and text (convolutional code) with no errors, postamble found.
   - **Not yet tried with real speakers and phones.** A first test could send the same text at 3200 and 6400 bit/s to phones at several distances.
+
+## v3: OFDM
+
+v3 is `acoustic_modem_v3.html` and `audiocomm_v3.py`, made from v2 (with 6400 bit/s); the v2 files are unchanged and `acoustic_modem.html` still serves v2. FSK frames and room sounding are unchanged bit for bit (28 FSK frames and a sounding frame compared with `audiocomm_v2.py`). To read OFDM frames, phones need the v3 page.
+
+- **The signal:** FSK sends one tone at a time; OFDM sends hundreds at once, each with its own phase. An inverse FFT of N samples at 48 kHz turns one complex number per subcarrier k (at k × 48000 / N Hz, from 3.2 to 16 kHz) into a symbol. Before each symbol its last CP samples are sent again: the cyclic prefix, or **guard interval**. An echo that arrives within the guard only multiplies each subcarrier by a complex gain (the room's frequency response) instead of spilling into the next symbol; echo that arrives later acts as noise.
+
+  | Guard | N | Guard interval | Symbol + guard | Subcarriers | Before the code | Turbo 1/2 | Turbo 1/4 |
+  |---|---|---|---|---|---|---|---|
+  | long | 2048 | 1024 samples, 21.3 ms | 64 ms | 546, 23.4 Hz apart | 17.1 kbit/s | 8.5 kbit/s | 4.3 kbit/s |
+  | short | 1024 | 256 samples, 5.3 ms | 26.7 ms | 273, 46.9 Hz apart | 20.5 kbit/s | 10.2 kbit/s | 5.1 kbit/s |
+
+- **Modulation:** DQPSK. Each subcarrier carries 2 bits per symbol as a phase step from the symbol before: bits b0 b1 give a step of π/4 + m π/2 with m = (b0 xor b1) + 2 b1 (Gray: 00, 10, 11, 01), so the sign of the real part of the step gives b0 and that of its imaginary part b1. Bits 2j and 2j + 1 of each symbol go on subcarrier j. The receiver compares each symbol with the one before on the same subcarrier, so it needs no estimate of the room's response.
+- **Level:** the rms is 0.45, half the 0.9 peak of FSK (each subcarrier a cosine of amplitude 0.45 √(2/K)); peaks above 0.9 are clipped, which touches 4.5% of the samples and leaves the clipping noise 19 dB below the signal. With the same peaks, OFDM plays about 3 dB quieter than FSK.
+- **Choosing it:** the Modulation row has a third button, "OFDM". It hides the Tones and Rate rows and shows a "Guard interval" row: "21 ms · 17 kbit/s" (long) or "5 ms · 20 kbit/s" (short). In the page's address: `mod=ofdm` and `guard=short`. Script: `audiocomm_v3.py tx --mod ofdm --guard long --code turbo4 --text "..."`. Every code can be used; without one, a single wrong bit spoils a text, so use a turbo code.
+- **Frame and header:** a hopping control part as in every hopping frame (warm-up, preamble and header at 400 bit/s), then a known reference symbol, the ns = ⌈(coded bits) / (2 K)⌉ data symbols, and the reference symbol again, each with its guard. The reference symbol has the phases π j² / K on its K subcarriers (Newman phases: its peaks stay 5.4 dB above its rms, below the clipping level). The header uses tone set 3 (as 6400 bit/s) with the rate field 0 for the long guard, 1 for the short one (2 is rejected, 3 stays 6400 bit/s). Older receivers (v0, v1, v2 page and script) ignore these frames. The 57-character text with the convolutional code lasts 0.84 s, of which 0.65 s is the control part (127-bit preamble) and 0.19 s the three OFDM symbols. The demo image lasts 1.29 s with turbo 1/2 (8 data symbols), 1.80 s with turbo 1/4 and 1.13 s with the short guard and turbo 1/2, against 1.99 s with FSK at 6400 bit/s and 3.33 s at 3200 bit/s.
+- **Receiver** (`ofdm_receive` in the script, `ofdmReceive` in the page; it starts once the header has been read and the whole OFDM part is in):
+  1. It reads the OFDM part on a 48 kHz grid, whatever the microphone's rate, with a windowed-sinc interpolation (Hann window, 16 samples each side).
+  2. Timing: the first reference symbol, divided by what was sent, gives the room's impulse response as seen in the band. The FFT windows are placed so that the guard covers the stretch with the most energy: the latest stretch of CP + 1 samples holding at least 99% of the most energy any stretch holds, within ±N/4 of the preamble's timing.
+  3. Time scale: a clock offset, or a phone moving at 0.1 m/s (about 300 ppm), stretches the recording by ε. Between the two reference symbols, (ns + 1)(N + CP) samples apart, the phase on subcarrier f then turns by 2π f (ns + 1)(N + CP) ε / 48000. The receiver tries ε from −500 to +500 ppm in steps of 1 ppm, keeps the one that best lines up the subcarriers, refines it with a parabola, and reads the part again on a grid stretched by 1 + ε. The timing is then found again from both reference symbols.
+  4. The FFT windows start 8 samples before the guard's end, so that the direct sound never falls outside the guard.
+  5. Differential detection: z = Y<sub>i</sub> Y<sub>i−1</sub>* on each subcarrier, LLR(b0) = −√2 Re z / N0 and LLR(b1) = −√2 Im z / N0, with N0 measured from the decisions on each group of 32 subcarriers: the noise plus the echo that arrives after the guard. These LLRs go to the decoder whatever soft output is chosen.
+- **What the page shows:** the impulse response as the receiver's FFT windows see it, with the guard shaded (echo inside it is harmless, echo after it is noise); the share of the energy that arrives after the guard; the SNR per subcarrier (lowest, highest and median over the groups of 32); the clock offset; and the timing offset from the preamble's. The WAVs are named `acoustic_text_ofdm_long.wav` and the like.
+
+**Results (simulation)**, 57-character text, 511-bit preamble, the script's receiver, RT60 0.6 s. DRR at which half of the texts are read (SNR 40 dB), in two model rooms:
+
+- room A: the page tests' room (used for v2's tables): direct sound, 4 early reflections between 3 and 14 ms, a diffuse tail, through a speaker filter; its DRR counts the early reflections as echo (16 trials, 1 dB steps);
+- room B: the script's `sim` room: direct sound, then a diffuse tail from 1 ms on, no distinct early reflections (8 trials, 2 dB steps).
+
+| | Message bit/s | Room A | Room B |
+|---|---|---|---|
+| FSK, 4 tones, 3200 bit/s, turbo 1/2 | 1.6 k | −5.2 dB | −5.0 dB |
+| FSK, 4 tones, 6400 bit/s, turbo 1/2 | 3.2 k | −1.6 dB | −1.6 dB |
+| OFDM, long guard, turbo 1/4 | 4.3 k | −4.4 dB | −1.3 dB |
+| OFDM, long guard, turbo 1/2 | 8.5 k | −0.5 dB | +3.1 dB |
+| OFDM, short guard, turbo 1/2 | 10.2 k | +1.3 dB | +5.3 dB |
+
+- FSK does not care how the echo is spread in time, so both rooms give it the same numbers. OFDM does: in room A much of the "echo" is the early reflections, which fall inside the guard and do no harm, so at the same DRR OFDM sees 3 to 4 dB less harmful echo than in room B. The gain of OFDM in a reverberant room therefore depends on how much of the room's echo arrives within 21 ms: in room A it carries 2.7 times FSK's information rate for about 1 dB less range (4.3 kbit/s against 1.6, 8.5 against 3.2), in room B 1.3 times FSK 6400's rate at the same range (4.3 kbit/s against 3.2) and 2.7 times FSK 3200's for 3.7 dB less.
+- In both rooms the short guard needs about 2 dB more than the long one for 20% more bit rate: in a reverberant room much of the echo arrives after 5.3 ms.
+- **Noise** (room A at DRR +6 dB, so no diffuse tail; the noise level is the same for every frame, set relative to a 4-tone 3200 bit/s frame), SNR at which half of the texts are read: FSK 3200 bit/s −1.7 dB, FSK 6400 +3.0 dB, OFDM long guard with turbo 1/4 +5.5 dB, with turbo 1/2 +9.4 dB, short guard with turbo 1/2 +10.7 dB. Where noise limits the link, OFDM with turbo 1/4 needs 2.5 dB more than FSK at 6400 bit/s for 1.3 times its rate, because it plays 3 dB quieter and differential detection costs about 3 dB.
+- A time scale of ±300 ppm (a phone moving at 0.1 m/s) and a 44.1 kHz microphone with ±50 ppm gave the same counts as none (long guard, turbo 1/4 at DRR −4 and −3 dB in room A: 13 and 16 of 16; turbo 1/2 and the short guard at +1 dB: 16 and 4 of 16 in each case).
+- These match the earlier study (`ofdm_study.md`, which assumed perfect timing and time scale and used room A) within 0.5 dB.
+
+**Sheng's recording of 2026-10-08** (hopping, 1600 bit/s, turbo, demo image, a phone at a distance; old hop band from 1.6 kHz). From the decoded image the frame that was sent can be rebuilt, and compared with what the phone heard:
+
+- **Echo:** in 1.6–14 kHz, 81% of the received energy arrives within 1 ms of the direct sound, 16% between 1 and 5.3 ms, 1% between 5.3 and 21.3 ms and about 1% later. At that spot even the short guard would have held nearly all the echo.
+- **Background noise:** 36 dB below the signal in 3.2–16 kHz (it is strong only below 1 kHz).
+- **Motion:** the delay changed by less than 0.1 sample per 64 ms (20 ppm) most of the time, and by up to 0.6 sample per 64 ms (about 200 ppm, a few cm/s) for about a second, which the time-scale estimate handles when it lasts the whole OFDM part.
+- **What limited the link:** only 55 to 80% of the received energy in 3.2–16 kHz is a linear echo of what was sent (55% in the second where the phone moved). The rest, 1 to 6 dB below the signal, is neither echo nor background noise. Probably distortion in the speaker or the microphone (inferred, not measured): all the tones of that frame were multiples of 1.6 kHz, so harmonics land on other tones, and the second harmonic of the 1.6 kHz tone is its pair, 3.2 kHz, which fits the 43% of 0s read as 1s on that pair. For OFDM this acts as noise, and in noise OFDM needs more signal than FSK: at that spot FSK at 3200 bit/s should reach farther than OFDM. With the signal 36 dB above the background noise, a lower volume may reduce the distortion more than it costs.
+
+**Tests (simulation):**
+
+- The page and `audiocomm_v3.py` give WAVs equal within one LSB for 13 settings (8 with OFDM: both guards, no code, Hamming, convolutional, turbo 1/2, 1/3 and 1/4; 5 with FSK, including 6400 bit/s), and each decodes all 52 WAVs (made by the page and by the script, clean at 48 kHz and at 44.1 kHz with −70 ppm and an SNR of 12 dB) with the same clock offsets and the same number of bits corrected.
+- The v2 page and `audiocomm_v2.py` ignore all OFDM frames and decode the FSK ones.
+- In Chromium (fake microphone), the page received an OFDM demo image (long guard, turbo 1/2, 773 channel bits corrected, +21 ppm, no pixel errors) and a short-guard text; the Modulation row hides the tones and rates with OFDM and shows the guard.
+- The OFDM receiver takes about 0.2 s per frame on the test computer, the turbo decoder about as long again; a phone may take a few times longer.
+- **Not yet tried with real speakers and phones.** A first test could send the same text with FSK 3200, FSK 6400 and OFDM (long guard, turbo 1/4 and 1/2) to phones at several distances, at full and at reduced volume.

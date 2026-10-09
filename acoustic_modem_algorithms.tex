@@ -1,5 +1,5 @@
 % acoustic_modem_algorithms.tex
-% Algorithms of the acoustic modem demo, version 2 (acoustic_modem_v2.html = acoustic_modem.html, audiocomm_v2.py) and version 1 (acoustic_modem_v1.html, audiocomm_v1.py).
+% Algorithms of the acoustic modem demo, version 3 (acoustic_modem_v3.html, audiocomm_v3.py), version 2 (acoustic_modem_v2.html = acoustic_modem.html, audiocomm_v2.py) and version 1 (acoustic_modem_v1.html, audiocomm_v1.py).
 % Compile with: pdflatex acoustic_modem_algorithms.tex (twice, for the references and the table of contents).
 \documentclass[11pt,a4paper]{article}
 \usepackage[T1]{fontenc}
@@ -48,9 +48,9 @@
 \captionsetup{font=small,labelfont=bf}
 
 \title{\color{icemagenta}\textbf{An acoustic modem for the classroom}\\[4pt]
-\large Algorithms, equations and parameter choices of the demo, version~2}
+\large Algorithms, equations and parameter choices of the demo, version~3}
 \author{Communication Theory (2A), CentraleSup\'elec\,---\,Mention ICE}
-\date{9 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v2.html} (also served as \code{acoustic\_modem.html}) and \code{audiocomm\_v2.py},\\ and version~1, \code{acoustic\_modem\_v1.html} and \code{audiocomm\_v1.py}}
+\date{9 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v3.html} and \code{audiocomm\_v3.py}; version~2, \code{acoustic\_modem\_v2.html}\\ (also served as \code{acoustic\_modem.html}) and \code{audiocomm\_v2.py}; and version~1, \code{acoustic\_modem\_v1.html} and \code{audiocomm\_v1.py}}
 
 \begin{document}
 \maketitle
@@ -60,15 +60,17 @@
 The demo sends text, images and room soundings from a laptop's speaker to the students' phones through the air of the classroom.
 This document describes every algorithm the modem implements, with the equations behind them, and explains the values chosen for its parameters.
 The transmitter uses frequency-shift keying (FSK) with two tones per symbol or, since version~2, four tones carrying two bits, either on fixed tones or hopping over up to 32 tone pairs or 16 groups of four tones; at 6400 bit/s, one group of four tones covers the whole band.
+Version~3 adds orthogonal frequency-division multiplexing (OFDM): 546 or 273 subcarriers carrying differential QPSK, with a guard interval of 21 or $5\ms$, at 17 or 20\,kbit/s before the code.
 Each frame is self-describing: a control part that every receiver knows in advance carries a maximum-length-sequence preamble and a protected header, so receivers need no settings.
 Four error-correcting codes can be sent: none, Hamming $(7,4)$, the $K=7$ convolutional code, and a turbo code of rate $1/2$, $1/3$ or $1/4$.
 Reed--Solomon $(255,223)$ is received but no longer sent.
-The receiver is non-coherent.
+The FSK receiver is non-coherent.
 It detects the frame by correlating a level-free tone contrast with the preamble, tracks the symbol timing with an early--late gate, and estimates the clock offset between the two devices from a postamble.
 It turns the tone energies into log-likelihood ratios (LLRs) with a Rician model calibrated on known bits, then decodes with soft-decision Viterbi or iterative log-MAP decoding.
 A room-sounding frame measures the impulse response of the speaker, room and microphone with a periodic maximum-length sequence, and derives the reverberation time, the direct-to-reverberant ratio, $C_{50}$, the delay spread, the frequency response and the signal-to-noise ratio per frequency.
 Numbers quoted as results come from the simulations and the one real recording documented in \code{audioComm\_two\_devices.md}.
 Version~2 differs from version~1 by the four-tone mode (\cref{sec:mfsk}) and a narrower search for the postamble (\cref{sec:clock}); the text says where.
+Version~3 adds OFDM (\cref{sec:ofdm}), received by differential detection after a timing and a time-scale estimate on two reference symbols.
 \end{abstract}
 
 \tableofcontents
@@ -80,6 +82,7 @@ Version~2 differs from version~1 by the four-tone mode (\cref{sec:mfsk}) and a n
 
 \subsection{Files and scope}
 \begin{itemize}
+\item \code{acoustic\_modem\_v3.html} and \code{audiocomm\_v3.py} are version~3: version~2 plus OFDM as a third modulation (\cref{sec:ofdm}). They send the same FSK frames and room soundings as version~2, bit for bit, and read all of version~2's frames; earlier pages and scripts ignore OFDM frames.
 \item \code{acoustic\_modem\_v2.html} is the web page of version~2: transmitter and receiver in one self-contained file, with no network access needed once loaded. The modem core is plain JavaScript, independent of the page's user interface. \code{acoustic\_modem\_v1.html} is version~1, and \code{acoustic\_modem.html} is a copy of the version that the GitHub Pages address serves, now version~2.
 \item \code{audiocomm\_v2.py} (numpy only) implements the same transmitter bit for bit and the same receiver in vectorised form, together with the room simulator of \cref{sec:roomsim}; \code{audiocomm\_v1.py} is its version~1. Their few differences from the page's receiver are listed in \cref{sec:pydiff}.
 \item The page and the script of a version produce byte-identical WAV files and decode each other's recordings. Version~1 also reads every version~0 frame. Version~2 is version~1 plus four-tone FSK (\cref{sec:mfsk}) and a narrower search for the postamble (\cref{sec:clock}): it sends the same binary frames as version~1 and reads all of version~1's frames, while versions~0 and~1 ignore its four-tone frames. Version~0 (\code{acoustic\_modem\_v0.html}, \code{audiocomm.py}) is frozen and is the subset of version~1 without tone hopping, the turbo code and room sounding. The MATLAB scripts use an older frame and are not described here.
@@ -99,7 +102,7 @@ The receiver records at its own rate $\fs$ (usually $44.1$ or $48\kHz$), with ec
 \node[blk, right=of src] (fec) {channel code\\+ interleaver};
 \node[blk, right=of fec] (scr) {scrambler\\$x^{15}{+}x^{14}{+}1$};
 \node[blk, right=of scr] (frm) {frame:\\control + message\\+ postamble};
-\node[blk, right=of frm] (mod) {FSK, 2 or 4 tones,\\fixed or hopping};
+\node[blk, right=of frm] (mod) {FSK, 2 or 4 tones,\\fixed or hopping;\\or OFDM (v3)};
 \node[blk, below=10mm of mod, fill=white, draw=icemagenta, text=icemagenta] (air) {speaker $\to$ room $\to$ microphone};
 \node[blk, left=of air] (en) {sliding tone\\energies $E_m$};
 \node[blk, left=of en] (det) {preamble\\correlation};
@@ -111,7 +114,7 @@ The receiver records at its own rate $\fs$ (usually $44.1$ or $48\kHz$), with ec
 \draw[arr] (mod) -- (air); \draw[arr] (air) -- (en); \draw[arr] (en) -- (det); \draw[arr] (det) -- (trk); \draw[arr] (trk) -- (llr);
 \draw[arr] (llr) -- (dec); \draw[arr] (dec) -- (out);
 \end{tikzpicture}
-\caption{Transmitter (top row) and receiver (bottom rows).}
+\caption{Transmitter (top row) and receiver (bottom rows). After the header, OFDM frames (version~3) go to the receiver of \cref{sec:ofdmrx}.}
 \label{fig:chain}
 \end{figure}
 
@@ -230,9 +233,9 @@ type & 2 & 0 text, 1 image, 2 room sounding\\
 $a$ & 11 & text: number of characters; image: height $h$; sounding: MLS order\\
 $b$ & 11 & text: 0; image: width $w$; sounding: number of periods\\
 code & 2 & 0 none, 1 Hamming, 2 convolutional, 3 Reed--Solomon (turbo codes: see below)\\
-rate & 2 & index into $\{200, 400, 800, 1600\}$ bit/s; with four tones, into $\{400, 800, 1600, 3200\}$, or 3 for 6400 bit/s with tone set 3\\
+rate & 2 & index into $\{200, 400, 800, 1600\}$ bit/s; with four tones, into $\{400, 800, 1600, 3200\}$; with tone set 3: 3 for 6400 bit/s, 0 and 1 for OFDM with the long and the short guard (version~3)\\
 tones & 2 & 0 low ($4/8\kHz$), 1 high ($8/16\kHz$), 2 tone hopping, 3 four tones (version~2)\\
-tone set & 2 & $0\,0$ (reserved before version~2); with four tones, 0 low, 1 high, 2 tone hopping, 3 the whole band (6400 bit/s)\\
+tone set & 2 & $0\,0$ (reserved before version~2); with four tones, 0 low, 1 high, 2 tone hopping, 3 the whole band (6400 bit/s, or OFDM)\\
 CRC & 8 & generator $x^8 + x^2 + x + 1$, inverted for the turbo codes\\
 \bottomrule
 \end{tabularx}
@@ -249,7 +252,10 @@ computed by a shift register with zero initial state and no final inversion. The
 The code field has only four values, all in use when the turbo code was added. The turbo codes of rate $1/2$, $1/3$ and $1/4$ (code numbers 4, 5 and 6) are therefore sent as codes 0, 1 and 2 with all eight CRC bits inverted. This is how 4G tells the number of transmit antennas, by masking the CRC of its broadcast channel~\cite{ts36212}. A receiver accepts a header if the CRC matches (codes 0--3) or matches after inversion (codes 4--7, of which 7 is unused). Receivers that predate the turbo code see a wrong CRC and ignore turbo frames instead of misdecoding them; receivers that predate rates $1/3$ and $1/4$ accept the inverted CRC but know no code 5 or 6, and ignore those frames too. Frames with the other codes are unchanged.
 
 \paragraph{Signalling four tones (version~2).}
-Four-tone frames set the tones field to 3, a value no earlier receiver accepts, and put their tone set in the two bits that were reserved; their rate field indexes $\{400, 800, 1600, 3200\}$ bit/s (\cref{sec:mfsk}). Versions~0 and~1 find no tone set~3 and ignore these frames. A version~2 receiver rejects a binary header whose last two bits are not $0\,0$, and a room sounding with tones field~3. Binary frames are unchanged. Tone set~3 with rate field~3 is 6400 bit/s (\cref{sec:wide}); tone set~3 with any other rate is rejected, and receivers made before 6400 bit/s know no tone set~3 and ignore these frames.
+Four-tone frames set the tones field to 3, a value no earlier receiver accepts, and put their tone set in the two bits that were reserved; their rate field indexes $\{400, 800, 1600, 3200\}$ bit/s (\cref{sec:mfsk}). Versions~0 and~1 find no tone set~3 and ignore these frames. A version~2 receiver rejects a binary header whose last two bits are not $0\,0$, and a room sounding with tones field~3. Binary frames are unchanged. Tone set~3 with rate field~3 is 6400 bit/s (\cref{sec:wide}); receivers made before 6400 bit/s know no tone set~3 and ignore these frames.
+
+\paragraph{Signalling OFDM (version~3).}
+Tone set~3 with rate field~0 or~1 is OFDM with the long or the short guard (\cref{sec:ofdm}); rate field~2 is rejected. Receivers made before version~3 accept tone set~3 only with rate field~3 and ignore OFDM frames. The control part of an OFDM frame always hops.
 
 \paragraph{Coding and repetition.}
 The 40 bits go through the convolutional code of \cref{sec:conv}, with 6 tail bits: $2(40+6) = 92$ coded bits, sent $r$ times. The receiver adds the $r$ soft values of each coded bit before Viterbi decoding, which gains $10\log_{10} r$\,dB on the header (\cref{sec:hdrdec}).
@@ -488,7 +494,153 @@ cost & 4.7 / 4.5 & 3.6 / 3.0\\
 6400 bit/s needed $4.5$ to $4.7\dB$ more SNR and 3 to $3.6\dB$ more DRR than 3200 bit/s (\cref{tab:wide}). Each earlier doubling of the four-tone bit rate cost about $3\dB$; in noise this one costs more, because the echo of the earlier symbols, always on the same four tones, adds to the noise. By the rule of $6\dB$ per doubling of the distance, 6400 bit/s reaches roughly 60 to 70\,\% of the distance of 3200 bit/s. A clock offset of $\pm 50$\,ppm and a $44.1\kHz$ microphone changed the counts by at most 2 texts in 16.
 
 \paragraph{Beyond 6400 bit/s.}
-A wider band, up to $20\kHz$ if the phones and the laptop reproduce it, would add about 30\,\%. Beyond that comes OFDM, many tones at once with a phase on each. A simulation study in the same room model (\code{ofdm\_study.md}: DQPSK on 546 subcarriers from 3.2 to $16\kHz$, symbols of 64\,ms with a 21\,ms cyclic prefix, peaks clipped $6\dB$ above the rms) found that in echo it carries about 2.7 times the information rate of FSK for $1\dB$ less range: 4.3\,kbit/s with the rate-$1/4$ turbo code down to DRR $-4.3\dB$, against $-5.2\dB$ for FSK at 3200 bit/s (1.6\,kbit/s). In noise it is worse: 4.3\,kbit/s needed an SNR of $+6.0\dB$, $3\dB$ more than FSK at 6400 bit/s (3.2\,kbit/s), because it plays $3.4\dB$ quieter for the same peaks and differential detection costs about $3\dB$. A phone moving at 0.1\,m/s scales time by 300\,ppm, which breaks OFDM unless the receiver estimates the scale and resamples the recording. Where 3200 bit/s just stops working (DRR about $-5\dB$), Shannon's capacity $B \log_2(1 + \mathrm{SINR})$, with the late echo counted as noise, is about 5\,kbit/s of information (an estimate).
+A wider band, up to $20\kHz$ if the phones and the laptop reproduce it, would add about 30\,\%. Beyond that comes OFDM, many tones at once with a phase on each. A simulation study in the same room model (\code{ofdm\_study.md}: DQPSK on 546 subcarriers from 3.2 to $16\kHz$, symbols of 64\,ms with a 21\,ms cyclic prefix, peaks clipped $6\dB$ above the rms) found that in echo it carries about 2.7 times the information rate of FSK for $1\dB$ less range: 4.3\,kbit/s with the rate-$1/4$ turbo code down to DRR $-4.3\dB$, against $-5.2\dB$ for FSK at 3200 bit/s (1.6\,kbit/s). In noise it is worse: 4.3\,kbit/s needed an SNR of $+6.0\dB$, $3\dB$ more than FSK at 6400 bit/s (3.2\,kbit/s), because it plays $3.4\dB$ quieter for the same peaks and differential detection costs about $3\dB$. A phone moving at 0.1\,m/s scales time by 300\,ppm, which breaks OFDM unless the receiver estimates the scale and resamples the recording. Where 3200 bit/s just stops working (DRR about $-5\dB$), Shannon's capacity $B \log_2(1 + \mathrm{SINR})$, with the late echo counted as noise, is about 5\,kbit/s of information (an estimate). Version~3 builds this OFDM mode (\cref{sec:ofdm}). With the real receiver the study's thresholds held within $0.5\dB$ in the same room model, but in a room whose echo is diffuse from the start the gain in echo is smaller (\cref{sec:ofdmres}).
+
+%======================================================================
+\section{OFDM (version~3)}
+\label{sec:ofdm}
+Version~3 adds a third modulation for the message part: orthogonal frequency-division multiplexing (OFDM)~\cite{weinstein}, many subcarriers at once, each with its own phase, as in Wi-Fi~\cite{ieee80211} and digital radio~\cite{dab}. The control part is the hopping one (400 bit/s, \cref{sec:hop}), so every receiver finds the frame and reads its header; receivers older than version~3 then ignore the frame (\cref{sec:header}). On the page, the Modulation row has a third button, ``OFDM'', which replaces the Tones and Rate rows by a ``Guard interval'' row; in the script, \code{-{}-mod ofdm -{}-guard long} or \code{short}.
+
+\subsection{Why OFDM}
+FSK sends one tone at a time and carries at most half a bit per second per hertz (\cref{sec:wide}). At high rates its symbols are a fraction of a millisecond long, and the room's echo of earlier symbols is what limits it. OFDM instead puts one complex number on each of $K$ subcarriers of a long symbol and repeats the end of the symbol before it, as a cyclic prefix or \emph{guard interval}. An echo that arrives within the guard then turns into a single complex gain per subcarrier, the room's frequency response at that frequency, and the symbols no longer overlap. With two bits per subcarrier, OFDM approaches 2 bit/s per hertz, less the share of time spent on the guard.
+
+\subsection{Subcarriers and symbols}
+With an FFT of $N$ points at $\fsT$, subcarrier $k$ is at $k\,\fsT/N$, and the subcarriers used are those from 3.2 to $16\kHz$,
+\begin{equation}
+\mathcal K = \{k_0 < k_1 < \dots < k_{K-1}\} = \bigl\{k : 3200\,N \le k\,\fsT < 16\,000\,N\bigr\}.
+\end{equation}
+Symbol $i$ is, for $n = -C, \dots, N - 1$ (the first $C$ samples are the guard, a copy of the last $C$),
+\begin{equation}
+x_i[n] = a \sum_{j=0}^{K-1} \cos\!\Bigl(\frac{2\pi k_j n}{N} + \varphi_{i,j}\Bigr), \qquad a = 0.45\sqrt{2/K},
+\label{eq:ofdmsym}
+\end{equation}
+computed as an inverse real FFT. Its rms is $a\sqrt{K/2} = 0.45$, half the $0.9$ peak of FSK, and samples beyond $\pm 0.9$ are clipped. Two choices of $N$ and $C$ are offered (\cref{tab:ofdm}); the header says which.
+
+\begin{table}[ht]
+\centering
+\caption{The two OFDM modes (version~3). Bit rates before the code are $2K\fsT/(N+C)$.}
+\label{tab:ofdm}
+\small
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{lcccccccc}
+\toprule
+Guard & $N$ & $C$ & guard & symbol + guard & $K$ & spacing & before the code & turbo $1/2$ / $1/4$\\
+\midrule
+long & 2048 & 1024 & $21.3\ms$ & $64.0\ms$ & 546 & $23.4\Hz$ & 17.1\,kbit/s & 8.5 / 4.3\,kbit/s\\
+short & 1024 & 256 & $5.3\ms$ & $26.7\ms$ & 273 & $46.9\Hz$ & 20.5\,kbit/s & 10.2 / 5.1\,kbit/s\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Why the guard works.}
+Let the room's response $h$ have its paths at delays $d \in [\tau, \tau + C]$ samples, and let the receiver take the FFT of the $N$ samples that start $C + \tau$ samples after symbol $i$ begins. Every path then contributes a whole period of the same symbol, cyclically shifted, so the window holds the circular convolution of $x_i$ with $h$. Its DFT at subcarrier $k_j$ is
+\begin{equation}
+Y_{i,j} = \frac{N a}{2}\, H_j\, e^{j\varphi_{i,j}} + w_{i,j},
+\label{eq:ofdmrx}
+\end{equation}
+with $H_j$ the room's response at subcarrier $j$ (including the phase of the window's position) and $w_{i,j}$ the noise. Paths outside $[\tau, \tau + C]$ leak the previous or the next symbol into the window and act as noise; that is why the guard must outlast most of the room's echo, and why the short guard, $5.3\ms$, loses more in reverberant rooms.
+
+\subsection{Differential QPSK}
+\label{sec:dqpsk}
+The receiver does not estimate $H_j$: each subcarrier carries two bits as the phase step from one symbol to the next (DQPSK), as in DAB~\cite{dab}. The coded, scrambled bits of data symbol $i = 1, \dots, n_s$ on subcarrier $j$ are $b_0 = c_{2((i-1)K + j)}$ and $b_1 = c_{2((i-1)K + j) + 1}$, the last symbol padded with zeros, and
+\begin{equation}
+\varphi_{i,j} = \theta_j + \frac{\pi}{4} P_{i,j}, \qquad P_{i,j} = \bigl(P_{i-1,j} + 1 + 2\,[(b_0 \oplus b_1) + 2 b_1]\bigr) \bmod 8, \qquad P_{0,j} = 0.
+\label{eq:dqpsk}
+\end{equation}
+The steps $\pi/4$, $3\pi/4$, $5\pi/4$, $7\pi/4$ carry $00$, $10$, $11$, $01$: a Gray mapping in which the sign of the real part of the step gives $b_0$ and that of its imaginary part $b_1$. Symbol $0$ and symbol $n_s + 1$ are the reference symbol, $P = 0$ on every subcarrier, with the phases
+\begin{equation}
+\theta_j = \frac{\pi\,(j^2 \bmod 2K)}{K},
+\end{equation}
+Newman's phases for a multitone with a low crest factor~\cite{boyd}: its peaks are $5.4\dB$ above its rms (0.84), so it is never clipped. The data symbols have nearly Gaussian samples: $4.5\,\%$ of them exceed $0.9$ and are clipped, which leaves the clipping noise $19\dB$ below the signal. With the same peaks, OFDM plays $3\dB$ quieter than FSK, whose rms is $0.9/\sqrt2$.
+
+\subsection{Frame}
+The frame is the hopping control part (warm-up, preamble, header) followed by the reference symbol, the
+\begin{equation}
+n_s = \Bigl\lceil \frac{\nc}{2K} \Bigr\rceil
+\end{equation}
+data symbols and the reference symbol again, each with its guard; there is no postamble. The header has tone set~3 and the rate field 0 for the long guard, 1 for the short one (\cref{sec:header}). The duration \cref{eq:duration} becomes
+\begin{equation}
+D = \frac{40 + \NP + 92\,r}{\Rc} + \frac{(n_s + 2)(N + C)}{\fsT} \quad (+\,0.4\text{ s of silence}).
+\end{equation}
+With the 127-bit preamble, the 57-character text with the convolutional code ($n_s = 1$) lasts $0.84$\,s, of which $0.65$\,s is the control part; the demo image lasts $1.29$\,s with turbo $1/2$ ($n_s = 8$), $1.80$\,s with turbo $1/4$ and $1.13$\,s with the short guard and turbo $1/2$, against $1.99$\,s with FSK at 6400 bit/s.
+
+\subsection{Receiver}
+\label{sec:ofdmrx}
+Once the header is read, the receiver waits until the whole OFDM part should be in, with $0.1\,\%$ to spare, and processes it in one go (\code{ofdmReceive} in the page, \code{ofdm\_receive} in the script, which give the same results). The preamble's position $p_1$ predicts the start of the first guard, $t_0 = p_1 + (\NP + 92\,r)\,\fs/\Rc$ in the recording's samples.
+
+\paragraph{1. Reading on the transmitter's grid.}
+Whatever the microphone's rate, the OFDM part is read at the instants $t_0 + m\,(\fs/\fsT)(1 + \varepsilon)$, $m = -N/2, \dots, (n_s + 2)(N + C) + N/2$, by windowed-sinc interpolation,
+\begin{equation}
+r[m] = \sum_{|u| < A} y[q]\,\operatorname{sinc}(u)\,\tfrac12\bigl(1 + \cos(\pi u/A)\bigr), \qquad u = t_m - q,\ A = 16,
+\end{equation}
+first with $\varepsilon = 0$. This turns the recording into samples at $48\kHz$, the transmitter's rate, on which the FFTs of $N$ points line up with the subcarriers.
+
+\paragraph{2. Timing from the reference symbol.}
+The receiver takes the FFT of the reference symbol's window starting in the middle of its guard, removes the known phases and tapers the band with a Hann window $w_j$ (lower side lobes in time):
+\begin{equation}
+g[n] = \Bigl|\sum_{j} Y_{0,j}\, e^{-j\theta_j}\, w_j\, e^{j 2\pi k_j n/N}\Bigr|^2, \qquad n = 0, \dots, N - 1.
+\end{equation}
+This is the room's impulse response as seen in the band, a path of delay $d$ (from $t_0$) at index $C/2 + d$, modulo $N$. The receiver looks for the stretch of $C + 1$ indices, starting at $s$ within $C/2 \pm N/4$, that holds the most energy, $E(s) = \sum_{n=s}^{s+C} g[n \bmod N]$, and takes the latest $s$ with $E(s) \ge 0.99 \max E$: the direct sound then sits at the start of the stretch and the guard covers as much of the later echo as possible. The timing correction is $\tau = s - C/2$.
+
+\paragraph{3. Time scale.}
+A clock offset between the two devices, or a phone moving at $v$ (a scale of $v/c$: $290$\,ppm at $0.1$\,m/s), stretches the recording by a factor $1 + \varepsilon$. Symbol $i$ then arrives $i(N + C)\varepsilon$ samples late, which turns subcarrier $f$ by $2\pi f\, i(N + C)\varepsilon/\fsT$. Between two consecutive long-guard symbols this is $18^\circ$ at $16\kHz$ for $50$\,ppm and $111^\circ$ for 300\,ppm, against the $45^\circ$ margin of DQPSK: without a correction, a moving phone could not read OFDM. The two reference symbols, $(n_s + 1)(N + C)$ samples apart, give the receiver
+\begin{equation}
+z_j = Y_{n_s+1,j}\, Y_{0,j}^{*}, \qquad \hat\varepsilon = \arg\max_{|\varepsilon| \le 500\,\mathrm{ppm}} \Bigl|\sum_j z_j\, e^{\,j 2\pi f_j (n_s + 1)(N + C)\varepsilon/\fsT}\Bigr|,
+\label{eq:ofdmeps}
+\end{equation}
+searched in steps of 1\,ppm and refined by a parabola through the peak and its neighbours. Both windows start in the middle of their guards, $C/2 + \tau$, so that a drift of up to $C/2$ samples between the references keeps both inside their guards (at 500\,ppm, up to $n_s = 332$ with the long guard and 199 with the short one, more than the largest image needs). If $|\hat\varepsilon| > 0.05$\,ppm, the part is read again with $\varepsilon = \hat\varepsilon$, and the timing of step~2 is found again on both reference symbols, now aligned.
+
+\paragraph{4. Windows.}
+The data windows start $C + \tau - 8$ samples after each symbol's start: the 8 samples of margin keep the direct sound inside the guard if the timing is slightly late, at the cost of 8 samples of late echo. The receiver also computes $g$ for these windows on both references: the share of its energy in indices $0$ to $C$ is the energy that arrives within the guard, and the page plots it (\cref{sec:ofdmshow}).
+
+\paragraph{5. Differential detection and LLRs.}
+On each subcarrier, $z_{i,j} = Y_{i,j} Y_{i-1,j}^{*}$ for $i = 1, \dots, n_s$. With \cref{eq:ofdmrx}, $z_{i,j} \approx |N a H_j/2|^2\, e^{j(\varphi_{i,j} - \varphi_{i-1,j})}$ plus noise: the room's response cancels. Writing $A_j = |N a H_j/2|$ and $\sigma_j^2$ for the variance of $w_{i,j}$, each component of the noise on $z$ has a variance of about $A_j^2 \sigma_j^2$ (neglecting $w_i w_{i-1}^*$), and the QPSK points are at $A_j^2(\pm 1 \pm j)/\sqrt2$, so that
+\begin{equation}
+\lambda(b_0) = -\frac{\sqrt2\, \operatorname{Re} z_{i,j}}{N_{0,j}}, \qquad \lambda(b_1) = -\frac{\sqrt2\, \operatorname{Im} z_{i,j}}{N_{0,j}}, \qquad N_{0,j} = \sigma_j^2,
+\end{equation}
+positive for a 1, as in \cref{sec:llr}. The noise is estimated per group $G$ of 32 subcarriers, across the decisions $\hat d = (\operatorname{sign}\operatorname{Re} z + j \operatorname{sign}\operatorname{Im} z)/\sqrt2$:
+\begin{equation}
+N_{0,G} = \frac{\operatorname{mean}_{i,\, j \in G} \bigl(\operatorname{Im}(z_{i,j}\, \hat d_{i,j}^{*})\bigr)^2}{\operatorname{mean}_{i,\, j \in G}\, \tfrac12\bigl(|Y_{i,j}|^2 + |Y_{i-1,j}|^2\bigr)},
+\qquad \mathrm{SNR}_G = \frac{\operatorname{mean} \tfrac12\bigl(|Y_{i,j}|^2 + |Y_{i-1,j}|^2\bigr)}{N_{0,G}} - 1.
+\end{equation}
+It includes the echo that arrives outside the guard, the clipping noise and whatever the time-scale estimate left. These LLRs go to the decoder (\cref{sec:decode}), whichever soft output is chosen on the page; the scrambler is undone on them as for FSK.
+
+\paragraph{What the page shows.}
+\label{sec:ofdmshow}
+The impulse response of step~4 in dB, with the guard shaded (echo inside it is harmless, echo after it is noise), the share of the energy after the guard, the SNR per subcarrier (lowest, highest, median over the groups), the clock offset $\hat\varepsilon$, and $\tau$.
+
+\subsection{Results}
+\label{sec:ofdmres}
+\Cref{tab:ofdmres} compares OFDM and FSK in simulation (57-character text, preamble 511, $T_{60} = 0.6$\,s, the script's receiver) in two model rooms. Room~A is the model with early reflections used for the other tables: direct sound, four reflections between 3 and $14\ms$, a diffuse tail and a speaker filter; its DRR counts the reflections as echo. Room~B is the script's simulator (\cref{sec:roomsim}): a direct sound followed by a diffuse tail from $1\ms$ on.
+
+\begin{table}[ht]
+\centering
+\caption{OFDM against four-tone FSK (hopping): the DRR at SNR $40\dB$ (echo) and the SNR at DRR $+6\dB$ in room~A (noise, set relative to a 3200 bit/s FSK frame, so the same for every frame) at which half of the texts are read. Room~A: 16 trials per point, $1\dB$ grid; room~B: 8 trials, $2\dB$ grid, interpolated.}
+\label{tab:ofdmres}
+\small
+\begin{tabular}{lcccc}
+\toprule
+& message & echo, room A & echo, room B & noise, room A\\
+& bit/s & DRR (dB) & DRR (dB) & SNR (dB)\\
+\midrule
+FSK 3200 bit/s, turbo $1/2$ & 1.6\,k & $-5.2$ & $-5.0$ & $-1.7$\\
+FSK 6400 bit/s, turbo $1/2$ & 3.2\,k & $-1.6$ & $-1.6$ & $+3.0$\\
+OFDM long guard, turbo $1/4$ & 4.3\,k & $-4.4$ & $-1.3$ & $+5.5$\\
+OFDM long guard, turbo $1/2$ & 8.5\,k & $-0.5$ & $+3.1$ & $+9.4$\\
+OFDM short guard, turbo $1/2$ & 10.2\,k & $+1.3$ & $+5.3$ & $+10.7$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+\item \emph{Echo.} FSK does not care how the echo is spread in time, and the two rooms give it the same thresholds. OFDM does: in room~A part of the echo is the early reflections, which fall inside the guard and do no harm, so OFDM gains 3 to $4\dB$ over room~B. With turbo $1/4$ it carries 4.3\,kbit/s, $1.3$ times FSK at 6400 bit/s, as far as FSK at 6400 bit/s (room~B) or nearly as far as FSK at 3200 bit/s (room~A). The short guard needs about $2\dB$ more than the long one in both rooms for $20\,\%$ more bit rate.
+\item \emph{Noise.} With turbo $1/4$, OFDM needs $2.5\dB$ more than FSK at 6400 bit/s: it plays $3\dB$ quieter, and differential detection costs about $3\dB$ against coherent detection, while FSK's four tones gain from their long decisions (\cref{sec:mfsk}).
+\item \emph{Time scale.} With $\pm 300$\,ppm, or a $44.1\kHz$ microphone with $\pm 50$\,ppm, the counts were the same as with none (long guard, turbo $1/4$, DRR $-4$ and $-3\dB$ in room~A: 13 and 16 of 16; turbo $1/2$ and the short guard at $+1\dB$: 16 and 4 of 16).
+\item The study that preceded version~3 (\code{ofdm\_study.md}: room~A, perfect timing and time scale) found the same thresholds within $0.5\dB$, so steps 2 and~3 cost little.
+\end{itemize}
+
+\paragraph{The real recording.}
+From the decoded image of the 1600 bit/s recording (\cref{sec:results}), the frame that was sent can be rebuilt and compared with what the phone heard, by least squares over the frame. In 1.6 to $14\kHz$, $81\,\%$ of the received energy arrived within $1\ms$ of the direct sound, $16\,\%$ between 1 and $5.3\ms$, $1\,\%$ between 5.3 and $21.3\ms$ and about $1\,\%$ later: at that spot, even the short guard would have held nearly all the echo. The background noise was $36\dB$ below the signal in 3.2 to $16\kHz$, and the delay changed by less than $0.1$ sample per $64\ms$ (20\,ppm) most of the time, and by up to $0.6$ sample (about 200\,ppm, a few centimetres per second) for about a second. Yet only 55 to $80\,\%$ of the received energy in 3.2 to $16\kHz$ was a linear echo of what was sent; the rest, 1 to $6\dB$ below the signal, was neither echo nor background noise. Distortion in the speaker or the microphone is the likely cause (an inference, not a measurement): all the tones of that frame were multiples of $1.6\kHz$, so their harmonics fall on other tones, and the second harmonic of $1.6\kHz$ is $3.2\kHz$, the other tone of its pair, which fits the $43\,\%$ of 0s read as 1s on that pair. For OFDM such distortion acts as noise, where it needs more signal than FSK; at that spot, FSK at 3200 bit/s should reach farther than OFDM. With $36\dB$ of margin above the background noise, a lower volume may lower the distortion more than the signal.
 
 %======================================================================
 \section{Channel codes}
@@ -808,7 +960,7 @@ The page also shows what an uncoded frame would have shown with ``the same chann
 
 \subsection{Differences in the Python receiver}
 \label{sec:pydiff}
-\code{audiocomm\_v2.py} and \code{audiocomm\_v1.py} compute the same quantities on a whole recording with vectorised numpy code. They find the frame at the first sample where the score exceeds 1, then take the maximum over the next $2W$ samples. They have no early--late gate: without the postamble they read the symbols at the nominal instants ($\rho = 1$). Their fine timing compares the new instants with the unshifted instants $t_j$. Otherwise they decode the same frames to the same bits (checked on simulated recordings at every setting).
+\code{audiocomm\_v2.py} and \code{audiocomm\_v1.py} compute the same quantities on a whole recording with vectorised numpy code. They find the frame at the first sample where the score exceeds 1, then take the maximum over the next $2W$ samples. They have no early--late gate: without the postamble they read the symbols at the nominal instants ($\rho = 1$). Their fine timing compares the new instants with the unshifted instants $t_j$. Otherwise they decode the same frames to the same bits (checked on simulated recordings at every setting). For OFDM frames (version~3) the page and the script run the same steps and give the same clock offsets and the same corrected bits.
 
 %======================================================================
 \section{Room sounding}
@@ -905,6 +1057,11 @@ Hopping stride & $s = H/2 - 1$ & Visits every pair once per $H$ symbols; consecu
 Turbo code & LTE constituents, S-random & Same length as the convolutional code; the well-studied 8-state constituents of LTE; an interleaver defined for any length.\\
 Turbo code rates & $1/2$, $1/3$, $1/4$, nested & Lower rates for the farthest phones, with the 511 preamble; in the same airtime a lower bit rate does as well in noise and better in echo (\cref{tab:rates}).\\
 TX close delay & $2\,\text{s}$ + output latency & Lets the speaker play the end of the frame (\cref{sec:txend}).\\
+OFDM band (v3) & 3.2 to 16\,kHz & The band of tone hopping: the weak, noisy low frequencies are avoided, and 16\,kHz is still reproduced by most phones and laptops.\\
+OFDM guard (v3) & $21.3\ms$ ($N = 2048$) or $5.3\ms$ ($N = 1024$) & The long guard holds most of a classroom's early echo for a third of the airtime; the short one shows what happens when the echo outlasts the guard (\cref{sec:ofdmres}).\\
+OFDM mapping (v3) & DQPSK, Gray & No estimate of the room's response is needed, and phase noise from a moving phone only matters between consecutive symbols (\cref{sec:dqpsk}).\\
+OFDM level (v3) & rms 0.45, clipped at 0.9 & Half the FSK peak: $4.5\,\%$ of the samples are clipped, with the clipping noise $19\dB$ below the signal.\\
+Reference symbol (v3) & Newman phases, sent first and last & Low peaks (never clipped); the pair gives the time scale (\cref{sec:ofdmrx}).\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -935,6 +1092,11 @@ Blind EM & 8 rounds & Converges in a few rounds from the hard decisions.\\
 Fine timing & $K \le 8$ blocks of $\ge 128$ symbols, $|\epsilon| \le \min(T/2, 0.5\ms)$, $t > 2$ & Enough symbols per block for a stable contrast; the $t$-test keeps the old instants unless the new ones are clearly better.\\
 Viterbi clipping $\ell$ & 4 (ratio), $\infty$ (calibrated) & Limits the weight of clicks with the uncalibrated ratio.\\
 Turbo iterations & $\le 8$, early stop & Stops as soon as the decisions settle (3--4 iterations on the real recording), which saves time on phones.\\
+OFDM interpolation (v3) & sinc, Hann window, $A = 16$ & Reads the recording on the transmitter's grid at any rate and time scale, with errors far below the noise.\\
+OFDM timing (v3) & latest stretch with $\ge 99\,\%$ of the most energy & Puts the direct sound at the start of the guard, so that the guard covers as much later echo as possible.\\
+OFDM time scale (v3) & $\pm 500$\,ppm, 1\,ppm steps, parabola & Covers clock offsets and a phone moving at up to about 0.17\,m/s; the phase error left is far below DQPSK's $45^\circ$.\\
+OFDM window margin (v3) & 8 samples & Keeps the direct sound inside the guard if the timing is slightly late.\\
+OFDM noise groups (v3) & 32 subcarriers & Enough decisions for a stable estimate of $N_0$, narrow enough to follow the room's response and the speaker's.\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -1092,7 +1254,7 @@ At the same bit rate, four tones tolerated about $2\dB$ more noise and, for 9 te
 On the 1600 bit/s hopping recording, the improvements of version~1 were measured one by one: handling the missing postamble took the calibrated LLR from 1373 pixel errors to 0; fine timing and the fitted scale lowered the channel errors from $8.2$ to $6.1\,\%$ and the turbo iterations from 8 to 3--4; the per-pair error count then pointed to the lowest tone pair, which led to the $3.2\kHz$ band.
 
 \paragraph{Not yet verified on real hardware.}
-Room sounding, the new hopping band (top tones up to $15.8\kHz$ at 200 bit/s), long-range hopping, the turbo rates $1/3$ and $1/4$ and the four tones of version~2 have been tested in simulation and with the page in a browser fed simulated recordings, not yet with real phones in a real room. A classroom test with recordings saved from the phones would confirm them.
+Room sounding, the new hopping band (top tones up to $15.8\kHz$ at 200 bit/s), long-range hopping, the turbo rates $1/3$ and $1/4$, the four tones of version~2 and the OFDM of version~3 have been tested in simulation and with the page in a browser fed simulated recordings, not yet with real phones in a real room. A classroom test with recordings saved from the phones would confirm them.
 
 %======================================================================
 \clearpage
@@ -1233,6 +1395,15 @@ F.~Gray, ``Pulse code communication,'' U.S. Patent 2\,632\,058, Mar. 1953.
 
 \bibitem{bicm}
 G.~Caire, G.~Taricco, and E.~Biglieri, ``Bit-interleaved coded modulation,'' \emph{IEEE Trans. Inf. Theory}, vol.~44, no.~3, pp.~927--946, May 1998.
+
+\bibitem{weinstein}
+S.~B. Weinstein and P.~M. Ebert, ``Data transmission by frequency-division multiplexing using the discrete Fourier transform,'' \emph{IEEE Trans. Commun. Technol.}, vol.~19, no.~5, pp.~628--634, Oct. 1971.
+
+\bibitem{dab}
+ETSI EN 300 401, \emph{Radio Broadcasting Systems; Digital Audio Broadcasting (DAB) to mobile, portable and fixed receivers}.
+
+\bibitem{boyd}
+S.~Boyd, ``Multitone signals with low crest factor,'' \emph{IEEE Trans. Circuits Syst.}, vol.~33, no.~10, pp.~1018--1022, Oct. 1986.
 
 \end{thebibliography}
 
