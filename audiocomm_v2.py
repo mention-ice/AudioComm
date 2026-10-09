@@ -13,7 +13,9 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            type 1 image: a = rows, b = columns;  type 2 room sounding: a = MLS order (14, 15, 16), b = periods (1..8);
            rate: 200 400 800 1600;  tones: low (4/8 kHz), high (8/16 kHz), hop (tone hopping, 3.2 to 16 kHz)
            v2: tones 3 = 4 tones per symbol (4-FSK), the tone set (0 low, 1 high, 2 hop) in the last two bits, and the
-           rate field read in 400 800 1600 3200; receivers older than v2 find no tone set 3 and ignore the frame
+           rate field read in 400 800 1600 3200; receivers older than v2 find no tone set 3 and ignore the frame;
+           tone set 3 with rate field 3 = 6400 bit/s, one group of 4 tones over the whole band (3.2 / 6.4 / 9.6 /
+           12.8 kHz, tone hopping with a single group); receivers older than 6400 bit/s ignore it
   code   : 0 none, 1 Hamming (7,4) + interleaver, 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
@@ -49,6 +51,7 @@ Usage
   python audiocomm_v2.py tx --text "Hello" --tones hop --code conv -o hop.wav   # tone hopping, for reverberant rooms
   python audiocomm_v2.py tx --text "Hello" --tones hop --code turbo -o turbo.wav   # turbo code (turbo3, turbo4: rates 1/3, 1/4)
   python audiocomm_v2.py tx --text "Hello" --mod 4 --tones hop --rate 3200 --code turbo -o fast4.wav   # 4 tones, 2 bits per symbol
+  python audiocomm_v2.py tx --text "Hello" --mod 4 --tones hop --rate 6400 --code turbo -o fast6.wav   # the whole band, no hopping
   python audiocomm_v2.py rx --listen 20                      # record 20 s from the mic, then decode
   python audiocomm_v2.py tx --sound -o sound.wav             # room sounding: MLS of 0.68 s, 4 periods averaged
   python audiocomm_v2.py tx --sound --order 16 --periods 8 --pre 511 -o sound.wav   # large or reverberant room
@@ -87,6 +90,9 @@ HREPS = {127: 1, 255: 2, 511: 4}
 CTRL = dict(tones="low", rate=400)               # mode of the control part (preamble and header)
 RATES, TONE_SETS = [200, 400, 800, 1600], ["low", "high", "hop"]
 RATES4 = [400, 800, 1600, 3200]                  # v2, 4 tones per symbol
+# 6400 bit/s, 4 tones only: one group of 4 tones spaced 3.2 kHz fills the band 3.2-12.8 kHz, so there is nothing left to
+# hop over (H = 1). It is as fast as FSK goes in this band: one tone at a time carries at most 1/2 bit/s per Hz.
+RATE_WIDE = 6400
 TONES = {"low": (4000, 8000), "high": (8000, 16000)}
 # v2: 4-FSK. With 4 tones a symbol carries 2 bits, so at the same bit rate it lasts twice as long; tones spaced by a
 # multiple of the symbol rate stay orthogonal (here 1.6 kHz, at every rate up to 3200 bit/s).
@@ -696,7 +702,10 @@ def crc8(bits):
 
 def header_bits(typ, a, b, code, rate, tones, M=2):
     c, t, four = CODES.index(code), TONE_SETS.index(tones), M == 4   # codes 4 to 7: field c mod 4 and the CRC inverted
-    v = (msb(typ, 2) + msb(a, 11) + msb(b, 11) + msb(c & 3, 2) + msb((RATES4 if four else RATES).index(rate), 2)
+    r = 3 if rate == RATE_WIDE else (RATES4 if four else RATES).index(rate)
+    if rate == RATE_WIDE:
+        t = 3                                    # 6400 bit/s: tone set 3, rate field 3
+    v = (msb(typ, 2) + msb(a, 11) + msb(b, 11) + msb(c & 3, 2) + msb(r, 2)
          + msb(3 if four else t, 2) + msb(t if four else 0, 2))   # 4 tones: tones 3, the tone set in the last two bits
     return encode_fec("conv", np.array(v + [x ^ (c >> 2) for x in crc8(v)]))
 
@@ -722,8 +731,10 @@ def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127
         typ, (a, b) = 1, img.shape
         data = img.astype(int).flatten(order="F")
     M = 4 if mod == 4 else 2
-    if rate not in (RATES4 if M == 4 else RATES):
-        raise ValueError(f"rate {rate} bit/s not available with {M} tones: {RATES4 if M == 4 else RATES}")
+    if rate not in (RATES4 + [RATE_WIDE] if M == 4 else RATES):
+        raise ValueError(f"rate {rate} bit/s not available with {M} tones: {RATES4 + [RATE_WIDE] if M == 4 else RATES}")
+    if rate == RATE_WIDE and tones != "hop":
+        raise ValueError(f"{RATE_WIDE} bit/s uses one group of 4 tones over the whole band: choose tones hop")
     warm = [(i + 1) % 2 for i in range(round(0.1 * CTRL["rate"]))]
     hdr = header_bits(typ, a, b, code, rate, tones, M)
     ch = encode_fec(code, data)
@@ -804,6 +815,8 @@ def tone_desc(tones, rate, M=2):
     if tones != "hop":
         return "tones " + " / ".join(f"{f / 1000:g}" for f in tone_set(tones, M)) + " kHz"
     H, _ = hop_set(rate)
+    if H == 1:
+        return "tones " + " / ".join(f"{f / 1000:g}" for f in hop_pair(rate, 0, M)) + " kHz (the whole band, no hopping)"
     top = hop_pair(rate, H - 1, M)[-1]
     return f"tone hopping, {H} {'pairs' if M == 2 else f'groups of {M} tones'} from {HOP_F0 / 1000:g} to {top / 1000:g} kHz"
 
@@ -929,6 +942,10 @@ def parse_header(hb):
     M = 4 if four else 2
     typ, a, b, c, rate = val(0, 2), val(2, 11), val(13, 11), val(24, 2) + 4 * ext, (RATES4 if four else RATES)[val(26, 2)]
     tones = val(30, 2) if four else val(28, 2)
+    if four and tones == 3:                      # tone set 3: 6400 bit/s, one hopping group over the whole band
+        if val(26, 2) != 3:
+            return None
+        tones, rate = TONE_SETS.index("hop"), RATE_WIDE
     if tones >= len(TONE_SETS) or c >= len(CODES) or (not four and val(30, 2)):
         return None
     code = CODES[c]
@@ -1030,7 +1047,10 @@ def decode(y, fs, verbose=True, soft="cal"):
             else:
                 c2 = sum(known_contrast(Ef[:, lo + o:hi + 1 + o], v) for o, v in zip(off, S)) / NS
         p2 = lo + int(np.argmax(c2))
-        found = c2.max() >= 0.5 * c1[p1]
+        # At 6400 bit/s every symbol uses the same 4 tones, so the early echoes (a few ms, many symbols) cap the
+        # postamble's contrast near 0.4 even in a quiet room: a fifth of the preamble's score is enough there (its
+        # side lobes, a symbol or more away, stay near 0.02).
+        found = c2.max() >= (0.2 if rate == RATE_WIDE else 0.5) * c1[p1]
         rho = (p2 - p1) / Delta if found else 1.0
         mk = np.round(p1 + ((n_p + NH) * Lr + np.arange(ns) * Ld) * rho).astype(int)
         post = np.round((p2 if found else p1 + Delta) + np.arange(NS) * Ld * rho).astype(int)
@@ -1351,7 +1371,8 @@ def main():
         p = sub.add_parser(name)
         if name == "tx":
             p.add_argument("--text")
-            p.add_argument("--rate", type=int, choices=sorted(set(RATES + RATES4)), default=400, help="200 with 2 tones only, 3200 with 4 tones only")
+            p.add_argument("--rate", type=int, choices=sorted(set(RATES + RATES4 + [RATE_WIDE])), default=400,
+                           help="200 with 2 tones only, 3200 and 6400 with 4 tones only (6400 with --tones hop: one group of 4 tones over the whole band)")
             p.add_argument("--mod", type=int, choices=(2, 4), default=2, help="tones per symbol: 2 (1 bit) or 4 (2 bits)")
             p.add_argument("--tones", choices=TONE_SETS, default="low", help="hop: tone hopping, for reverberant rooms")
             p.add_argument("--pre", type=int, choices=sorted(PILOTS), default=127, help="preamble length, longer reaches farther")

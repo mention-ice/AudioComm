@@ -9,7 +9,7 @@ Each version's page and Python script (`acoustic_modem_v0.html` and `audiocomm.p
 | `audiocomm.py` | Python version for the labs (v0). Uses numpy only (`sounddevice` is needed only for live play and record). It does not read hopping or turbo frames: use `audiocomm_v1.py` for those. |
 | `audioComm_tx.m`, `audioComm_rx.m`, `audioComm_params.m`, `audioComm_prbs.m` | MATLAB version (`audioComm_v4.m` is untouched) |
 | `acoustic_modem_v1.html`, `audiocomm_v1.py` | **v1**: v0 plus room sounding, tone hopping, a turbo code, a fix for cut-off endings, fine timing with a fitted LLR scale, a hop band starting at 3.2 kHz, Reed–Solomon received but no longer sent, and turbo code rates 1/3 and 1/4 (the eight "v1" sections below). v0 = `acoustic_modem_v0.html` and `audiocomm.py`, frozen. |
-| `acoustic_modem_v2.html`, `audiocomm_v2.py` | **v2**: v1 plus four tones per symbol (4-FSK) as a choice next to binary, 3200 bit/s with four tones, and a narrower search for the postamble (see the last section). v1 is unchanged. |
+| `acoustic_modem_v2.html`, `audiocomm_v2.py` | **v2**: v1 plus four tones per symbol (4-FSK) as a choice next to binary, 3200 and 6400 bit/s with four tones, and a narrower search for the postamble (see the last two sections). v1 is unchanged. |
 
 ## Running the live demo
 
@@ -307,3 +307,32 @@ Limited by echo (SNR 40 dB), DRR at which half / 9 in 10 of the texts are read (
     - switches its rates and tone labels with the modulation, keeps `mod=4` in its address, and hides the row for room soundings;
     - receives a 4-tone 1600 bit/s hopping image (turbo code) and a 4-tone 400 bit/s text on 4 / 5.6 / 7.2 / 8.8 kHz (convolutional code), with no errors.
   - **Not yet tried with real speakers and phones.** A first classroom test could send the same text with 2 and 4 tones at 1600 bit/s with hopping, to the same phones.
+
+## v2: 6400 bit/s
+
+Added to v2 (both `acoustic_modem.html` and `acoustic_modem_v2.html`, and `audiocomm_v2.py`) after Sheng asked how to raise the bit rate further. Phones that had the page open need to reload it to read 6400 bit/s frames.
+
+- **The signal:** 4 tones at 3.2, 6.4, 9.6 and 12.8 kHz, spaced by the symbol rate of 3200 symbols/s, so a symbol lasts 0.31 ms (15 samples at 48 kHz). One group of 4 tones fills the whole 3.2–16 kHz band, so there is nothing left to hop over: it is the hopping rule with H = 6400/R = 1 group. This is as fast as FSK goes in this band, since sending one tone at a time carries at most half a bit per second per hertz. Going further needs many tones at once, each with its own phase (OFDM).
+- **Choosing it:** the Rate row shows 6400 with 4 tones. Choosing it selects Hopping, the only tone set that spans the band, and choosing fixed tones moves the rate back to 3200 (`rate=6400` in the page's address). `audiocomm_v2.py tx --mod 4 --tones hop --rate 6400`.
+- **Frame and header:** tone set 3, unused until now, with the rate field at 3 (any other rate value with tone set 3 is rejected). v2 receivers made before this change, and v0 and v1, ignore these frames (checked on the page and the script). All other frames are unchanged bit for bit (13 settings compared). The control part still runs at 400 bit/s, so it becomes a large share of a fast frame: the 57-character text with the convolutional code takes 0.81 s (0.98 s at 3200 bit/s) and the demo image 1.99 s (3.33 s), of which 0.65 s is preamble and header (127-bit preamble).
+- **Receiver:** the hopping receiver with one group. One change: the postamble counts as found if its correlation reaches a fifth of the preamble's, instead of a half. With every symbol on the same 4 tones, the early echoes (a few milliseconds, many symbols at this rate) cap the postamble's contrast at about 0.39 in the model room even with little echo (0.69 at 3200 bit/s). With the old threshold the postamble was never found at 6400 bit/s. Its side lobes, a symbol or more away, stay near 0.02, so a fifth is still safe. It is now found in 14 to 16 of 16 frames from a DRR of −3 dB up, which gives the clock offset and the postamble calibration; the texts are read about as often as with the blind calibration (within two in 16).
+
+**Results (simulation)**, same conditions as the 4-tone tables above (tone hopping, turbo code rate 1/2, 511-bit preamble, 57-character text, RT60 0.6 s, the script's receiver, 16 trials per point), SNR or DRR at which half / 9 in 10 of the texts are read:
+
+| Bit rate, 4 tones | Noise (DRR +6 dB) | Echo (SNR 40 dB) |
+|---|---|---|
+| 3200 | −1.7 / −0.7 dB | −5.2 / −3.5 dB |
+| 6400 | +3.0 / +3.8 dB | −1.6 / −0.5 dB |
+| Cost of 6400 | 4.7 / 4.5 dB | 3.6 / 3.0 dB |
+
+- Each earlier doubling of the 4-tone bit rate cost about 3 dB. In echo 6400 bit/s costs about the same, but in noise it costs 4.5 to 4.7 dB, because with a single group the echo of the earlier symbols always lands on the same 4 tones and adds to the noise. By the 6 dB per doubling of distance rule of thumb, 6400 bit/s reaches 60 to 70% of the distance of 3200 bit/s.
+- A clock offset of ±50 ppm and a 44.1 kHz microphone changed these counts by at most two texts in 16.
+- **Beyond 6400 bit/s:** a wider band (up to 20 kHz, if phones and laptops reproduce it) would add about 30%. After that comes OFDM, many tones at once with a phase on each. A simulation study in the same room model (`ofdm_study.md`: DQPSK on 546 subcarriers from 3.2 to 16 kHz, 64 ms symbols with a 21 ms cyclic prefix, peaks clipped 6 dB above the rms) found:
+  - in echo, about 2.7 times FSK's information rate for 1 dB less range: 4.3 kbit/s (turbo 1/4) read down to DRR −4.3 dB, against −5.2 dB for FSK at 3200 bit/s (1.6 kbit/s); 8.5 kbit/s (turbo 1/2) down to −0.5 dB, against −1.6 dB for FSK at 6400 bit/s (3.2 kbit/s);
+  - in noise, worse: 4.3 kbit/s needs an SNR of +6.0 dB, 3 dB more than FSK at 6400 bit/s, because OFDM plays 3.4 dB quieter for the same peaks and differential detection costs about 3 dB;
+  - a phone moving at 0.1 m/s scales time by 300 ppm, which breaks OFDM unless the receiver estimates the scale and resamples the recording.
+- **Tests (simulation):**
+  - The page and `audiocomm_v2.py` give byte-identical WAVs for 18 settings (4 of them at 6400 bit/s, with no code, the convolutional code and turbo codes 1/2 and 1/3), and each decodes all 72 WAVs (clean at 48 kHz, and at 44.1 kHz with ±50–70 ppm and an SNR of 12 dB).
+  - The v2 page from before this change ignores all 16 WAVs at 6400 bit/s and decodes the other 56.
+  - In Chromium, the page shows 6400 only with 4 tones, selects Hopping with it, goes back to 3200 with fixed tones and to 1600 with 2 tones, and receives a 6400 bit/s demo image (turbo code) and text (convolutional code) with no errors, postamble found.
+  - **Not yet tried with real speakers and phones.** A first test could send the same text at 3200 and 6400 bit/s to phones at several distances.

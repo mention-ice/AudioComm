@@ -135,7 +135,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     <span class="muted mo tr">Turbo code rate</span><span class="seg mo tr" id="trSeg"><button data-v="turbo">1/2</button><button data-v="turbo3">1/3</button><button data-v="turbo4">1/4</button></span>
     <span class="muted mo">Modulation</span><span class="seg mo" id="modSeg"><button data-v="2">2 tones, 1 bit per symbol</button><button data-v="4">4 tones, 2 bits per symbol</button></span>
     <span class="muted">Tones</span><span class="seg" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
-    <span class="muted mo">Rate, bit/s</span><span class="seg mo" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button><button data-v="3200">3200</button></span>
+    <span class="muted mo">Rate, bit/s</span><span class="seg mo" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button><button data-v="3200">3200</button><button data-v="6400">6400</button></span>
     <span class="muted so">Period</span><span class="seg so" id="ordSeg"><button data-v="14">0.34 s</button><button data-v="15">0.68 s</button><button data-v="16">1.37 s</button></span>
     <span class="muted so">Periods averaged</span><span class="seg so" id="perSeg"><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button></span>
     <span class="muted">Preamble, bits</span><span class="seg" id="preSeg"><button data-v="127">127</button><button data-v="255">255</button><button data-v="511">511</button></span>
@@ -165,6 +165,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     v0 also offered <b>Reed–Solomon (255,223)</b>, which corrects up to 16 wrong bytes in each block of 255. In a room it fails as early as Hamming, since both decide each bit before decoding, so this page no longer sends it; it still decodes it.</p>
     <p class="muted"><b>Tone hopping.</b> In a room, the sound of each bit rings on for a large part of a second, far longer than the bit (2.5 ms at 400 bit/s). With only two tones, the echo of the earlier bits sits on both tones all the time; beyond the critical distance, where the echo is louder than the direct sound, it buries the bit. Hopping spreads the bits over 6400 / R pairs of adjacent tones from 3.2 to 16 kHz (16 pairs at 400 bit/s, R the rate): bit k uses pair 7k mod 16 (s k mod H in general), so a pair is used again only H bits later and the echo on each tone is H/2 times weaker, about 3 dB per doubling of the pairs. The preamble and header hop too (at 400 bit/s), otherwise far receivers would not find the frame. Each tone has its own level (speaker, room, microphone), so the receiver levels the tones before deciding. The band starts at 3.2 kHz: below that, a small speaker gives little and a room is noisy, and in a real test the 1.6 kHz tone the band first started at caused nearly all the errors.</p>
     <p class="muted"><b>Four tones (v2).</b> With 4 tones, a symbol carries 2 bits, Gray-coded so that neighbouring tones differ in one bit only. At the same bit rate it lasts twice as long and gathers twice the energy, and its tones, spaced by the symbol rate (half the bit rate), take the same band as the 2 tones of binary FSK. The receiver then compares 4 energies instead of 2, which non-coherent detection turns into a gain: in simulation, about 2 dB in noise and 2 to 3 dB in a room's echo, or roughly 25 to 40 % more distance, and 3200 bit/s becomes usable, where binary FSK would make errors even close to the speaker. Longer symbols also tolerate twice the timing error. The fixed tones are 4, 5.6, 7.2 and 8.8 kHz (or 8 to 12.8 kHz); with hopping, the 6400 / R pairs become groups of 4 adjacent tones. The control part stays binary, so every receiver finds the frame and reads the header; receivers older than v2 find no 4-tone mode in it and ignore the frame. With 4 tones the header's 4 rates are 400 to 3200 bit/s, and the postamble and the message are each padded to a whole number of symbols.</p>
+    <p class="muted"><b>6400 bit/s.</b> At 6400 bit/s, with 4 tones, a symbol lasts 0.31 ms (15 samples at 48 kHz) and its tones, spaced 3.2 kHz, are 3.2, 6.4, 9.6 and 12.8 kHz: one group fills the whole band, so there is nothing left to hop over, and the echo of the earlier symbols always lies on the same 4 tones. FSK can go no faster in this band, because sending one tone at a time carries at most half a bit per second per hertz; going further takes many tones at once, each with its own phase (OFDM, as in Wi-Fi). In simulation it needs about 4.7 dB more SNR and 3.6 dB more DRR than 3200 bit/s, so it reaches 60 to 70 % of that distance. Choosing 6400 selects Hopping, the only tone set that spans the band. The header marks it as tone set 3, which receivers made before it ignore.</p>
   </details>
 </section>
 
@@ -714,26 +715,31 @@ function drawQR(cv, text, px = 8) {
 // Tones: 0 low (4 / 8 kHz), 1 high (8 / 16 kHz), 2 tone hopping (3.2 to 16 kHz, see hopSet).
 // v2: tones 3 means 4 tones per symbol (4-FSK), with the tone set (0, 1 or 2 as above) in the last two bits and the rate
 // read in RATES4. Receivers that predate it find no tone set 3 and ignore the frame. The message and the postamble then
-// go 2 bits per symbol, each padded with a 0 to a whole number of symbols.
+// go 2 bits per symbol, each padded with a 0 to a whole number of symbols. Tone set 3 with rate field 3 is 6400 bit/s:
+// one group of 4 tones over the whole band (see RATE_WIDE); receivers that predate it ignore the frame.
 // Types: 0 text (a = characters), 1 image (a = height, b = width), 2 room sounding (a = MLS order, b = periods).
 const CTRL = { tones: 'low', rate: 400 };
 const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high', 'hop'], RATES4 = [400, 800, 1600, 3200];
+// 6400 bit/s, 4 tones only: one group of 4 tones spaced 3.2 kHz fills the band 3.2-12.8 kHz, so there is nothing left to
+// hop over (H = 1). It is as fast as FSK goes in this band: one tone at a time carries at most 1/2 bit/s per Hz.
+const RATE_WIDE = 6400;
 function crc8(bits) {   // CRC-8, generator x^8 + x^2 + x + 1
   let r = 0;
   for (const b of bits) { const fb = ((r >> 7) & 1) ^ b; r = (r << 1) & 0xff; if (fb) r ^= 0x07; }
   return msb(r, 8);
 }
 function headerBits(h) {
-  const c = CODES.indexOf(h.code), t = TONE_SETS.indexOf(h.tones), four = h.mod === 4;
+  const c = CODES.indexOf(h.code), wide = h.rate === RATE_WIDE, t = wide ? 3 : TONE_SETS.indexOf(h.tones), four = h.mod === 4;   // 6400 bit/s: tone set 3, rate field 3
   const v = [...msb(h.type, 2), ...msb(h.a, 11), ...msb(h.b, 11), ...msb(c & 3, 2),
-             ...msb((four ? RATES4 : RATES).indexOf(h.rate), 2), ...msb(four ? 3 : t, 2), ...msb(four ? t : 0, 2)];
+             ...msb(wide ? 3 : (four ? RATES4 : RATES).indexOf(h.rate), 2), ...msb(four ? 3 : t, 2), ...msb(four ? t : 0, 2)];
   return encodeFEC('conv', [...v, ...crc8(v).map(b => b ^ (c >> 2))]);
 }
 // msg = {type:'text', text} | {type:'image', h, w, pixels (col-major, 1 = white)} | {type:'sound', order, periods}
 function buildFrame(msg, cfg) {
   if (msg.type === 'sound') return buildSounding(msg, cfg);
-  const M = +cfg.mod === 4 ? 4 : 2, code = cfg.code || 'none', tones = TONE_SETS.includes(cfg.tones) ? cfg.tones : 'low', pre = PILOTS[cfg.pre] ? +cfg.pre : 127;
-  const rate = (M === 4 ? RATES4 : RATES).includes(+cfg.rate) ? +cfg.rate : 400;
+  const M = +cfg.mod === 4 ? 4 : 2, code = cfg.code || 'none', pre = PILOTS[cfg.pre] ? +cfg.pre : 127;
+  const rate = (M === 4 ? [...RATES4, RATE_WIDE] : RATES).includes(+cfg.rate) ? +cfg.rate : 400;
+  const tones = rate === RATE_WIDE ? 'hop' : TONE_SETS.includes(cfg.tones) ? cfg.tones : 'low';   // 6400 bit/s: the one group of the whole band
   let type, a, b, data;
   if (msg.type === 'text') { const c = textCodes(msg.text); type = 0; a = c.length; b = 0; data = c.flatMap(v => msb(v, 8)); }
   else { type = 1; a = msg.h; b = msg.w; data = Array.from(msg.pixels); }
@@ -773,8 +779,10 @@ function parseHeader(hb) {   // hb: the 40 decoded header bits; null unless the 
   if (ext < 0) return null;   // neither the CRC nor the inverted CRC (codes 4 to 7)
   const val = (s, n) => hb.slice(s, s + n).reduce((v, x) => 2 * v + x, 0);
   const tf = val(28, 2), four = tf === 3, M = four ? 4 : 2;   // tones 3: 4-FSK, its tone set in the last two bits
-  const type = val(0, 2), a = val(2, 11), b = val(13, 11), code = CODES[val(24, 2) + 4 * ext], rate = (four ? RATES4 : RATES)[val(26, 2)], tones = TONE_SETS[four ? val(30, 2) : tf];
-  if (!tones || !code || (!four && val(30, 2))) return null;
+  const wide = four && val(30, 2) === 3;   // tone set 3: 6400 bit/s, one hopping group over the whole band (rate field 3)
+  const type = val(0, 2), a = val(2, 11), b = val(13, 11), code = CODES[val(24, 2) + 4 * ext];
+  const rate = wide ? (val(26, 2) === 3 ? RATE_WIDE : 0) : (four ? RATES4 : RATES)[val(26, 2)], tones = wide ? 'hop' : TONE_SETS[four ? val(30, 2) : tf];
+  if (!tones || !rate || !code || (!four && val(30, 2))) return null;
   let h = null;
   if (type === 0 && a >= 1 && b === 0) h = { type: 'text', len: a, n0: 8 * a };
   if (type === 1 && a >= 1 && b >= 1 && a <= 256 && b <= 256 && a * b <= 20000) h = { type: 'image', h: a, w: b, n0: a * b };
@@ -961,6 +969,7 @@ function hopSet(rate, M = 2) {
 function toneDesc(tones, rate, M = 2) {   // for the page: the tones of a frame, in words
   if (tones !== 'hop') return `${toneSet(tones, M).map(f => f / 1000).join(' / ')} kHz`;
   const hs = hopSet(rate, M), top = hs.tones(hs.H - 1)[M - 1] / 1000;
+  if (hs.H === 1) return `${hs.tones(0).map(f => f / 1000).join(' / ')} kHz (the whole band, no hopping)`;
   return `tone hopping, ${hs.H} ${M === 2 ? 'pairs' : `groups of ${M} tones`} from ${HOP_F0 / 1000} to ${top} kHz`;
 }
 const TONE_TABS = new Map();
@@ -1282,9 +1291,13 @@ class Receiver {
     const Delta = (NP + NH) * Lr + ns * Ld, tol = Math.round(MAX_PPM * 1e-6 * Delta + Ld / 4), mid = Math.round(p1 + Delta), here = Math.round(this.pos);
     if (Math.max(mid + tol, here + 2 * Lwd) + Math.round((NPs - 1) * Ld) + Lwd > this.n) return;   // wait for the postamble
     const corr = m => this.hopCorr(m, mhs, ns, PS, Ld, Lwd);
+    // At 6400 bit/s every symbol uses the same 4 tones, so the early echoes (a few ms, many symbols) cap the
+    // postamble's contrast near 0.4 even in a quiet room: a fifth of the preamble's score is enough there (its side
+    // lobes, a symbol or more away, stay near 0.02).
+    const thr = (hdr.rate === RATE_WIDE ? 0.2 : 0.5) * this.cmax;
     let best = searchMax(corr, Math.max(mid - tol, here - 2 * Lwd), Math.min(mid + tol, here + 2 * Lwd), Lwd);
-    if (best.v < 0.5 * this.cmax) { const b = searchMax(corr, mid - tol, mid + tol, Lwd); if (b.v > best.v) best = b; }
-    const found = best.v >= 0.5 * this.cmax, rho = found ? (best.m - p1) / Delta : 1, q2 = found ? best.m : here;
+    if (best.v < thr) { const b = searchMax(corr, mid - tol, mid + tol, Lwd); if (b.v > best.v) best = b; }
+    const found = best.v >= thr, rho = found ? (best.m - p1) / Delta : 1, q2 = found ? best.m : here;
     const at = (x, k) => { const i = Math.round(x) - this.base; return this.hopTabs(mhs, k, Lwd).map(t => energyAt(this.y, i, t)); };
     let E = this.E;
     if (found) {   // re-read the tone energies at the instants corrected for the clock offset
@@ -1346,7 +1359,7 @@ function demoPixels() {
   for (let i = 0; i < n; i++) p[i] = (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
   return { type: 'image', h: DEMO.h, w: DEMO.w, pixels: p };
 }
-if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, RATES4, TONES4, toneSet, symbolBits, toSymbols, bitSets, symbolMetrics, postErrors, contrast, knownContrast, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
+if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, RATES4, RATE_WIDE, TONES4, toneSet, symbolBits, toSymbols, bitSets, symbolMetrics, postErrors, contrast, knownContrast, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
   SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
   turboPerm, turboEncode, turboDecode, bcjr, TURBO_R };
 </script>
@@ -1356,9 +1369,10 @@ if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATE
 const $ = id => document.getElementById(id);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const params = new URLSearchParams(location.search);
-const MOD0 = params.get('mod') === '4' ? 4 : 2, rateList = M => M === 4 ? RATES4 : RATES;   // number of tones per symbol: 2 (binary) or 4
+const MOD0 = params.get('mod') === '4' ? 4 : 2, rateList = M => M === 4 ? [...RATES4, RATE_WIDE] : RATES;   // number of tones per symbol: 2 (binary) or 4
 const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: rateList(MOD0).includes(+params.get('rate')) ? +params.get('rate') : 400,
               code: CODES.includes(params.get('code')) && params.get('code') !== 'rs' ? params.get('code') : 'none', soft: params.get('soft') === 'ratio' ? 'ratio' : 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127 };
+if (cfg.rate === RATE_WIDE) cfg.tones = 'hop';   // 6400 bit/s: one group of 4 tones over the whole band
 const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
 let msgMode = 'text', pen = 0, actx = null;
 
@@ -1379,15 +1393,16 @@ $('qrBtn').onclick = () => { const u = phoneUrl(); drawQR($('qrCanvas'), u); $('
 $('qrOverlay').onclick = () => $('qrOverlay').classList.add('hidden');
 addEventListener('keydown', e => { if (e.key === 'Escape') $('qrOverlay').classList.add('hidden'); });
 
-seg($('tonesSeg'), cfg.tones, v => { cfg.tones = v; syncUrl(); txInfo(); });
-seg($('rateSeg'), cfg.rate, v => { cfg.rate = +v; syncUrl(); txInfo(); });
+// 6400 bit/s takes the whole band, as one hopping group: choosing it selects Hopping, and fixed tones bring it back to 3200
+seg($('tonesSeg'), cfg.tones, v => { cfg.tones = v; if (v !== 'hop' && cfg.rate === RATE_WIDE) $('rateSeg').querySelector('[data-v="3200"]').click(); syncUrl(); txInfo(); });
+seg($('rateSeg'), cfg.rate, v => { cfg.rate = +v; if (cfg.rate === RATE_WIDE && cfg.tones !== 'hop') $('tonesSeg').querySelector('[data-v="hop"]').click(); syncUrl(); txInfo(); });
 function showMod() {   // the rates and tone labels of binary or 4-tone FSK
   $('rateSeg').querySelectorAll('button').forEach(b => b.classList.toggle('hidden', !rateList(cfg.mod).includes(+b.dataset.v)));
   $('tonesSeg').querySelectorAll('button').forEach(b => { if (b.dataset.v !== 'hop') b.textContent = cfg.mod === 4 ? `${TONES4[b.dataset.v][0] / 1000} to ${TONES4[b.dataset.v][3] / 1000} kHz` : TONES[b.dataset.v].map(f => f / 1000).join(' / ') + ' kHz'; });
 }
 seg($('modSeg'), cfg.mod, v => {
   cfg.mod = +v;
-  if (!rateList(cfg.mod).includes(cfg.rate)) { cfg.rate = cfg.mod === 4 ? 400 : 1600; $('rateSeg').querySelector(`[data-v="${cfg.rate}"]`).click(); }   // 200 is binary only, 3200 4 tones only
+  if (!rateList(cfg.mod).includes(cfg.rate)) { cfg.rate = cfg.mod === 4 ? 400 : 1600; $('rateSeg').querySelector(`[data-v="${cfg.rate}"]`).click(); }   // 200 is binary only, 3200 and 6400 4 tones only
   showMod(); syncUrl(); txInfo();
 });
 showMod();
@@ -1510,7 +1525,7 @@ function makeRx() {
     onState: (s, info) => {
       if (s === 'detected') { pill('Frame detected', 'live'); clearOut(); }
       if (s === 'header' && info.type === 'sound') pill(`Measuring the room · ${info.periods} × ${(((1 << info.order) - 1) / FS_TX).toFixed(2)} s`, 'live');
-      else if (s === 'header') { pill((info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`) + ` · ${info.rate} bit/s` + (info.M === 4 ? ' · 4 tones' : '') + (info.tones === 'hop' ? ' · hopping' : '') + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`), 'live'); }
+      else if (s === 'header') { pill((info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`) + ` · ${info.rate} bit/s` + (info.M === 4 ? ' · 4 tones' : '') + (info.tones === 'hop' ? (info.rate === RATE_WIDE ? ' · whole band' : ' · hopping') : '') + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`), 'live'); }
       if (s === 'lost') { pill('Listening', 'live'); }
     },
     onProgress: p => { if (p.sound) { $('rxProg').style.width = (100 * p.frac) + '%'; return; } $('rxProg').style.width = (100 * p.done / p.hdr.nc) + '%'; if (p.bits) showOut(p.hdr, p.bits, p.done); },

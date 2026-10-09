@@ -59,7 +59,7 @@
 \noindent
 The demo sends text, images and room soundings from a laptop's speaker to the students' phones through the air of the classroom.
 This document describes every algorithm the modem implements, with the equations behind them, and explains the values chosen for its parameters.
-The transmitter uses frequency-shift keying (FSK) with two tones per symbol or, since version~2, four tones carrying two bits, either on fixed tones or hopping over up to 32 tone pairs or 16 groups of four tones.
+The transmitter uses frequency-shift keying (FSK) with two tones per symbol or, since version~2, four tones carrying two bits, either on fixed tones or hopping over up to 32 tone pairs or 16 groups of four tones; at 6400 bit/s, one group of four tones covers the whole band.
 Each frame is self-describing: a control part that every receiver knows in advance carries a maximum-length-sequence preamble and a protected header, so receivers need no settings.
 Four error-correcting codes can be sent: none, Hamming $(7,4)$, the $K=7$ convolutional code, and a turbo code of rate $1/2$, $1/3$ or $1/4$.
 Reed--Solomon $(255,223)$ is received but no longer sent.
@@ -117,7 +117,7 @@ The receiver records at its own rate $\fs$ (usually $44.1$ or $48\kHz$), with ec
 
 \subsection{Notation and conventions}
 \begin{itemize}
-\item $\fsT = 48\,000\Hz$ is the transmitter's sample rate and $\fs$ the receiver's. $R \in \{200, 400, 800, 1600\}$ bit/s (with four tones, $\{400, 800, 1600, 3200\}$) is the message's bit rate and $T = 1/R$ its symbol duration. The control part always runs at $\Rc = 400$ bit/s.
+\item $\fsT = 48\,000\Hz$ is the transmitter's sample rate and $\fs$ the receiver's. $R \in \{200, 400, 800, 1600\}$ bit/s (with four tones, $\{400, 800, 1600, 3200, 6400\}$) is the message's bit rate and $T = 1/R$ its symbol duration. The control part always runs at $\Rc = 400$ bit/s.
 \item With two tones, one bit is sent per symbol, so bit and symbol are used interchangeably. With four tones (\cref{sec:mfsk}), a symbol carries two bits and lasts $2T$. Bits are $b \in \{0,1\}$ and $a = 2b-1 \in \{-1,+1\}$ is the antipodal version.
 \item $L = \fsT / R$ is the number of transmitted samples per symbol (240, 120, 60 or 30). At the receiver, $L_R = \fs / R$ is a real number of samples per symbol and $W = \round{L_R}$ is the length of the detection window.
 \item $E_0$ and $E_1$ denote the outputs of the non-coherent detectors at the bit-0 and bit-1 tones. They are magnitudes of a windowed DFT coefficient (envelopes), not squared magnitudes, although the code calls them ``energies''. With $M$ tones, $E_m$ is the output at tone $m = 0, \dots, M-1$.
@@ -230,9 +230,9 @@ type & 2 & 0 text, 1 image, 2 room sounding\\
 $a$ & 11 & text: number of characters; image: height $h$; sounding: MLS order\\
 $b$ & 11 & text: 0; image: width $w$; sounding: number of periods\\
 code & 2 & 0 none, 1 Hamming, 2 convolutional, 3 Reed--Solomon (turbo codes: see below)\\
-rate & 2 & index into $\{200, 400, 800, 1600\}$ bit/s; with four tones, into $\{400, 800, 1600, 3200\}$\\
+rate & 2 & index into $\{200, 400, 800, 1600\}$ bit/s; with four tones, into $\{400, 800, 1600, 3200\}$, or 3 for 6400 bit/s with tone set 3\\
 tones & 2 & 0 low ($4/8\kHz$), 1 high ($8/16\kHz$), 2 tone hopping, 3 four tones (version~2)\\
-tone set & 2 & $0\,0$ (reserved before version~2); with four tones, 0 low, 1 high, 2 tone hopping\\
+tone set & 2 & $0\,0$ (reserved before version~2); with four tones, 0 low, 1 high, 2 tone hopping, 3 the whole band (6400 bit/s)\\
 CRC & 8 & generator $x^8 + x^2 + x + 1$, inverted for the turbo codes\\
 \bottomrule
 \end{tabularx}
@@ -249,7 +249,7 @@ computed by a shift register with zero initial state and no final inversion. The
 The code field has only four values, all in use when the turbo code was added. The turbo codes of rate $1/2$, $1/3$ and $1/4$ (code numbers 4, 5 and 6) are therefore sent as codes 0, 1 and 2 with all eight CRC bits inverted. This is how 4G tells the number of transmit antennas, by masking the CRC of its broadcast channel~\cite{ts36212}. A receiver accepts a header if the CRC matches (codes 0--3) or matches after inversion (codes 4--7, of which 7 is unused). Receivers that predate the turbo code see a wrong CRC and ignore turbo frames instead of misdecoding them; receivers that predate rates $1/3$ and $1/4$ accept the inverted CRC but know no code 5 or 6, and ignore those frames too. Frames with the other codes are unchanged.
 
 \paragraph{Signalling four tones (version~2).}
-Four-tone frames set the tones field to 3, a value no earlier receiver accepts, and put their tone set in the two bits that were reserved; their rate field indexes $\{400, 800, 1600, 3200\}$ bit/s (\cref{sec:mfsk}). Versions~0 and~1 find no tone set~3 and ignore these frames. A version~2 receiver rejects a binary header whose last two bits are not $0\,0$, and a room sounding with tones field~3. Binary frames are unchanged.
+Four-tone frames set the tones field to 3, a value no earlier receiver accepts, and put their tone set in the two bits that were reserved; their rate field indexes $\{400, 800, 1600, 3200\}$ bit/s (\cref{sec:mfsk}). Versions~0 and~1 find no tone set~3 and ignore these frames. A version~2 receiver rejects a binary header whose last two bits are not $0\,0$, and a room sounding with tones field~3. Binary frames are unchanged. Tone set~3 with rate field~3 is 6400 bit/s (\cref{sec:wide}); tone set~3 with any other rate is rejected, and receivers made before 6400 bit/s know no tone set~3 and ignore these frames.
 
 \paragraph{Coding and repetition.}
 The 40 bits go through the convolutional code of \cref{sec:conv}, with 6 tail bits: $2(40+6) = 92$ coded bits, sent $r$ times. The receiver adds the $r$ soft values of each coded bit before Viterbi decoding, which gains $10\log_{10} r$\,dB on the header (\cref{sec:hdrdec}).
@@ -371,7 +371,7 @@ The idea of hopping FSK tones to escape reverberation is also used in underwater
 %======================================================================
 \section{Four tones per symbol (version~2)}
 \label{sec:mfsk}
-Version~2 can send the message part with $M = 4$ tones per symbol (4-FSK) instead of two. Each symbol then carries $\log_2 M = 2$ bits. The control part is unchanged, binary at 400 bit/s, so every receiver still finds every frame and reads its header. On the page, the Transmit card's ``Modulation'' row chooses ``2 tones, 1 bit per symbol'' or ``4 tones, 2 bits per symbol''; in the script, \code{--mod 4}.
+Version~2 can send the message part with $M = 4$ tones per symbol (4-FSK) instead of two. Each symbol then carries $\log_2 M = 2$ bits. The control part is unchanged, binary at 400 bit/s, so every receiver still finds every frame and reads its header. On the page, the Transmit card's ``Modulation'' row chooses ``2 tones, 1 bit per symbol'' or ``4 tones, 2 bits per symbol''; in the script, \code{-{}-mod 4}.
 
 \subsection{Why four tones}
 At the same bit rate $R$, a four-tone symbol lasts $T_s = 2/R$, twice as long as a binary one, and its tones are spaced by the symbol rate $1/T_s = R/2$, the smallest orthogonal spacing (\cref{sec:mod}). Four tones therefore take the same band, $2R$, as a binary pair spaced by $R$. Three effects favour them.
@@ -408,10 +408,10 @@ Tone $m$ & bits $c_{2i}\,c_{2i+1}$ & low & high & hopping, group $p$\\
 \end{table}
 
 \paragraph{Fixed tones.}
-The fixed sets start at the lower tone of the binary pairs, 4 or $8\kHz$, with a spacing of $1.6\kHz$, the symbol rate at 3200 bit/s: $\Delta f\,T_s = 3200/R = 8, 4, 2, 1$ at 400 to 3200 bit/s, so the four tones are orthogonal at every rate (unlike the binary $4/8\kHz$ pair at 1600 bit/s, \cref{sec:mod}). The low set, 4 to $8.8\kHz$, stays where small speakers and phone microphones are good.
+The fixed sets start at the lower tone of the binary pairs, 4 or $8\kHz$, with a spacing of $1.6\kHz$, the symbol rate at 3200 bit/s: $\Delta f\,T_s = 3200/R = 8, 4, 2, 1$ at 400 to 3200 bit/s, so the four tones are orthogonal at every rate (unlike the binary $4/8\kHz$ pair at 1600 bit/s, \cref{sec:mod}). At 6400 bit/s they would not be ($\Delta f\,T_s = 1/2$), so that rate has tones of its own (\cref{sec:wide}). The low set, 4 to $8.8\kHz$, stays where small speakers and phone microphones are good.
 
 \paragraph{Hopping.}
-The $H = 6400/R$ pairs of \cref{eq:hoptones} become $H$ groups of four tones, $f_m^{(p)} = F_0 + 2pR + mR/2$, in the same band and with the same pattern \cref{eq:hoppattern}, symbols counted as in \cref{sec:hop}. The top tone is at 15.8, 15.6, 15.2 and $14.4\kHz$ at 400 to 3200 bit/s. At 3200 bit/s there are only $H = 2$ groups, used in turn. Every tone is a multiple of $R/2$, so each burst holds a whole number of cycles; with fixed tones, $f T_s$ is a multiple of $\tfrac12$. As in version~1, every burst therefore starts and ends at a zero crossing.
+The $H = 6400/R$ pairs of \cref{eq:hoptones} become $H$ groups of four tones, $f_m^{(p)} = F_0 + 2pR + mR/2$, in the same band and with the same pattern \cref{eq:hoppattern}, symbols counted as in \cref{sec:hop}. The top tone is at 15.8, 15.6, 15.2 and $14.4\kHz$ at 400 to 3200 bit/s. At 3200 bit/s there are only $H = 2$ groups, used in turn, and at 6400 bit/s a single one (\cref{sec:wide}). Every tone is a multiple of $R/2$, so each burst holds a whole number of cycles; with fixed tones, $f T_s$ is a multiple of $\tfrac12$. As in version~1, every burst therefore starts and ends at a zero crossing.
 
 \paragraph{Frame.}
 The $\nc$ coded bits become $n_s = \lceil \nc/2 \rceil$ symbols and the postamble $\lceil \NP/2 \rceil$ symbols (64, 128 or 256), whose known tones are given by the preamble's bits taken in pairs with a 0 appended. The duration \cref{eq:duration} becomes
@@ -453,6 +453,42 @@ which is 1 when only tone $s$ is heard, $-1/(M-1)$ when only it is silent and ab
 
 \paragraph{Results.}
 In simulation (\cref{tab:mfsk}), at the same bit rate, four tones tolerated about $2\dB$ more noise and, for 9 texts in 10, 2 to $3\dB$ more echo than two. Four tones at $2R$, twice the throughput of two tones at $R$, needed only $0.6$ to $0.9\dB$ more SNR but about $2\dB$ more DRR.
+
+\subsection{6400 bit/s: one group over the whole band}
+\label{sec:wide}
+At $R = 6400$ bit/s the hopping rule gives $H = 6400/R = 1$: a single group of four tones $f_m = F_0 + mR/2 = 3.2, 6.4, 9.6, 12.8\kHz$, spaced by the symbol rate of 3200 symbols/s, with symbols of $T_s = 0.31\ms$ ($L_s = 15$ samples at $48\kHz$). The group fills the band, so there is nothing left to hop over. This is as fast as orthogonal FSK goes in a band $B$: $M$ tones spaced by the symbol rate $R_s$ take $B = M R_s$ and carry $R = R_s \log_2 M$, so
+\begin{equation}
+\frac{R}{B} = \frac{\log_2 M}{M} \le \frac12 \ \text{bit/s per Hz},
+\end{equation}
+with equality for $M = 2$ and $M = 4$: 6400 bit/s in the $12.8\kHz$ from 3.2 to $16\kHz$. Going further takes many tones at once, each with its own phase, as in OFDM.
+
+\paragraph{Frame.}
+The header sends tone set~3 with rate field~3 (\cref{sec:header}). The page offers 6400 bit/s only with four tones and selects hopping with it; the script requires \code{-{}-tones hop}. The control part still runs at 400 bit/s and becomes a large share of a fast frame: with the 127-bit preamble, the 57-character text with the convolutional code lasts $0.81$\,s and the demo image $1.99$\,s, of which $0.65$\,s are preamble and header.
+
+\paragraph{Receiver.}
+It is the hopping receiver with one group, except for the postamble's threshold. Since every symbol uses the same four tones, the early reflections, a few milliseconds or tens of symbols long, fall on the tones of the following symbols, and the postamble correlation $c(p_2)$ stays near $0.39$ in the model room even with little reverberation ($0.69$ at 3200 bit/s), below half of the preamble's (about $0.8$ to $0.94$). The postamble is therefore declared found from a fifth of $c(p_1)$; its side lobes, a symbol or more from the peak, stay near $0.02$. With half, it was never found at 6400 bit/s; with a fifth, it was found in 14 to 16 of 16 frames from DRR $-3\dB$ up, and the texts were read about as often as with the blind calibration (within 2 in 16).
+
+\begin{table}[ht]
+\centering
+\caption{3200 against 6400 bit/s with four tones (tone hopping, a single group at 6400 bit/s; otherwise as in \cref{tab:mfsk}): the SNR (noise, DRR $+6\dB$) and the DRR (echo, SNR $40\dB$) at which half, and 9 in 10, of the texts are read, and the cost of 6400 bit/s in dB.}
+\label{tab:wide}
+\small
+\begin{tabular}{rcc}
+\toprule
+bit/s & noise: SNR (dB) & echo: DRR (dB)\\
+\midrule
+3200 & $-1.7$ / $-0.7$ & $-5.2$ / $-3.5$\\
+6400 & $+3.0$ / $+3.8$ & $-1.6$ / $-0.5$\\
+cost & 4.7 / 4.5 & 3.6 / 3.0\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Results.}
+6400 bit/s needed $4.5$ to $4.7\dB$ more SNR and 3 to $3.6\dB$ more DRR than 3200 bit/s (\cref{tab:wide}). Each earlier doubling of the four-tone bit rate cost about $3\dB$; in noise this one costs more, because the echo of the earlier symbols, always on the same four tones, adds to the noise. By the rule of $6\dB$ per doubling of the distance, 6400 bit/s reaches roughly 60 to 70\,\% of the distance of 3200 bit/s. A clock offset of $\pm 50$\,ppm and a $44.1\kHz$ microphone changed the counts by at most 2 texts in 16.
+
+\paragraph{Beyond 6400 bit/s.}
+A wider band, up to $20\kHz$ if the phones and the laptop reproduce it, would add about 30\,\%. Beyond that comes OFDM, many tones at once with a phase on each. A simulation study in the same room model (\code{ofdm\_study.md}: DQPSK on 546 subcarriers from 3.2 to $16\kHz$, symbols of 64\,ms with a 21\,ms cyclic prefix, peaks clipped $6\dB$ above the rms) found that in echo it carries about 2.7 times the information rate of FSK for $1\dB$ less range: 4.3\,kbit/s with the rate-$1/4$ turbo code down to DRR $-4.3\dB$, against $-5.2\dB$ for FSK at 3200 bit/s (1.6\,kbit/s). In noise it is worse: 4.3\,kbit/s needed an SNR of $+6.0\dB$, $3\dB$ more than FSK at 6400 bit/s (3.2\,kbit/s), because it plays $3.4\dB$ quieter for the same peaks and differential detection costs about $3\dB$. A phone moving at 0.1\,m/s scales time by 300\,ppm, which breaks OFDM unless the receiver estimates the scale and resamples the recording. Where 3200 bit/s just stops working (DRR about $-5\dB$), Shannon's capacity $B \log_2(1 + \mathrm{SINR})$, with the late echo counted as noise, is about 5\,kbit/s of information (an estimate).
 
 %======================================================================
 \section{Channel codes}
@@ -670,7 +706,7 @@ The two devices' sample clocks differ by tens to hundreds of parts per million (
 \begin{equation}
 \Delta = (\NP + \NH)\frac{\fs}{\Rc} + \nc\, \frac{\fs}{R}, \qquad \NH = 92r ,
 \end{equation}
-and the postamble is searched within $\pm\round{3 \cdot 10^{-4}\,\Delta + L_R/4}$ samples of $p_1 + \Delta$ (clocks within $\pm 300$\,ppm, plus a quarter of a symbol), with the preamble correlator at the message's rate and tones. With hopping, it is searched first within $\pm 2$ symbols of where the tracking expects it (inside that window), then over the whole window. Version~1 searches within $\pm\bigl(\round{0.005\Delta} + \round{\fs/R}\bigr)$ samples (clocks within $\pm 5000$\,ppm), and with hopping first within $\pm 2$ symbols of the tracked position, inside the window or not. It is declared found if its correlation $c(p_2)$ is at least half that of the preamble, $c(p_1)$. Then
+and the postamble is searched within $\pm\round{3 \cdot 10^{-4}\,\Delta + L_R/4}$ samples of $p_1 + \Delta$ (clocks within $\pm 300$\,ppm, plus a quarter of a symbol), with the preamble correlator at the message's rate and tones. With hopping, it is searched first within $\pm 2$ symbols of where the tracking expects it (inside that window), then over the whole window. Version~1 searches within $\pm\bigl(\round{0.005\Delta} + \round{\fs/R}\bigr)$ samples (clocks within $\pm 5000$\,ppm), and with hopping first within $\pm 2$ symbols of the tracked position, inside the window or not. It is declared found if its correlation $c(p_2)$ is at least half that of the preamble, $c(p_1)$ (a fifth at 6400 bit/s, \cref{sec:wide}). Then
 \begin{equation}
 \rho = \frac{p_2 - p_1}{\Delta}, \qquad \text{clock offset} = (\rho - 1) \times 10^6\ \text{ppm},
 \end{equation}
@@ -826,7 +862,7 @@ In simulation (rooms with $T_{60}$ from $0.4$ to $1.2$\,s and DRR from $-3$ to $
 
 \subsection{Room simulator (Python)}
 \label{sec:roomsim}
-\code{audiocomm\_v2.py sim} (or \code{audiocomm\_v1.py sim}) plays any frame through a measured response (\code{--ir}) or through a model room: a direct sound at $5\ms$ plus a diffuse tail of Gaussian noise whose amplitude decays as $e^{-3\ln(10)\, t/T_{60}}$ (60\,dB of energy in $T_{60}$), faded in over $1$--$6\ms$, of length $5\ms + 1.5\,T_{60}$, and scaled so that its energy is $10^{-\mathrm{DRR}/10}$ times that of the direct sound. The output is then resampled to the microphone's rate with a clock offset (windowed-sinc resampling, 24 zero crossings, raised-cosine window, cut-off at $0.95$ of the lower Nyquist frequency), and white Gaussian noise is added at the requested SNR relative to the power of the received signal. This model has no early reflections; the simulations quoted in \cref{sec:params} also used a room model with early reflections and, where stated, the background noise of the real recording.
+\code{audiocomm\_v2.py sim} (or \code{audiocomm\_v1.py sim}) plays any frame through a measured response (\code{-{}-ir}) or through a model room: a direct sound at $5\ms$ plus a diffuse tail of Gaussian noise whose amplitude decays as $e^{-3\ln(10)\, t/T_{60}}$ (60\,dB of energy in $T_{60}$), faded in over $1$--$6\ms$, of length $5\ms + 1.5\,T_{60}$, and scaled so that its energy is $10^{-\mathrm{DRR}/10}$ times that of the direct sound. The output is then resampled to the microphone's rate with a clock offset (windowed-sinc resampling, 24 zero crossings, raised-cosine window, cut-off at $0.95$ of the lower Nyquist frequency), and white Gaussian noise is added at the requested SNR relative to the power of the received signal. This model has no early reflections; the simulations quoted in \cref{sec:params} also used a room model with early reflections and, where stated, the background noise of the real recording.
 
 %======================================================================
 \section{Transmitter timing}
@@ -853,7 +889,7 @@ Sample rate & $48\kHz$ & Native rate of most audio hardware; every symbol is a w
 Amplitude & $0.9$ & Loud, with a margin below full scale.\\
 Bit rates $R$ & 200, 400, 800, 1600 bit/s & From robust (long symbols, more hopping pairs) to fast; at 1600 bit/s without hopping the room's echo dominates beyond short range.\\
 Four tones (v2) & 2 bits per symbol, Gray mapping, tones $R/2$ apart & About $2\dB$ more tolerance of noise and 2--$3\dB$ of echo at the same bit rate, in the band of a binary pair (\cref{sec:mfsk}).\\
-Four-tone rates & 400, 800, 1600, 3200 bit/s & The header's two rate bits; 200 bit/s stays binary, and 3200 bit/s is too fast for binary FSK (timing tolerance, error floor).\\
+Four-tone rates & 400, 800, 1600, 3200, 6400 bit/s & The header's two rate bits, and tone set 3 for 6400 bit/s, the fastest FSK in the band (\cref{sec:wide}); 200 bit/s stays binary, and 3200 bit/s is too fast for binary FSK (timing tolerance, error floor).\\
 Four-tone fixed sets & 4--8.8 or 8--12.8\,kHz, $1.6\kHz$ apart & Orthogonal at every rate; the low set stays where small speakers are good.\\
 Fixed tones & $4/8\kHz$ (default), $8/16\kHz$ & 4 and 8\,kHz are well reproduced by phone and laptop speakers and microphones, and orthogonal at 200--800 bit/s. 8/16\,kHz were the original demo's tones; 16\,kHz is weak on phones and inaudible to some adults.\\
 Control part & 400 bit/s, $4/8\kHz$ or hopping & A mode every receiver knows in advance; 400 bit/s is a compromise between robustness and the duration of the control part.\\
