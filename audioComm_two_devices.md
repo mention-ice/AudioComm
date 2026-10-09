@@ -1,14 +1,15 @@
 # Acoustic modem demo: web page, Python and MATLAB
 
-Each version's page and Python script (`acoustic_modem_v0.html` and `audiocomm.py` for v0, `acoustic_modem_v1.html` and `audiocomm_v1.py` for v1) use the **same frame**: a WAV made or recorded by one is decoded by the other (the transmitted samples were checked to be identical). v1 also reads every v0 frame. The MATLAB scripts still use the earlier frame (fixed settings, 127-bit preamble, no code) and do not read the current frames.
+Each version's page and Python script (`acoustic_modem_v0.html` and `audiocomm.py` for v0, `acoustic_modem_v1.html` and `audiocomm_v1.py` for v1, `acoustic_modem_v2.html` and `audiocomm_v2.py` for v2) use the **same frame**: a WAV made or recorded by one is decoded by the other (the transmitted samples were checked to be identical). v1 also reads every v0 frame, and v2 every v1 frame. The MATLAB scripts still use the earlier frame (fixed settings, 127-bit preamble, no code) and do not read the current frames.
 
 | File | Role |
 |---|---|
-| `acoustic_modem.html` | **Live demo**, the latest version (now v1, the same file as `acoustic_modem_v1.html`). Transmitter and receiver in one page, for laptops and phones. |
+| `acoustic_modem.html` | **Live demo**, the latest version (now v2, the same file as `acoustic_modem_v2.html`). Transmitter and receiver in one page, for laptops and phones. |
 | `acoustic_modem_v0.html` | v0, the original page, frozen. |
 | `audiocomm.py` | Python version for the labs (v0). Uses numpy only (`sounddevice` is needed only for live play and record). It does not read hopping or turbo frames: use `audiocomm_v1.py` for those. |
 | `audioComm_tx.m`, `audioComm_rx.m`, `audioComm_params.m`, `audioComm_prbs.m` | MATLAB version (`audioComm_v4.m` is untouched) |
-| `acoustic_modem_v1.html`, `audiocomm_v1.py` | **v1**: v0 plus room sounding, tone hopping, a turbo code, a fix for cut-off endings, fine timing with a fitted LLR scale, a hop band starting at 3.2 kHz, Reed–Solomon received but no longer sent, and turbo code rates 1/3 and 1/4 (see the last eight sections). v0 = `acoustic_modem_v0.html` and `audiocomm.py`, frozen. |
+| `acoustic_modem_v1.html`, `audiocomm_v1.py` | **v1**: v0 plus room sounding, tone hopping, a turbo code, a fix for cut-off endings, fine timing with a fitted LLR scale, a hop band starting at 3.2 kHz, Reed–Solomon received but no longer sent, and turbo code rates 1/3 and 1/4 (the eight "v1" sections below). v0 = `acoustic_modem_v0.html` and `audiocomm.py`, frozen. |
+| `acoustic_modem_v2.html`, `audiocomm_v2.py` | **v2**: v1 plus four tones per symbol (4-FSK) as a choice next to binary, 3200 bit/s with four tones, and a narrower search for the postamble (see the last section). v1 is unchanged. |
 
 ## Running the live demo
 
@@ -22,7 +23,7 @@ Each version's page and Python script (`acoustic_modem_v0.html` and `audiocomm.p
 
 You get a link like `https://<user>.github.io/<repo>/`. Show it as a QR code in the slides.
 
-This demo is published at `https://mention-ice.github.io/AudioComm/` (repository `mention-ice/AudioComm`): `acoustic_modem.html` is always the latest version, and `acoustic_modem_v0.html` and `acoustic_modem_v1.html` keep each version. It was first published at `sheng-yang-cs.github.io/AudioComm`; GitHub does not redirect a Pages address when a repository moves, so links and QR codes printed before the move no longer work.
+This demo is published at `https://mention-ice.github.io/AudioComm/` (repository `mention-ice/AudioComm`): `acoustic_modem.html` is the version to use in class (now v2), and `acoustic_modem_v0.html`, `acoustic_modem_v1.html` and `acoustic_modem_v2.html` keep each version. It was first published at `sheng-yang-cs.github.io/AudioComm`; GitHub does not redirect a Pages address when a repository moves, so links and QR codes printed before the move no longer work.
 
 Receivers need no settings: the rate, tones, code and preamble length travel in the header of each frame, so the plain link (or the page's QR code) is enough. On a phone, add `?role=tx` to open the Transmit tab.
 
@@ -103,7 +104,7 @@ Echo test note: with echoes whose delay is an exact number of tone periods, one 
 
 ## v1: room sounding (`acoustic_modem_v1.html`, `audiocomm_v1.py`)
 
-v1 reads every v0 frame and adds a third frame type that measures the room. v1 link: `https://mention-ice.github.io/AudioComm/acoustic_modem_v1.html`, also served as `acoustic_modem.html`, the latest version. A v1 page's QR code points to its own online copy, also when the laptop runs it from a local file.
+v1 reads every v0 frame and adds a third frame type that measures the room. v1 link: `https://mention-ice.github.io/AudioComm/acoustic_modem_v1.html` (it was also served as `acoustic_modem.html` until v2). A v1 page's QR code points to its own online copy, also when the laptop runs it from a local file.
 
 - **Sending:** "Sound the room" in the Transmit card, or `audiocomm_v1.py tx --sound [--order 14|15|16] [--periods 1..8] [--pre 127|255|511]`. After the usual control part (preamble, header with type 2, a = MLS order, b = periods) it plays an MLS of 2^order − 1 samples of ±0.35 at 48 kHz (period 0.34, 0.68 or 1.37 s) periods + 1 times, the first one to fill the room, then the postamble in the control mode. It sounds like a loud hiss of 3 to 13 s.
 - **Receiving:** each period is resampled to the transmitter's clock (ratio from the preamble–postamble distance, refined by the drift of the direct-path peak from one period to the next) and circularly cross-correlated with the MLS by FFT. The MLS autocorrelation is N at lag 0 and −1 elsewhere, so h = (c + Σr)/(N + 1). The periods are averaged (3 dB less noise per doubling). If the audio skipped or repeated samples, each period is realigned on its own peak and the period cut by the jump is dropped.
@@ -256,3 +257,53 @@ Limited by echo (little noise, 24 rooms per point), texts read out of 24:
 - **Preamble:** with the 127-bit preamble the frame itself is lost at about the noise (SNR −9 to −10 dB) and echo (DRR −12 to −14 dB) where rate 1/2 already fails, so rates 1/3 and 1/4 only help with the 511-bit preamble.
 - **For the farthest phones**, in a reverberant room: hopping, 200 bit/s, 511 preamble, turbo 1/3, or 1/4 for the last bit of margin. When airtime is short, halve the bit rate before lowering the code rate; in a quiet, dry room the two are worth the same.
 - **Tests (simulation):** all 108 turbo settings (fixed tones and hopping, 4 bit rates, 3 preambles, 3 code rates) decode with the settings read from the header; the page and `audiocomm_v1.py` give byte-identical WAVs at rates 1/3 and 1/4, and the script decodes the page's; rate-1/2 codewords, decisions and iteration counts are identical to before; the previous page and script ignore the new frames (in Chromium the previous page stays on "Listening"); the page shows the rate row only for Turbo, keeps the rate in its address, and reads a rate-1/4 frame in Chromium. Not yet tried with real speakers and phones.
+
+## v2: four tones per symbol (4-FSK)
+
+v2 is `acoustic_modem_v2.html` and `audiocomm_v2.py`, made from v1; the v1 files are unchanged. Since 2026-10-09 `acoustic_modem.html` is a copy of `acoustic_modem_v2.html`, so the main GitHub Pages link serves v2; v1 stays at `acoustic_modem_v1.html`. Phones that had the page open need to reload it to read 4-tone frames. The study that led to it is `mfsk_study.md` (an ideal receiver); the results below come from the real v2 receiver.
+
+- **Choosing it:** the Transmit card has a new "Modulation" row: "2 tones, 1 bit per symbol" (as before) or "4 tones, 2 bits per symbol". With 4 tones the rates are 400, 800, 1600 and 3200 bit/s: 200 bit/s is binary only and 3200 bit/s is 4 tones only, and switching moves 200 to 400 and 3200 to 1600. The page's address keeps the choice (`mod=4`); `audiocomm_v2.py tx --mod 4 --rate 3200 --tones hop`. Receivers read it from the header. Room soundings have no modulation choice.
+- **Modulation:** a symbol carries 2 bits and lasts 2/R seconds, twice as long as a binary one at the same bit rate. Bit pairs 00, 01, 11, 10 go to tones 0, 1, 2, 3 (Gray code), so that neighbouring tones differ in one bit. The tones are spaced by the symbol rate R/2, the smallest orthogonal spacing, so 4 tones take the band of a binary pair.
+  - Fixed tones: low 4 / 5.6 / 7.2 / 8.8 kHz, high 8 / 9.6 / 11.2 / 12.8 kHz. Being 1.6 kHz apart, they are orthogonal at every rate (the binary 4 / 8 kHz pair is not, at 1600 bit/s).
+  - Hopping: the 6400/R pairs become 6400/R groups of 4 adjacent tones (3200 + 2pR + mR/2 Hz), with the same hopping pattern. The top tone is 15.8, 15.6, 15.2 and 14.4 kHz at 400, 800, 1600 and 3200 bit/s.
+- **Frame and header:** the control part is unchanged (binary, 400 bit/s), so every receiver finds every frame and reads the header. A 4-tone header has tones = 3, unused until now, the tone set (0 low, 1 high, 2 hopping) in the two reserved bits, and its rate field read as 400 / 800 / 1600 / 3200. v0 and v1 pages and scripts know no tone set 3 and ignore the frame. Binary frames are unchanged bit for bit, and a v2 receiver rejects a binary header whose reserved bits are not 0. The message and the postamble are sent with 4 tones, each padded with one 0 to an even number of bits (the 127-bit postamble becomes 64 symbols). A frame lasts as long as a binary one at the same bit rate; at 3200 bit/s the 57-character text with the convolutional code takes 0.98 s and the demo image 3.3 s (127-bit preamble).
+- **Receiver:** the same steps as v1, with 4 energies per symbol instead of 2. Each one reduces exactly to v1's with 2 tones, and the v2 page and script decode binary frames to the same bits as v1.
+  - Calibrated LLR: level and noise of each of the 4 tones from the postamble, then each tone's log-likelihood λ_m = ln I0(A_m E_m/σ_m²) − A_m²/2σ_m². The LLR of each bit is ln Σ e^λ over the 2 tones whose bit is 1, minus the same over the 2 tones whose bit is 0. The scale α, the blind estimate (postamble missing) and the level tracking work the same way on 4 tones. The plain ratio becomes the strongest tone whose bit is 1 against the strongest whose bit is 0.
+  - Tone levelling with hopping: a tone is sent in only a quarter of its group's symbols, too few in a short frame for v1's rms. A tone never sent in a group would have been raised to the level of the others, and in simulation this made errors at 400 bit/s even with no noise. Each tone's level is now the rms over the symbols where it is the strongest tone (its group's level if it never is). Binary keeps v1's levelling.
+  - Timing and postamble: the contrast is (strongest − second strongest) / sum of the 4 energies; the postamble correlator measures how much the known tone stands out, (4 E_s − ΣE) / (3 ΣE). With 2 tones both are v1's (E1 − E0)/(E1 + E0).
+- **Postamble search narrowed to 300 ppm (binary frames too):** the postamble is now looked for within ±(300 ppm of the frame + a quarter of a symbol) of where it should be, instead of ±(0.5% + 1 symbol). In strong echo the correlation can peak a symbol or more late, and the wide search took such peaks for clock offsets of 1000 to 4300 ppm, after which the message was re-read at the wrong instants. The clocks of real devices are usually within ±50 ppm of nominal. With 4 tones at 400 bit/s and DRR −14.6 dB, this raised the texts read from 7 to 12 of 12 (page) and from 5 to 11 (script). Binary frames decoded as with v1 in every other test. Room soundings keep the wide search.
+
+**Results (simulation).** Tone hopping, turbo code rate 1/2, 511-bit preamble, 57-character text, room model with RT60 0.6 s, the script's receiver, 16 trials per point on a 1 dB grid. The page's receiver read the same number of texts within 1 or 2 of 12 on the same recordings.
+
+Limited by noise (DRR +6 dB, white noise, SNR over 3.2–16 kHz), SNR at which half the texts are read (lower is better):
+
+| Bit rate | 2 tones | 4 tones | Gain |
+|---|---|---|---|
+| 400 | −8.4 dB | −10.3 dB | 1.9 dB |
+| 800 | −5.4 dB | −7.8 dB | 2.4 dB |
+| 1600 | −2.5 dB | −4.5 dB | 2.0 dB |
+| 3200 | (binary not offered) | −1.7 dB | |
+
+Limited by echo (SNR 40 dB), DRR at which half / 9 in 10 of the texts are read (lower is better):
+
+| Bit rate | 2 tones | 4 tones | Gain |
+|---|---|---|---|
+| 400 | −12.6 / −11.6 dB | −15.5 / −14.6 dB | 2.9 / 3.0 dB |
+| 800 | −9.1 / −7.8 dB | −10.5 / −9.7 dB | 1.4 / 1.9 dB |
+| 1600 | −7.0 / above −4.8 dB | −7.3 / −6.5 dB | 0.3 / over 1.7 dB |
+| 3200 | (binary not offered) | −5.2 / −3.5 dB | |
+
+- **At the same bit rate, 4 tones are better:** about 2 dB in noise and, for 9 texts in 10, 2 to 3 dB in echo. At 1600 bit/s the half-way echo gain is small (0.3 dB) because binary fails gradually: 13 of 16 texts were still read 2 dB above its half-way point. By the rule of 6 dB per doubling of the distance (in the direct field for noise, beyond the critical distance for the DRR), 2 to 3 dB is 25 to 40% more distance. That is a rule of thumb, not a measurement.
+- **Why:** each decision gets a symbol twice as long, hence twice the energy, and a non-coherent detector gains more from that than a coherent one. With hopping, a tone group is used again only after twice the time, so its echo has decayed more. The timing tolerance also doubles.
+- **4 tones at twice the bit rate** (twice the throughput) need only 0.6 to 0.9 dB more SNR than 2 tones at half that rate, but about 2 dB more DRR. 3200 bit/s with 4 tones needs 0.8 dB more SNR and 1.8 dB more DRR than binary at 1600 bit/s.
+- **For class:** use 4 tones whenever the bit rate is fixed; to double the throughput of a binary setting, 4 tones at twice the rate cost about 1 dB in a quiet room but 2 dB in an echoing one.
+- In deep echo at 1600 and 3200 bit/s the 4-tone postamble is often not found; the receiver then uses the blind calibration and still reads the texts down to the thresholds above.
+- **Tests (simulation):**
+  - 168 frames (2 and 4 tones, every rate, tone set, preamble and code) decode with the settings read from the header.
+  - v2's binary frames are bit-identical to v1's (84 of 84), and v1 decodes none of the 4-tone frames.
+  - The page and `audiocomm_v2.py` give byte-identical WAVs (13 settings) and decode each other's (52 of 52 each way, with both soft outputs).
+  - `audiocomm_v2.py` decodes v1's binary WAVs to the same bits as `audiocomm_v1.py` (32 of 32). `audiocomm_v1.py` and the v0 page ignore all 36 four-tone WAVs.
+  - In Chromium, the page:
+    - switches its rates and tone labels with the modulation, keeps `mod=4` in its address, and hides the row for room soundings;
+    - receives a 4-tone 1600 bit/s hopping image (turbo code) and a 4-tone 400 bit/s text on 4 / 5.6 / 7.2 / 8.8 kHz (convolutional code), with no errors.
+  - **Not yet tried with real speakers and phones.** A first classroom test could send the same text with 2 and 4 tones at 1600 bit/s with hopping, to the same phones.
