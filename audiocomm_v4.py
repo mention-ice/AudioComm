@@ -1,6 +1,8 @@
 """audiocomm_v4.py - acoustic modem (FSK with 2 or 4 tones, or OFDM with DQPSK, QPSK, 8PSK, 16, 64 or 256QAM) and room
 sounding, Python version for the labs.
 
+© 2026 Sheng Yang. All rights reserved.
+
 Same frames as acoustic_modem_v4.html, so a WAV produced or recorded by either can be
 decoded by the other. The receiver needs no settings: they travel in the header.
 

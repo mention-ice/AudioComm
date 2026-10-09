@@ -1,9 +1,12 @@
 <!doctype html>
+<!-- Acoustic Modem v4. © 2026 Sheng Yang. All rights reserved. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Acoustic Modem v4</title>
+<meta name="author" content="Sheng Yang">
+<meta name="copyright" content="© 2026 Sheng Yang. All rights reserved.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&display=swap">
 <style>
 /* Colours of the Mention ICE logo: magenta #86144F, ink #1C1722, grey-violet #706A7F, ground #F5F3F6 */
@@ -66,6 +69,7 @@ textarea{width:100%;min-height:76px;font:inherit;font-size:17px;padding:10px;bor
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;font-size:16px;padding:12px 22px}
 .btn:disabled{opacity:.45;cursor:default}
 .muted{color:var(--muted);font-size:13px}
+footer.copy{max-width:1200px;margin:-24px auto 0;padding:0 16px max(24px,env(safe-area-inset-bottom));color:var(--muted);font-size:13px;text-align:center}
 .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
 .pill.ok{background:var(--ok);color:#fff}.pill.warn{background:var(--warn);color:#fff}.pill.bad{background:var(--bad);color:#fff}.pill.live{background:var(--accent);color:var(--accent-ink)}
 canvas{display:block;max-width:100%}
@@ -227,9 +231,11 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   </details>
 </section>
 </main>
+<footer class="copy">© 2026 Sheng Yang. All rights reserved.</footer>
 
 <script id="modem-core">
 // ---- modem core (no DOM): shared by the page and the offline tests ----
+// © 2026 Sheng Yang. All rights reserved.
 const PILOT = Array.from("0000000111111011111001111010111000011011101001100010101100000101111000111011011001001010010000100111001011010001000110011010101", Number);
 // Longer preambles for longer distances: maximum-length sequences of 255 and 511 bits (the 127-bit one is unchanged)
 function mls(deg, taps) {   // Fibonacci LFSR, all-ones seed; taps: exponents of the feedback polynomial
