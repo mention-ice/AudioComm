@@ -1,0 +1,2175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Acoustic Modem v4</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&display=swap">
+<style>
+/* Colours of the Mention ICE logo: magenta #86144F, ink #1C1722, grey-violet #706A7F, ground #F5F3F6 */
+:root{
+  --brand:#86144f; --brand-ink:#ffffff; --brand2:#706a7f;
+  --bg:#f5f3f6; --card:#ffffff; --ink:#1c1722; --muted:#5f5a6b; --line:#e3dfe7;
+  --accent:#86144f; --accent-ink:#ffffff; --ok:#1d7a4e; --warn:#a66300; --bad:#b0122f;
+  --f0:#706a7f; --f1:#d02f82; --plot-bg:#15111a; --plot-grid:#2e2836;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --brand:#6b1040; --brand-ink:#ffffff; --brand2:#a9a3b5;
+    --bg:#110e14; --card:#1c1722; --ink:#f5f3f6; --muted:#a9a3b5; --line:#332c3b;
+    --accent:#e2589c; --accent-ink:#1c1722; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
+    --f0:#a9a3b5; --f1:#ff70ba;
+  }
+}
+:root[data-theme="dark"]{
+  --brand:#6b1040; --brand-ink:#ffffff; --brand2:#a9a3b5;
+  --bg:#110e14; --card:#1c1722; --ink:#f5f3f6; --muted:#a9a3b5; --line:#332c3b;
+  --accent:#e2589c; --accent-ink:#1c1722; --ok:#46c483; --warn:#e3a23b; --bad:#ff6b7f;
+  --f0:#a9a3b5; --f1:#ff70ba;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-text-size-adjust:100%}
+header{background:var(--brand);color:var(--brand-ink);border-bottom:4px solid var(--brand2);margin-bottom:12px}
+.hd{max-width:1200px;margin:0 auto;padding:16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+h1{font:700 23px/1.25 "Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;margin:0 0 2px;letter-spacing:-.01em}
+/* logo bar: always on white, the ground both logos are drawn for */
+.logos{background:#fff;border-bottom:1px solid #e3dfe7}
+.logos>div{max-width:1200px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.ice{display:flex;align-items:center;gap:12px;color:#1c1722}
+.ice svg{height:44px;width:auto;display:block;flex:none}
+.ice span{font:700 15px/1.2 "Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif}
+.cs{height:60px;width:auto;display:block}
+@media (max-width:520px){.ice svg{height:30px}.ice{gap:8px}.ice span{font-size:12px}.cs{height:42px}}
+.sub{color:var(--brand-ink);opacity:.85;margin:0}
+header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,255,255,.55)}
+.opts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
+.opts>.muted:nth-child(odd){white-space:nowrap}
+.opts>.seg{justify-self:start}
+.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk{display:none}
+@media (max-width:520px){.opts{grid-template-columns:1fr;gap:4px}.opts>.seg{margin-bottom:6px}}
+.card h2{border-left:4px solid var(--accent);padding-left:8px}
+main{max-width:1200px;margin:0 auto;padding:8px 16px 40px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:860px){main{grid-template-columns:1fr}}
+.roles{display:none;max-width:1200px;margin:0 auto;padding:4px 16px}
+@media (max-width:860px){.roles{display:block} main[data-role="tx"] #rxCard, main[data-role="rx"] #txCard{display:none}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-width:0}
+.card h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:8px;line-height:1.2}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;background:transparent;color:var(--ink);padding:7px 12px;font:inherit;font-size:14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.roles .seg{display:flex}.roles .seg button{flex:1;padding:10px}
+textarea{width:100%;min-height:76px;font:inherit;font-size:17px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:9px 14px;font:inherit;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600;font-size:16px;padding:12px 22px}
+.btn:disabled{opacity:.45;cursor:default}
+.muted{color:var(--muted);font-size:13px}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;background:var(--line);color:var(--ink)}
+.pill.ok{background:var(--ok);color:#fff}.pill.warn{background:var(--warn);color:#fff}.pill.bad{background:var(--bad);color:#fff}.pill.live{background:var(--accent);color:var(--accent-ink)}
+canvas{display:block;max-width:100%}
+.plot{width:100%;height:150px;background:var(--plot-bg);border-radius:10px}
+.plot.small{height:90px}
+.imgbox{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.pix{image-rendering:pixelated;image-rendering:crisp-edges;background:#888;border-radius:6px;border:1px solid var(--line)}
+.pad{touch-action:none;cursor:crosshair}
+.progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.progress>div{height:100%;width:0;background:var(--accent);transition:width .1s linear}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:12px}
+.rxtext{font-size:24px;font-weight:600;min-height:38px;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:4px 0 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+details{margin-top:12px}summary{cursor:pointer;color:var(--muted)}
+.hidden{display:none!important}
+figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
+.pad,#txCanvas{user-select:none;-webkit-user-select:none;touch-action:none}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px;cursor:pointer}
+.qrbox{background:#fff;color:#111;border-radius:16px;padding:20px;text-align:center;max-width:100%}
+.qrbox canvas{width:min(78vmin,560px);height:auto;image-rendering:pixelated;margin:0 auto}
+.qrbox p{margin:8px 0 0;color:#444;font-size:14px;word-break:break-all}
+.rawtext{font-size:15px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-word;margin-top:4px}
+</style>
+</head>
+<body>
+<header><div class="logos"><div>
+  <div class="ice" role="img" aria-label="Mention ICE, Information &amp; Communication Engineering">
+    <svg viewBox="226 116 444 230" aria-hidden="true"><circle cx="253.5" cy="142.5" r="22.5" fill="#86144F"/><path d="M253.5 207V315" stroke="#1C1722" stroke-width="42" stroke-linecap="round"/><path d="M487.1 161.2A92 92 0 1 0 487.1 302.2" fill="none" stroke="#86144F" stroke-width="36" stroke-linecap="round"/><path d="M454.2 198.2A42.5 42.5 0 1 0 454.2 265.2" fill="none" stroke="#706A7F" stroke-width="19" stroke-linecap="round"/><circle cx="428" cy="231.7" r="11" fill="#1C1722"/><path d="M573.3 146H645.7M573.3 317.5H645.7" stroke="#1C1722" stroke-width="38.5" stroke-linecap="round"/><path d="M573.3 232H608.7" stroke="#706A7F" stroke-width="38.5" stroke-linecap="round"/></svg>
+    <span aria-hidden="true">Information &amp;<br>Communication Engineering</span>
+  </div>
+  <img class="cs" alt="CentraleSupélec" width="390" height="200" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAYYAAADICAMAAADbe7Z/AAAAwFBMVEWgIlNXV1eaD0WeZqEXFxd3AXd9AQGXDUWGepVfX6mXlKSXBT6wXHAUFBSlABgAAP8RERGVAz2RgqGLT3aHZof/AP+UAz3/AH/MWnp//3+aEUb/f/9/f/9mmZm/v3+BhpzGcY3/v78AAACFeJSWAjwAAAAGBgYDAwMICAgWFhZ+fn4LCwsJCQn///84ODiNgJ0mJib/AAASEhKgAUB+AD6qAFWpqamGe5aHe5acA0AlJSWFeZWFeZWYCEGGeZWZCkIASSz0AAAAQHRSTlMeCFwKGAIC2HAEDdQIaAMBlaL///0BfAIIAoUCAgUEcgkEAP7++rLQkDADcFEBEf4WAUv+BAMDTTD4LM+wsI+SSIF8RQAAEhBJREFUeNrtnQmb4jaagG3MTR3dnUkys7MzsyvwfWAM5igK+P//aiSZQ5Il2VUcdrCUJ+nQGOt49Z2SZQ3Uq4TeAP1hrPv7z+14PF6BJWhA0WrVGs+A/xmu9ggALlOF4eHF8BCDTzj443NRGB5cBu8ArPdjpigMj1VHUBKgIEwVhirLEkPgFIXhgaIQgjUXgsLwSNMMQH88VhiqVkjrz6nCUG1598BqLC4Kw2Oi5lCskBSGhxlnsNxPFYaKMXhg+CmloDDUgoLC8AC74BlFFBSGRwhDIQWF4QEU9oUUFIb7R22r8VhhqBiDB9ZjhaFqDO/6cFuCwi+F4c4qqcAwwG+3n/v9GoQKw92KLldJ0/G2vzZAc0pFGLx/bmUQoBDA8rvhDUKF4Z72eSVRSXsDb5QJlTTcOXwOJfb5c52tTDeqVIJhCfpCYejjNVGgMDzAWzVEwrBd491KCkOl8fPWAAMAFIYHGeitkIIHFIbHlH8KY4Z1UylUgUGYWV1xKISe1wSLXYVS4hvo6Z6l4J391uUyVBhuDEGgk7YGPe1x+DYcruE/mESoMDxCJ9EqKYQf1v3PTG62+xUMrAcKw/39pO2SpDDI7e/eG8BQGG5IwSi2z3DIP3P5vmdeeng4BkMQuxm0+dhOeaQGCsPNpIGXT6LcJOH66AroCsOtMHB3xawvM90LDVHeb/j77wrDTUrIt9DGZbFTvH1p2n/WMPvxntKAh+HzMr6yjTPbMFQYbiMMRkEE7XmS9VHjSXcIPBoD3/xOL+7q/0o3C6zLOEuz2awL/1UYJCqJP8oXX9STrMwVYuiki0X38vFtsUhnCkP5jNJleJfgUyoNQhvdWaTH//s/DZf/zz51/wooaoPBk3tSJ49VcNvuAg31UGu1DrvRZoJLb7Q7tDTcwTRVGL6GAcgwfPLjt/QN9aS1G0028/mEKHNIZHfQXuDXi5nC8AWlJJUG3sIQSDGD3oQCQLKY9A6tf8PrugpDaRMttQ0GH0JrJ2RwJtGCPa2vkaiJw3oJjyWeEryKzbF24AyHglCizCcHLYOmMJQI3yTPPWyHrEpalIVwBjHrKAy4DAuSGbpQK7FBQ2cGtN3kC2W+aWF0CgNK3PE90bBAHHIqCYnC5Itls9NAd6YwiJaiCR/IAP1fJbKrCygK88nXCxSIjsIgXPa5TPUl2P/ibDGmZGGWgtZm8p0yhwKxaDwG0f6YIZE7hRKTX4imnNVZ9+sK6cyhVz8OD8fwDobFKzoeWG1JCJ9rmkIHhIf55NtlUzsOVWyQ4XtCQ3K3mA4GfXQS6BQ9iYgewaIodMHL7goK2EAsGo+BG58xJhgNu7Hq9/srtGlvQFnn2exaCrXjUAUGQXxmvFODfdktyTyCNeuEV1OoG4cKthKHy60gfcpuJV56nrfMJfO64HA9BWQf0kZjEGWNoFoalGrxH6PJ5CYcOs3GsBbmsQclfj38W+8WGCa9l7TJGIS+EsoaGSUYTsc34TA/1Mc81OsRRJTTeC8jSXIOc1yK1VKrNuahkgdyveVWzEEiEPCbI8Dpb8Js9qS3O/z844/DbjQpWAyC5qEuab6KHk8Xb8zbD4DO333hGeBf5yTH9G/cjFLv0Lr06EUrWJaDailtMAaZOIy3K/Q9uznvHT21viK323MM9a6Fd268LVDJlp61Vk+WAayL11oNBkN6wBs6NQMGzufkRgijB/hH7lB7hsMO9YXclDTroL1jRmskBjEKuw3GADlID538XBnH+Hl5zGMYvHdsEAZi02txtyPNoDOkHWpvpas6T0n8DMOJRH992hs2XPf3/AW5307zfHN4AakgGpMuWI+MboMxoCW2gtM/UW51+wnLdjwei649GYiWbNMFlAitN6+1OFR28uSyxFm4kvGnDUSrYFPeQpwZH4FukzF44XB8k9JDFN4KavsTchA6S50GYxCuhn61TH8rpoDW67RejVMalR4O3b8Jh/9wOpF/yiQFmlAcZk3GgFb+f10vDHtWqcyODzqktL1YCLZy1MJIV/z+hv30Sgq/9swmsk6a5TFw4EHtHV6AXW21UrVvM9Gv5TD9XNLnzqQof3HooXgOp5dSyjzwfaUX0HAM13KAGin8nTIJKGTeZMpns9kcqJxRKlg9rUFiqWIM74Or7HQfUIfmdtCu1jmzd/gyxJ0ZVxzmNdgdUPl734xSr3EodYZGh7OrdUOOcYdrHeY7hQEvqG2/o5imW+ax0A43ZUHKg8BZGjXeNmTy4O2/gWE/oCnMuoIA7RImzwRGuvrIoQ6vZmUXdEqJwoo99S0FgrTR7pI14mulGuQz6vG+6CUY9MflQUyRKBjvDIXWvDBrtOBfVH0AV5PXdsOJbexLgshe78BsHBB4QUx8lnK342+qd5Xq8hJ7FAuvy4DIIORO3UslOypHZ9XPj+DmCgNhIeDQDvtbKQn0shkoBgZnX6smXfifyWz0/H8UBgYEWEMSXBTTafakA1hy9s8sxJYBY+ieMPydh+GnwkCVEI/werXHC5/T6QkAftikj1/4wz+x+w3sJiUwAIWhrEgcd2KsV/09WoiG/+77q+NrrzzhVuOXURmlBK9TGMqT4G3bW0pe+DOTmoZReLmOh2FzUBiE6gk9YmIMvIFhwP8reO2VHMNllJWJvmvhz/J8VilVDuudOYhtw+hlJs/tqfDtVmUhjt7mVIqVe5mmkhm3KR2hcZjviLzdDPQKHFqF4UoOAnHoad1uEay/V978Z8Ew67xwt6n2yCS2INauwf7JZ8GAfNH8egM6LYZQ+7N/jGq6Q+ZpMMAZHdL7AeCHVkgu6PDT3HVwlJ4IA0pYaIfeJHsEdL7JDpsk1U0q8Go1pZRuWqD+MbTWYffz5y57FDGlv20VLEcoDDdSTJR2ofewzrr89J/aPHkPzZQuFm/d7tti0clHeJvaPuDwbBiE5U10Nt8orMEj6k3BsADaZlLXrZONwfAmotD4h67qQWFzaPaToI/1Y1s1P67h+TH82QEv4mMCdvU4YuzJMcxS/GaBjUQY/lQY7kqgk+K3XskOta/NST5PLg3oRCVZ0bodheGu5UVrQQbS49TnrWYfa3VvfQQ1UW9SeMbb5Gezz9p7AIZSZ09qoKswVI2hRgdPNhhDnY5hbS6G0S5s9hnd9cBAbpxRGKrC0NNq9aKlhmKoGYWGYuhpNXstZRMxMJvIFIZKMGwO/6jdC/iahwFGbbPavY6yaRjmtTMLjcTQWtbyFbnNwoAOta/lC6ObhGHXqu3r05uCYYMhdDtAYagMw2aD3l8PumltW/z8GOaTEd5lX2MIT4xhNMHvHBvtWho67jbt1LrFT7sWvdsdWi1Nw4c8pOms5i1++l176aL2DJ4YQ7ebopeOdf4izW3MYyYKgyoKg8KgisKgMKiiMCgMqigMCoMqCoPCoIrCoDCoojAoDKooDA3CELlJ4kbP0K2h637cuSe+5eh3wBD7lomL7cfos5v8ZSG4TtYTK8jGq32HOlAVyc0x6D4C4PiJ79im6bggMu1aTW+v9NyOrWNP0J8u0E3TvQ8F5r6ep+tXYnDh2Funu+IPtmnVA8CHjUvpWeHC8Qmyl5/EcLAs6x4Y0KQlhMHKmmh+XIchgDf1iamH1dONMLiWfx0G86gry1O4DHti5mftjSiQqs4+tvE6DIiCQ/5taN8Og0/f+uvFi5IvYLDorvj3wABvalN2wdNd+2oMaALZem5O3QiDdS2Goya2vyEMGZZbY4AUnJylCq7FgKd+kO/4bTBE5vUY9PIY0JWUYxTfGkPkIMMPbo4Byy1r4+NbYQjMh0qDzWJAv70thtckBLfHEJkmb6ScG2GwH4oBS7bLqqk7OKw3x4CFIeDcloMhLBgEngRLMYTlqhBgCPkYHNY43RrDzaQhvGCw+b6EzvZbD1BgZzvUpYH/6juO84FDV+g6Wz6h3VwcCqJgFhesK+IgefXhTxD3xDJti7hdFFioBngTtxiDl2TNCXKOEjup/EvvAqIloE19gk2LPtptN0li6CSje+ebQdabFGMIT03kYdOzL61sPDUXO7wxZwbS0hDgEcKOrEv5JVkgE1kn996lncVLcU8WM9OCHhxbmwyCcBxvZy645RZgSGx8NV3hKbqlHZn4tc0016KaZ1M/RWMZHG9t5rNGono5GIhLc1kP3T9/iW+k4cbYYQntjOuNqVxKO8G3M5PINh1Xz3I5ZwvpJkHCSkOUZKkrB97RCYnh9Sx0GzSHsrvEUgzOsW+4OT7jsOK8GG8mn5prnT5RYWpgZVNJD/AsCNEw2jE/YsjVm8eABhYZ8yh3aZansBPvmEOC32pOqdAIdTu6iH1CKi9U/Un/Wmy8wbP/6CInhtfh35reeaR9YtQdGQbnokcdRgmd5jQiwUnx6FR+gA1Ts7E8zUokuXbEtuODn9pjMfh0EykOaHJaOqFFXc0uk7fwib5GzFzFPTm1yDVph1HnYPBwsxwzAt7FoOK7nurAMhSJMZC5F50xbbp1UYNQg0c8j9aiZoTFNPfH+XYBMzSyehkMCdHvIeO+JWS4jH/nlMLQpobFokY2pG6AP/lyDNlkx3/rWvZRjWeZI59omivEEFOsWdHRHcoi0S4FM/9DBkNkUu3VKduV1RuT9VoiDDHVA5+6tE15EXGGwSyBga4xoOeqTd2VcRiFGOxjI3Wyx6eGF2DwqU+JyUZsrkWD8EpLQ8RkAh3KbkrrpTH41A9d6q4OHS47ZZVSBoy+aUBjiPm9FGNgk1jYavmgDAZMzBI1J2uxT5Kw4q9hiOixdSX1+nwMS/rSmLzUZYZEf/XboAyGhK6QuY9NzZHSGHJV6u02f/awGJj6Y34WIE4c26Qc1LIYLMDvqrxeCgNzaZu8rW/mPSegWcWeEh6212PIFzLOBtOv0hiEixDQYbWlGI79EDSHKMPTYigpLMUYHEYPUOP341zv0syr6g/yUud8aUhOVYuXtTjGDXpBCj9X7GsxBCIGZhbViTE4nOaYgsDnaCasb2LA09helqmXwsC9VL+4TbmsxTGKbhdisC2q/LgWAy+8ilF0ZQW6XClxmxNKRZmwiMUYSEcPj1mpevMYmEstIpLKJZ803RbPTbL+V1lq+RsY8uBxZIqzGEExhvILqxYd53wdAxm3iuvNY3DEzn9eGoQ/aVtBqX5/E4POCxGPtQTFSkmQtQ2siLce910M7VzOybkWQ8id9lrWTE5SKTgPhE87rDfBYHs8NkkZh9WX+HZBXq6jryolqYm2SmEIJJdyJ7V2ympwLh+S88m6Vhrij1CyeuCTA5AUO6yCZKTHmYM2VZu0uSwGN+fwC5OgeYdV4Pf4vJmpMciJiUDH9Lxc+Jcw+OcpycEQU+l2X4ohtCW7LRwz4mgBB/DnP9v1yMwnr85WTFovE0Vb4ku5NDWQ2/t06g+zcEBJuxt/A4NEGgIzZ4Rh9e4r9xdBTqw/iMjP4eQAXEFiJuBhICacnw8NBPUyGGSX5hG5rnbuZcxEzkR3IpsZuIBJZggxeBcMjglKYnBPzsT5J/QvcGKWNC4u0WOHnYQ+LerUyNpcDD7VG5epV+fXS2PIJId/aU7HR6alnRONFAeX1mwum86wonIYiFSfbUkwkGuAYbYElxA/YX7B5Apcsu2Rzcw0pmdtYr775g8ehrNeS3hrSpd6P0xbJA3SJjLKBer8WCP66V6W6FjhoBIhAbUYIsdw1gHEdOBgWNrnZseW6WYRhH9uK/sLKsuV0GszcAD8ITU6+QXVk5r0Ew6GH6Y1PGcbHXF2LaEGiV32YS6lTCvFwUXzRqO0ZBKD2E3QVrGIZ4Hg9+2PwKa/lWPI5Chuk2PF85QycbD8Vwd1/biUaQmtSXJqThxYdAY129HtuHG0jF20gM5uq8ca1goCGLE74JUXN8Cpm7Rj1+e46eJ6c4ugl0vR1oeYe5sI3QavRZ9b4NuXzDDHxruX1cUg5yk5Ikf82Dx6Bf0HL5l4XiTAt8989Lb4FzGx2Jn3WoiuJPxo/TgfE274FvB7Kq03vyUgumSW/Pxtzk3Ee1mIp31013csy/ETgWvaDhwHfs0iilChPtH+cox/Rm4S0alfXECgrTZ+kv3aDQJX/ouY35zjvQLYFVir4FtUU6Afb6zno+gowLcOvzoMevkmRmi0ndN6uXr2LRdx+xVUrDAoDAqDwqAwKAwKg8KgMCgMCsNfB4MtW3W/Y/kvP6job+DEHVQAAAAASUVORK5CYII=">
+</div></div>
+<div class="hd">
+  <div>
+    <h1>Acoustic modem <span style="font-weight:500;opacity:.75">v4</span></h1>
+    <p class="sub">FSK with 2 or 4 tones, or OFDM (DQPSK, QPSK, 8PSK or 16QAM), over the air: one device transmits through its speaker, any device in the room decodes through its microphone.</p>
+  </div>
+  <button class="btn" id="qrBtn">QR code for phones</button>
+</div></header>
+<div id="qrOverlay" class="overlay hidden"><div class="qrbox"><canvas id="qrCanvas"></canvas><p id="qrUrl"></p><p>Scan to open the receiver. It needs no settings. Click to close.</p></div></div>
+<div class="roles"><span class="seg" id="roleSeg"><button data-v="tx">Transmit</button><button data-v="rx">Receive</button></span></div>
+
+<main id="main" data-role="rx">
+<section class="card" id="txCard">
+  <h2>Transmit</h2>
+  <span class="seg" id="msgSeg"><button data-v="text">Text</button><button data-v="demo">Demo image</button><button data-v="draw">Draw</button><button data-v="photo">Photo</button><button data-v="sound">Sound the room</button></span>
+  <div id="txText" class="row"><textarea id="txtIn" maxlength="1023">Hello CentraleSupélec!</textarea></div>
+  <div id="txImg" class="row hidden">
+    <div class="imgbox">
+      <canvas id="txCanvas" class="pix" width="57" height="74"></canvas>
+      <div>
+        <div class="row"><span class="muted">Size</span><span class="seg" id="sizeSeg"><button data-v="1">Normal</button><button data-v="2">Large, 2×</button></span></div>
+        <div id="drawTools" class="hidden">
+          <div class="row"><span class="seg" id="penSeg"><button data-v="0">Pen</button><button data-v="1">Eraser</button></span><button class="btn" id="clearPad">Clear</button></div>
+          <div class="muted">Draw on the <span id="padDim">32×32</span> grid.</div>
+        </div>
+        <div id="photoTools" class="hidden">
+          <input type="file" id="photoIn" accept="image/*">
+          <div class="muted">Scaled to at most <span id="photoMax">64</span> pixels and turned black and white.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="opts" id="txOpts">
+    <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button data-v="none">None</button><button data-v="hamming">Hamming (7,4)</button><button data-v="conv">Convolutional</button><button data-v="turbo">Turbo</button></span>
+    <span class="muted mo tr">Turbo code rate</span><span class="seg mo tr" id="trSeg"><button data-v="turbo">1/2</button><button data-v="turbo3">1/3</button><button data-v="turbo4">1/4</button></span>
+    <span class="muted mo">Modulation</span><span class="seg mo" id="modSeg"><button data-v="2">2 tones, 1 bit</button><button data-v="4">4 tones, 2 bits</button><button data-v="ofdm">OFDM</button></span>
+    <span class="muted fk">Tones</span><span class="seg fk" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
+    <span class="muted mo fk">Rate, bit/s</span><span class="seg mo fk" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button><button data-v="3200">3200</button><button data-v="6400">6400</button></span>
+    <span class="muted mo of">Mapping</span><span class="seg mo of" id="mapSeg"><button data-v="dqpsk">DQPSK</button><button data-v="qpsk">QPSK</button><button data-v="8psk">8PSK</button><button data-v="16qam">16QAM</button></span>
+    <span class="muted mo of">Guard interval</span><span class="seg mo of" id="guardSeg"><button data-v="long">21 ms · 17 kbit/s</button><button data-v="short">5 ms · 20 kbit/s</button></span>
+    <span class="muted so">Period</span><span class="seg so" id="ordSeg"><button data-v="14">0.34 s</button><button data-v="15">0.68 s</button><button data-v="16">1.37 s</button></span>
+    <span class="muted so">Periods averaged</span><span class="seg so" id="perSeg"><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button></span>
+    <span class="muted">Preamble, bits</span><span class="seg" id="preSeg"><button data-v="127">127</button><button data-v="255">255</button><button data-v="511">511</button></span>
+    <span class="mo"></span><span class="muted mo">A longer preamble, a lower rate and 4 tones reach farther; in a reverberant room, beyond a few metres, use Hopping. OFDM is the fastest (the rate is before the code): use it with a code, and in a reverberant room with the long guard. QPSK, 8PSK and 16QAM add pilots so that the receiver measures the room's response: QPSK reaches farther than DQPSK, 16QAM is nearly twice as fast but needs about 3 dB more signal. Receivers need no settings: they read all of these from the header of each frame.</span>
+    <span class="so"></span><span class="muted so">Plays a loud hiss (a maximum-length sequence, MLS) from which every receiver measures the room: impulse response, reverberation time, frequency response, noise. The period must outlast the room's echo: take 1.37 s in a large or reverberant room. Each doubling of the periods averaged gives 3 dB less noise on the measurement. With Hopping, the preamble and header hop too, so that receivers far away still find the sounding.</span>
+  </div>
+  <p class="muted" id="txInfo"></p>
+  <div class="row">
+    <button class="btn primary" id="sendBtn">▶ Send</button>
+    <button class="btn" id="wavBtn">Download WAV</button>
+  </div>
+  <div class="progress"><div id="txProg"></div></div>
+  <p class="muted" id="txStatus">Start listening on the receiver first, then press Send.</p>
+  <details>
+    <summary>What is being sent</summary>
+    <p class="muted">A frame has two parts. The <b>control part</b> is sent at 400 bit/s, at 4 / 8 kHz or hopping, two modes every receiver knows in advance: 0.1 s warm-up · MLS preamble · header. The <b>message part</b> uses the tones and rate chosen on the transmitter: coded and scrambled message · MLS postamble (the same sequence as the preamble).
+    The header carries the type (text, image or room sounding) and size of the message, the code, the rate and the tones (for OFDM, the guard and the mapping), protected by a CRC-8 and the convolutional code, so the receivers need no settings, as with the SIGNAL field of Wi-Fi. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone; with 4 tones, each burst carries 2 bits (see below). <code>audiocomm_v4.py</code> produces and decodes the same frames.</p>
+    <p class="muted">The receivers find a frame by correlating what they hear with the three possible preambles (maximum-length sequences of 127, 255 or 511 bits).
+    A longer preamble gathers more energy before deciding that a frame starts: each doubling of its length gives about 3 dB of margin, so phones farther away, or in a noisier room, still find the frame; the header is then sent 2 or 4 times so that it is read as far away.
+    Neither helps once the message itself is too weak: for that, also lower the rate (200 bit/s gives the message 3 dB more) and use a code.
+    The preamble also gives the instant of every symbol. Its long symbols (2.5 ms) tolerate an error of several samples, but the message's short ones do not (0.6 ms at 1600 bit/s). So with tone hopping, once the message is in, the receivers fine-tune its timing on the message itself, by up to half a symbol or 0.5 ms, and keep it if it makes the two tones of each symbol clearly more distinct.</p>
+    <p class="muted">The receivers read the code from the header, so only the transmitter chooses it.
+    <b>Hamming (7,4)</b>: 3 parity bits per 4 bits, corrects 1 wrong bit in each block of 7 (hard decisions).
+    <b>Convolutional</b>: rate 1/2, constraint length 7 (generators 171, 133 octal), decoded by the Viterbi algorithm on the soft outputs.
+    <b>Turbo</b>: rate 1/2 as in 4G: two small recursive convolutional codes, the second fed with the message shuffled, decoded by two soft decoders that exchange what they learnt, up to 8 times. It needs about 1.3 dB less signal than the convolutional code for the same frame error rate.
+    Hamming, convolutional and turbo bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.
+    v0 also offered <b>Reed–Solomon (255,223)</b>, which corrects up to 16 wrong bytes in each block of 255. In a room it fails as early as Hamming, since both decide each bit before decoding, so this page no longer sends it; it still decodes it.</p>
+    <p class="muted"><b>Tone hopping.</b> In a room, the sound of each bit rings on for a large part of a second, far longer than the bit (2.5 ms at 400 bit/s). With only two tones, the echo of the earlier bits sits on both tones all the time; beyond the critical distance, where the echo is louder than the direct sound, it buries the bit. Hopping spreads the bits over 6400 / R pairs of adjacent tones from 3.2 to 16 kHz (16 pairs at 400 bit/s, R the rate): bit k uses pair 7k mod 16 (s k mod H in general), so a pair is used again only H bits later and the echo on each tone is H/2 times weaker, about 3 dB per doubling of the pairs. The preamble and header hop too (at 400 bit/s), otherwise far receivers would not find the frame. Each tone has its own level (speaker, room, microphone), so the receiver levels the tones before deciding. The band starts at 3.2 kHz: below that, a small speaker gives little and a room is noisy, and in a real test the 1.6 kHz tone the band first started at caused nearly all the errors.</p>
+    <p class="muted"><b>Four tones (v2).</b> With 4 tones, a symbol carries 2 bits, Gray-coded so that neighbouring tones differ in one bit only. At the same bit rate it lasts twice as long and gathers twice the energy, and its tones, spaced by the symbol rate (half the bit rate), take the same band as the 2 tones of binary FSK. The receiver then compares 4 energies instead of 2, which non-coherent detection turns into a gain: in simulation, about 2 dB in noise and 2 to 3 dB in a room's echo, or roughly 25 to 40 % more distance, and 3200 bit/s becomes usable, where binary FSK would make errors even close to the speaker. Longer symbols also tolerate twice the timing error. The fixed tones are 4, 5.6, 7.2 and 8.8 kHz (or 8 to 12.8 kHz); with hopping, the 6400 / R pairs become groups of 4 adjacent tones. The control part stays binary, so every receiver finds the frame and reads the header; receivers older than v2 find no 4-tone mode in it and ignore the frame. With 4 tones the header's 4 rates are 400 to 3200 bit/s, and the postamble and the message are each padded to a whole number of symbols.</p>
+    <p class="muted"><b>6400 bit/s.</b> At 6400 bit/s, with 4 tones, a symbol lasts 0.31 ms (15 samples at 48 kHz) and its tones, spaced 3.2 kHz, are 3.2, 6.4, 9.6 and 12.8 kHz: one group fills the whole band, so there is nothing left to hop over, and the echo of the earlier symbols always lies on the same 4 tones. FSK can go no faster in this band, because sending one tone at a time carries at most half a bit per second per hertz; going further takes many tones at once, each with its own phase (OFDM, as in Wi-Fi: see below). In simulation it needs about 4.7 dB more SNR and 3.6 dB more DRR than 3200 bit/s, so it reaches 60 to 70 % of that distance. Choosing 6400 selects Hopping, the only tone set that spans the band. The header marks it as tone set 3, which receivers made before it ignore.</p>
+    <p class="muted"><b>OFDM (v3).</b> FSK sends one tone at a time; OFDM sends hundreds at once, each with its own phase. An inverse FFT of N samples at 48 kHz turns one complex number per subcarrier (k × 48000 / N Hz, from 3.2 to 16 kHz) into a symbol: with the long guard, N = 2048, 546 subcarriers 23.4 Hz apart and a symbol of 42.7 ms. Before each symbol its last 21.3 ms are sent again, the cyclic prefix or <b>guard interval</b>. An echo that arrives within the guard then only changes the amplitude and the phase of each subcarrier (the room's frequency response) instead of spilling into the next symbol; only the echo that arrives later acts as noise. Each subcarrier carries 2 bits per symbol as a phase step from the symbol before (DQPSK: π/4, 3π/4, 5π/4 or 7π/4, Gray-coded), so the receiver compares each symbol with the previous one and needs no estimate of the room's response. The frame is the hopping control part, then a known reference symbol, the data symbols, and the reference symbol again. On the two reference symbols the receiver finds where to place its FFT windows (it plots the impulse response they see, with the guard) and the time scale: a clock offset, or a phone moving at 0.1 m/s (300 ppm), turns the phase between them in proportion to frequency, and the receiver undoes it by resampling. The rms is set to half the peak (peaks above are clipped), so OFDM plays 3 dB quieter than FSK. With the long guard: 17.1 kbit/s before the code, 8.5 kbit/s with turbo 1/2, 4.3 kbit/s with turbo 1/4. In simulation, where echo limits the link, OFDM with turbo 1/4 (4.3 kbit/s) reaches at least as far as FSK at 6400 bit/s (3.2 kbit/s), and nearly as far as FSK at 3200 bit/s when most of the echo arrives within the guard; where noise limits the link, it needs about 2.5 dB more signal than FSK at 6400 bit/s. The <b>short guard</b> (N = 1024, 5.3 ms) is 20 % faster, but in a reverberant room much of the echo arrives after it: compare both to see why the guard must outlast the room's echo. Receivers older than v3 ignore OFDM frames.</p>
+    <p class="muted"><b>Coherent OFDM (v4).</b> DQPSK compares each symbol with the one before, so the receiver needs to know nothing about the room, but it pays for it: the comparison doubles the noise, and a phase step carries 2 bits at most in practice. With <b>pilots</b>, the reference symbol's values sent on 1 subcarrier in 12 of every data symbol (shifted by 3 from one symbol to the next: 8 % of the subcarriers), the receiver measures the gain and the phase of every subcarrier, the room's frequency response H, and decides on each symbol by itself: Y = H X + noise, so X ≈ Y / H. Then <b>QPSK</b> (2 bits per subcarrier) needs about 2 dB less signal than DQPSK, <b>8PSK</b> carries 3 bits and <b>16QAM</b> 4, its amplitude carrying bits too, which is why the gain must be known as well as the phase. The estimate of H takes the two reference symbols and every pilot, removes from each symbol its own small change (a gain, a phase and a delay: a phone that moves by a few millimetres between symbols turns the high subcarriers by tens of degrees), averages, and smooths across the band, since an echo that arrives within the guard can only make a response that varies slowly from one subcarrier to the next. It costs about 1.5 dB against a receiver that would know H exactly. In simulation, with turbo 1/2 and the long guard: DQPSK 8.5 kbit/s; QPSK 7.8 kbit/s with 2 dB to spare in noise and 1 dB in echo; 8PSK 11.7 kbit/s for about 1 dB more than DQPSK; 16QAM 15.6 kbit/s for about 3 dB more (4.5 dB in a room whose echo is all diffuse), roughly 70 % of the distance. The receiver plots the received points divided by H: a tight cloud around each point means a clean channel, a cloud that spreads into its neighbours means errors for the code to correct. The header marks the mapping by xoring its CRC with a mask, so receivers older than v4 ignore these frames. v4 also follows, for DQPSK, the delay change from one symbol to the next: with v3, a phone swinging by 2 cm lost one frame in five.</p>
+  </details>
+</section>
+
+<section class="card" id="rxCard">
+  <h2>Receive <span class="pill" id="rxPill">Idle</span></h2>
+  <div class="row">
+    <button class="btn primary" id="listenBtn">● Start listening</button>
+    <span class="muted" id="rxFs"></span>
+  </div>
+  <div class="row"><span class="muted">Soft output</span><span class="seg" id="softSeg"><button data-v="cal">Calibrated LLR</button><button data-v="ratio">ln(E₁/E₀)</button></span></div>
+  <canvas id="spec" class="plot"></canvas>
+  <div class="legend"><span><i style="background:var(--f0)"></i>bit 0 tone</span><span><i style="background:var(--f1)"></i>bit 1 tone</span><span>live spectrogram, last ~5 s; hopping, 4 tones or OFDM: band edges</span></div>
+  <canvas id="corr" class="plot small" style="margin-top:10px"></canvas>
+  <div class="legend"><span>match with the known preamble (frame detected above the dashed line)</span></div>
+  <div style="margin-top:14px">
+    <div class="progress"><div id="rxProg"></div></div>
+    <div id="rxOutText" class="rxtext" style="margin-top:10px"></div>
+    <div id="rxRawText" class="rawtext hidden"></div>
+    <div class="imgbox" style="margin-top:10px">
+      <figure id="rxFig" class="hidden"><canvas id="rxCanvas" class="pix" width="1" height="1"></canvas><figcaption>received</figcaption></figure>
+      <figure id="rawFig" class="hidden"><canvas id="rawCanvas" class="pix" width="1" height="1"></canvas><figcaption>same channel errors, without the code</figcaption></figure>
+      <figure id="refFig" class="hidden"><canvas id="refCanvas" class="pix" width="1" height="1"></canvas><figcaption>sent (demo image)</figcaption></figure>
+    </div>
+    <div id="ofdmOut" class="hidden" style="margin-top:10px">
+      <canvas id="ofdmPlot" class="plot"></canvas>
+      <div class="legend"><span><i style="background:var(--f1)"></i>impulse response as the receiver's FFT windows see it (from the reference symbols)</span><span><i style="background:var(--f0)"></i>guard interval: echo inside it is harmless, echo after it acts as noise</span></div>
+      <canvas id="ofdmConst" class="plot" style="width:min(100%,280px);height:240px;margin-top:10px"></canvas>
+      <div class="legend"><span><i style="background:var(--f1)"></i>received points: Y / H on the data subcarriers (DQPSK: the phase steps Y<sub>i</sub> Y<sub>i−1</sub><sup>*</sup>, normalized)</span><span>circles: the points that can be sent</span></div>
+    </div>
+  </div>
+  <div id="sndOut" class="hidden" style="margin-top:10px">
+    <canvas id="irPlot" class="plot"></canvas>
+    <div class="legend"><span><i style="background:var(--f1)"></i>impulse response energy</span><span><i style="background:var(--f0)"></i>energy decay curve</span><span>dashed: slope → RT60</span></div>
+    <canvas id="frPlot" class="plot" style="margin-top:10px"></canvas>
+    <div class="legend"><span><i style="background:var(--f1)"></i>frequency response (1/6 octave)</span><span><i style="background:var(--f0)"></i>SNR of the sounding</span><span>dotted: the modem's tones</span></div>
+  </div>
+  <div class="stats" id="stats"></div>
+  <canvas id="hist" class="plot small hidden" style="margin-top:10px"></canvas>
+  <div class="legend hidden" id="histLegend"><span>soft output log(E<sub>high</sub>/E<sub>low</sub>) per bit: two well separated humps mean a clean channel</span></div>
+  <div class="row"><button class="btn hidden" id="irBtn">Download impulse response (WAV)</button><button class="btn hidden" id="recBtn">Download received recording (WAV)</button></div>
+  <details>
+    <summary>Soft output</summary>
+    <p class="muted"><b>ln(E₁/E₀)</b> compares the energies received on the two tones. Its sign is the right decision when both tones arrive equally strong, but its size says little about reliability: a bit drowned in noise can look as sure as a clean one.</p>
+    <p class="muted"><b>Calibrated LLR</b> measures, on the known bits of the postamble (sent at the message's tones and rate), the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². If the postamble is not found (for example when the end of the sound was cut off), A and σ² are estimated on the message itself: its bits are guessed from the energies, then the guesses and the estimates are refined in turn (EM). With the postamble, the LLR is then multiplied by the factor α ≤ 1 that best predicts the postamble's own bits: the echoes of short symbols have heavier tails than Gaussian noise, which makes the model too sure of itself (α ≈ 0.3 at 1600 bit/s in a real room). It corrects an imbalance between the tones (speaker, microphone, room) and gives the Viterbi decoder reliabilities on the right scale. With 4 tones, each tone m gets its own λ<sub>m</sub> = ln I₀(A<sub>m</sub>E<sub>m</sub>/σ<sub>m</sub>²) − A<sub>m</sub>²/2σ<sub>m</sub>², the log-likelihood that it was the tone sent, and the LLR of each of the symbol's two bits is ln Σ e<sup>λ</sup> over the two tones where that bit is 1, minus the same over the two where it is 0; ln(E₁/E₀) becomes the strongest of the first two tones against the strongest of the other two. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal. Switch after a reception to decode the same recording both ways.</p>
+    <p class="muted">OFDM frames always use their own LLR, that of differential detection: for each subcarrier, z = Y<sub>i</sub> Y<sub>i−1</sub><sup>*</sup> compares the symbol with the one before, the LLR of the first bit is −√2 Re z / N<sub>0</sub> and that of the second −√2 Im z / N<sub>0</sub>, and N<sub>0</sub> (noise plus the echo that arrives after the guard) is measured on the decisions, per group of 32 subcarriers. With QPSK, 8PSK or 16QAM (v4) they use that of the estimated channel: for each bit, ln Σ<sub>s: bit 1</sub> exp(−|Y − H s|² / N<sub>0</sub>) − ln Σ<sub>s: bit 0</sub> exp(−|Y − H s|² / N<sub>0</sub>) over the points s of the mapping, with N<sub>0</sub> measured on the pilots and the reference symbols.</p>
+  </details>
+  <details>
+    <summary>Room sounding</summary>
+    <p class="muted">Choose <b>Sound the room</b> on the transmitter. After the usual control part (preamble and header, so that the receivers know what follows) it plays a maximum-length sequence of 2<sup>n</sup>−1 samples of ±1 at 48 kHz, several times in a row. The circular autocorrelation of an MLS is a single spike, so correlating one received period with the sequence gives the impulse response h(t) of the whole chain: speaker, room and microphone. Averaging the periods lowers the noise; the first period is skipped, so that the room already rings in its steady state.</p>
+    <p class="muted">From h(t): the <b>reverberation time</b> RT60, the time the sound energy takes to fall by 60 dB, from the slope of the Schroeder energy decay curve (the backward integral of h²) between −5 and −25 dB (T20) or −15 dB (T10); the <b>direct-to-reverberant ratio</b> (energy within 2.5 ms of the direct sound against the rest); <b>C50</b> (first 50 ms against the rest); the <b>rms delay spread</b> τ<sub>rms</sub>, to compare with the duration of a bit (2.5 ms at 400 bit/s): echoes much longer than a bit cause intersymbol interference. The <b>frequency response</b> shows how strongly each tone arrives, and the noise heard just before the frame gives the <b>SNR</b> per frequency, turned into the E<sub>s</sub>/N<sub>0</sub> a tone of the modem would get.</p>
+    <p class="muted">These are the parameters of a room model: a direct path, an exponentially decaying diffuse tail with the measured RT60, per-frequency gains and noise. <code>audiocomm_v4.py sim</code> plays any frame through a measured impulse response (downloaded above) to try the modem offline in that room.</p>
+  </details>
+</section>
+</main>
+
+<script id="modem-core">
+// ---- modem core (no DOM): shared by the page and the offline tests ----
+const PILOT = Array.from("0000000111111011111001111010111000011011101001100010101100000101111000111011011001001010010000100111001011010001000110011010101", Number);
+// Longer preambles for longer distances: maximum-length sequences of 255 and 511 bits (the 127-bit one is unchanged)
+function mls(deg, taps) {   // Fibonacci LFSR, all-ones seed; taps: exponents of the feedback polynomial
+  let s = (1 << deg) - 1; const out = [];
+  for (let i = 0; i < (1 << deg) - 1; i++) {
+    out.push(s & 1);
+    let fb = 0; for (const t of taps) fb ^= (s >> (deg - t)) & 1;
+    s = (s >> 1) | (fb << (deg - 1));
+  }
+  return out;
+}
+const PILOTS = { 127: PILOT, 255: mls(8, [8, 6, 5, 4]), 511: mls(9, [9, 5]) };
+const HREPS = { 127: 1, 255: 2, 511: 4 };   // copies of the header: more with a longer preamble, so that it is read as far away
+const NP = 127, HBITS = 40, NHC = 2 * (HBITS + 6);   // header: 32 bits + CRC-8, through the convolutional code
+const TONES = { low: [4000, 8000], high: [8000, 16000] };
+// v2: 4-FSK. With 4 tones a symbol carries 2 bits, so at the same bit rate it lasts twice as long; tones spaced by a
+// multiple of the symbol rate stay orthogonal (here 1.6 kHz, at every rate up to 3200 bit/s).
+const TONES4 = { low: [4000, 5600, 7200, 8800], high: [8000, 9600, 11200, 12800] };
+const toneSet = (tones, M) => (M === 4 ? TONES4 : TONES)[tones];
+const FS_TX = 48000;
+
+function prbs(n) {            // LFSR x^15 + x^14 + 1, all-ones seed
+  let s = 0x7fff; const k = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { const fb = ((s >> 14) ^ (s >> 13)) & 1; s = ((s << 1) | fb) & 0x7fff; k[i] = fb; }
+  return k;
+}
+function msb(v, nb) { const o = []; for (let i = nb - 1; i >= 0; i--) o.push((v >> i) & 1); return o; }
+// Gray mapping: tone m carries the K bits of the Gray code of m, m xor (m >> 1), most significant first, so that
+// neighbouring tones, the likeliest mix-up, differ in one bit only. With 2 tones, tone m is bit m.
+function symbolBits(m, K) { return msb(m ^ (m >> 1), K); }
+function toSymbols(bits, M) {   // bits -> tones, K = log2 M bits per symbol, the last symbol padded with 0
+  const K = Math.log2(M), out = [];
+  for (let i = 0; i < bits.length; i += K) {
+    let v = 0; for (let b = 0; b < K; b++) v = 2 * v + (bits[i + b] || 0);
+    let m = v; for (let s = v >> 1; s; s >>= 1) m ^= s;   // the tone whose Gray code is v
+    out.push(m);
+  }
+  return out;
+}
+const SEL = {};   // SEL[M][i][b]: the tones whose bit i is b
+function bitSets(M) {
+  if (!SEL[M]) { const K = Math.log2(M), L = Array.from({ length: M }, (_, m) => symbolBits(m, K)); SEL[M] = Array.from({ length: K }, (_, i) => [0, 1].map(b => L.flatMap((l, m) => l[i] === b ? [m] : []))); }
+  return SEL[M];
+}
+function textCodes(text) { return Array.from(text).slice(0, 1023).map(ch => { const c = ch.codePointAt(0); return c < 256 ? c : 63; }); }
+
+// ---- channel coding: bits are arrays of 0/1, LLRs are > 0 for a 1 ----
+// The code is announced in the header (see headerBits), so receivers pick it up automatically.
+const CODES = ['none', 'hamming', 'conv', 'rs', 'turbo', 'turbo3', 'turbo4'];
+const CODE_INFO = {
+  none:    { name: 'no code', short: 'no code', rate: '1' },
+  hamming: { name: 'Hamming (7,4) + interleaver', short: 'Hamming (7,4)', rate: '4/7' },
+  conv:    { name: 'convolutional (171,133), K = 7, soft Viterbi + interleaver', short: 'convolutional code', rate: '1/2' },
+  rs:      { name: 'Reed–Solomon (255,223) over bytes', short: 'Reed–Solomon', rate: '≈ 7/8' },
+  turbo:   { name: 'turbo (two 8-state codes, 13 and 15 octal), iterative log-MAP + interleaver', short: 'turbo code', rate: '1/2' },
+  turbo3:  { name: 'turbo, every parity bit of both codes sent', short: 'turbo code', rate: '1/3' },
+  turbo4:  { name: 'turbo, plus a second parity (17 octal) from each code in turn', short: 'turbo code', rate: '1/4' }
+};
+const TURBO_R = { turbo: 2, turbo3: 3, turbo4: 4 };   // turbo codes: rate 1/r
+const RS_K = 223, RS_P = 32;
+
+function codedLength(code, n0) {
+  if (code === 'hamming') return 7 * Math.ceil(n0 / 4);
+  if (code === 'conv' || code === 'turbo') return 2 * (n0 + 6);
+  if (code === 'turbo3') return 3 * n0 + 12;
+  if (code === 'turbo4') return 4 * n0 + 18;
+  if (code === 'rs') { const K = Math.ceil(n0 / 8), B = Math.ceil(K / RS_K); return 8 * (K + RS_P * B); }
+  return n0;
+}
+
+// Rectangular interleaver: write row by row into ceil(sqrt(n)) columns, read column by column.
+function ilvPerm(n) {
+  const C = Math.max(1, Math.ceil(Math.sqrt(n))), R = Math.ceil(n / C), p = [];
+  for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) { const i = r * C + c; if (i < n) p.push(i); }
+  return p;
+}
+const interleave = x => ilvPerm(x.length).map(i => x[i]);
+function deinterleave(y) { const p = ilvPerm(y.length), x = new Array(y.length); p.forEach((i, k) => { x[i] = y[k]; }); return x; }
+
+// Hamming (7,4), systematic: [d0 d1 d2 d3 p0 p1 p2]
+const HAM_P = [[1, 1, 0], [1, 0, 1], [0, 1, 1], [1, 1, 1]];          // parity bits each data bit enters
+const HAM_COL = [...HAM_P, [1, 0, 0], [0, 1, 0], [0, 0, 1]];          // columns of H
+function hamEncode(d) {
+  const out = [];
+  for (let i = 0; i < d.length; i += 4) {
+    const u = [0, 1, 2, 3].map(j => d[i + j] || 0), p = [0, 0, 0];
+    u.forEach((b, j) => { if (b) for (let k = 0; k < 3; k++) p[k] ^= HAM_P[j][k]; });
+    out.push(...u, ...p);
+  }
+  return out;
+}
+function hamDecode(c, n0) {
+  const out = [];
+  for (let i = 0; i < c.length; i += 7) {
+    const w = c.slice(i, i + 7), s = [0, 0, 0];
+    w.forEach((b, j) => { if (b) for (let k = 0; k < 3; k++) s[k] ^= HAM_COL[j][k]; });
+    const e = HAM_COL.findIndex(col => col[0] === s[0] && col[1] === s[1] && col[2] === s[2]);
+    if (e >= 0) w[e] ^= 1;
+    out.push(...w.slice(0, 4));
+  }
+  return out.slice(0, n0);
+}
+
+// Convolutional code, rate 1/2, K = 7, generators 171 and 133 (octal), 6 zero tail bits
+const CC_G = [0o171, 0o133];
+const parity = v => { v ^= v >> 4; v ^= v >> 2; v ^= v >> 1; return v & 1; };
+function convEncode(d) {
+  let s = 0; const out = [];
+  for (const b of [...d, 0, 0, 0, 0, 0, 0]) { const reg = (b << 6) | s; out.push(parity(reg & CC_G[0]), parity(reg & CC_G[1])); s = reg >> 1; }
+  return out;
+}
+function convDecode(llr, n0, lim = 4) {
+  const T = llr.length / 2, NS = 64, clip = v => Math.max(-lim, Math.min(lim, v));
+  let pm = new Float64Array(NS).fill(-1e18); pm[0] = 0;
+  const dec = new Uint8Array(T * NS), o0 = new Int8Array(128), o1 = new Int8Array(128);
+  for (let reg = 0; reg < 128; reg++) { o0[reg] = 2 * parity(reg & CC_G[0]) - 1; o1[reg] = 2 * parity(reg & CC_G[1]) - 1; }
+  for (let t = 0; t < T; t++) {
+    const l0 = clip(llr[2 * t]), l1 = clip(llr[2 * t + 1]), nm = new Float64Array(NS);
+    for (let ns = 0; ns < NS; ns++) {
+      const b = ns >> 5, sa = (ns & 31) << 1, ra = (b << 6) | sa, rb = ra | 1;
+      const ma = pm[sa] + o0[ra] * l0 + o1[ra] * l1, mb = pm[sa | 1] + o0[rb] * l0 + o1[rb] * l1;
+      if (mb > ma) { nm[ns] = mb; dec[t * NS + ns] = 1; } else nm[ns] = ma;
+    }
+    pm = nm;
+  }
+  const out = new Array(T); let ns = 0;
+  for (let t = T - 1; t >= 0; t--) { out[t] = ns >> 5; ns = ((ns & 31) << 1) | dec[t * NS + ns]; }
+  return out.slice(0, n0);
+}
+
+// Turbo code (as in 4G): two 8-state recursive systematic encoders, feedback 1 + D^2 + D^3 and parity 1 + D + D^3
+// (13 and 15 octal); the second one encodes the message in the order of a spread pseudo-random interleaver. Each encoder
+// returns to state 0 with 3 tail steps. Rate 1/2: parity bits taken alternately from each encoder,
+// k bits -> [k message bits | k parity bits | 12 tail bits] = 2k + 12 bits, as long as with the convolutional code.
+// Rate 1/3 sends every parity bit of both encoders (as cdma2000, and 4G before rate matching), [k | k | k | 12 tail bits];
+// 1/4 also sends cdma2000's second parity, 1 + D + D^2 + D^3 (17 octal), taken alternately from each encoder,
+// [k | k | k | k | 18 tail bits]. The three rates are nested: each one's bits include those of the higher rates.
+// The decoder runs two log-MAP (BCJR) decoders in turn, each passing the other what it learnt (extrinsic LLRs).
+const TB_NEXT = [], TB_PAR = [], TB_PAR2 = [];   // index 2 s + u: next state and parity bits (15, 17 octal) from state s with input u
+for (let s = 0; s < 8; s++) {
+  const s1 = (s >> 2) & 1, s2 = (s >> 1) & 1, s3 = s & 1;
+  for (let u = 0; u < 2; u++) { const a = u ^ s2 ^ s3; TB_PAR.push(a ^ s1 ^ s3); TB_PAR2.push(a ^ s1 ^ s2 ^ s3); TB_NEXT.push((a << 2) | (s1 << 1) | s2); }
+}
+const TURBO_PERMS = new Map();
+function turboPerm(k) {   // Fisher-Yates shuffle driven by xorshift32 seeded with k, then spread (S-random): positions
+  // closer than S stay more than S apart where possible, which makes low-weight codewords rare
+  if (TURBO_PERMS.has(k)) return TURBO_PERMS.get(k);
+  const p = Array.from({ length: k }, (_, i) => i); let x = ((0x9E3779B9 ^ k) >>> 0) || 1;
+  for (let i = k - 1; i > 0; i--) {
+    x = (x ^ (x << 13)) >>> 0; x = (x ^ (x >>> 17)) >>> 0; x = (x ^ (x << 5)) >>> 0;
+    const j = x % (i + 1), t = p[i]; p[i] = p[j]; p[j] = t;
+  }
+  const S = Math.min(16, Math.floor(Math.sqrt(k / 2)));
+  for (let i = 0; i < k; i++)
+    for (let m = i; m < k; m++) {
+      let ok = true;
+      for (let j = Math.max(0, i - S); j < i && ok; j++) ok = Math.abs(p[m] - p[j]) > S;
+      if (ok) { const t = p[i]; p[i] = p[m]; p[m] = t; break; }
+    }
+  TURBO_PERMS.set(k, p);
+  return p;
+}
+function rscEncode(u) {   // parity bits (15 and 17 octal), then the 3 tail inputs that bring the register back to 0 and their parity bits
+  let s = 0; const p = [], q = [], tu = [], tp = [], tq = [];
+  for (const b of u) { p.push(TB_PAR[2 * s + b]); q.push(TB_PAR2[2 * s + b]); s = TB_NEXT[2 * s + b]; }
+  for (let i = 0; i < 3; i++) {
+    const b = ((s >> 1) & 1) ^ (s & 1); tu.push(b); tp.push(TB_PAR[2 * s + b]); tq.push(TB_PAR2[2 * s + b]); s = TB_NEXT[2 * s + b];
+  }
+  return { p, q, tu, tp, tq };
+}
+function turboEncode(d, r = 2) {   // rate 1/r, r = 2, 3 or 4
+  const pi = turboPerm(d.length), e1 = rscEncode(d), e2 = rscEncode(pi.map(i => d[i])), alt = (a, b) => d.map((_, i) => i % 2 ? b[i] : a[i]);
+  if (r === 2) return [...d, ...alt(e1.p, e2.p), ...e1.tu, ...e1.tp, ...e2.tu, ...e2.tp];
+  if (r === 3) return [...d, ...e1.p, ...e2.p, ...e1.tu, ...e1.tp, ...e2.tu, ...e2.tp];
+  return [...d, ...e1.p, ...e2.p, ...alt(e1.q, e2.q), ...e1.tu, ...e1.tp, ...e1.tq, ...e2.tu, ...e2.tp, ...e2.tq];
+}
+function bcjr(ls, la, lp, lq = null) {   // log-MAP over the steps of ls, from state 0 to state 0; LLRs are ln P(0)/P(1) here
+  // lq: LLRs of the second parity bits (17 octal), at rate 1/4 only
+  const T = ls.length, A = new Float64Array(8 * (T + 1)).fill(-1e9), g = new Float64Array(16 * T), out = new Float64Array(T);
+  const lse = (a, b) => a > b ? a + Math.log1p(Math.exp(b - a)) : b + Math.log1p(Math.exp(a - b));   // ln(e^a + e^b)
+  for (let t = 0; t < T; t++) for (let q = 0; q < 16; q++)
+    g[16 * t + q] = 0.5 * ((ls[t] + la[t]) * (1 - 2 * (q & 1)) + lp[t] * (1 - 2 * TB_PAR[q]) + (lq ? lq[t] * (1 - 2 * TB_PAR2[q]) : 0));
+  A[0] = 0;
+  for (let t = 0; t < T; t++) {   // forward: alpha
+    const a = 8 * t, n = a + 8;
+    for (let q = 0; q < 16; q++) { const s = n + TB_NEXT[q]; A[s] = lse(A[s], A[a + (q >> 1)] + g[16 * t + q]); }
+    let m = -Infinity; for (let s = 0; s < 8; s++) m = Math.max(m, A[n + s]); for (let s = 0; s < 8; s++) A[n + s] -= m;
+  }
+  let B = new Float64Array(8).fill(-1e9); B[0] = 0;
+  for (let t = T - 1; t >= 0; t--) {   // backward: beta, and the a-posteriori LLR of each input
+    const nb = new Float64Array(8).fill(-1e9); let l0 = -1e9, l1 = -1e9;
+    for (let q = 0; q < 16; q++) {
+      const gb = g[16 * t + q] + B[TB_NEXT[q]], v = A[8 * t + (q >> 1)] + gb;
+      if (q & 1) l1 = lse(l1, v); else l0 = lse(l0, v);
+      nb[q >> 1] = lse(nb[q >> 1], gb);
+    }
+    out[t] = l0 - l1;
+    let m = -Infinity; for (let s = 0; s < 8; s++) m = Math.max(m, nb[s]); for (let s = 0; s < 8; s++) nb[s] -= m;
+    B = nb;
+  }
+  return out;
+}
+function turboDecode(llr, n0, lim = Infinity, iters = 8, r = 2) {   // llr > 0 means 1; rate 1/r; returns the message bits and the iterations run
+  const k = n0, pi = turboPerm(k), L = llr.map(v => -Math.max(-lim, Math.min(lim, Math.max(-30, Math.min(30, v)))));
+  const part = j => L.slice(j * k, (j + 1) * k), keep = (a, o) => a.map((v, i) => i % 2 === o ? v : 0);   // keep: bits sent at i mod 2 = o
+  const ls = part(0), tl = L.slice(r * k), z3 = [0, 0, 0], t2 = r === 4 ? 9 : 6, ls2 = pi.map(i => ls[i]);   // t2: tail of encoder 2
+  const lp1 = r === 2 ? keep(part(1), 0) : part(1), lp2 = r === 2 ? keep(part(1), 1) : part(2);
+  const lq1 = r === 4 ? [...keep(part(3), 0), ...tl.slice(6, 9)] : null, lq2 = r === 4 ? [...keep(part(3), 1), ...tl.slice(15, 18)] : null;
+  let le2 = new Float64Array(k), x = null, it = 0;
+  while (it < iters) {
+    it++;
+    const a1 = bcjr([...ls, ...tl.slice(0, 3)], [...le2, ...z3], [...lp1, ...tl.slice(3, 6)], lq1);
+    const le1 = Float64Array.from({ length: k }, (_, i) => a1[i] - ls[i] - le2[i]);
+    const a2 = bcjr([...ls2, ...tl.slice(t2, t2 + 3)], [...pi.map(i => le1[i]), ...z3], [...lp2, ...tl.slice(t2 + 3, t2 + 6)], lq2);
+    const n2 = new Float64Array(k), xn = new Uint8Array(k);
+    pi.forEach((j, i) => { n2[j] = a2[i] - ls2[i] - le1[j]; xn[j] = a2[i] < 0 ? 1 : 0; });
+    const same = x !== null && xn.every((v, i) => v === x[i]);
+    le2 = n2; x = xn;
+    if (same) break;   // the decisions no longer change
+  }
+  return { bits: Array.from(x), iters: it };
+}
+
+// Reed–Solomon over GF(256) (primitive polynomial 0x11d), 32 parity bytes: corrects up to 16 wrong bytes per codeword
+const GF_EXP = new Uint8Array(512), GF_LOG = new Uint8Array(256);
+(() => { let x = 1; for (let i = 0; i < 255; i++) { GF_EXP[i] = x; GF_LOG[x] = i; x <<= 1; if (x & 256) x ^= 0x11d; } for (let i = 255; i < 512; i++) GF_EXP[i] = GF_EXP[i - 255]; })();
+const gmul = (a, b) => (a && b) ? GF_EXP[GF_LOG[a] + GF_LOG[b]] : 0;
+const gdiv = (a, b) => a ? GF_EXP[(GF_LOG[a] + 255 - GF_LOG[b]) % 255] : 0;
+const gpow = e => GF_EXP[((e % 255) + 255) % 255];
+const RS_GEN = (() => { let g = [1]; for (let i = 0; i < RS_P; i++) { const r = gpow(i), h = new Array(g.length + 1).fill(0); g.forEach((c, j) => { h[j] ^= c; h[j + 1] ^= gmul(c, r); }); g = h; } return g; })();
+function rsEncodeBlock(msg) {                       // systematic: message bytes, then 32 parity bytes
+  const r = new Array(RS_P).fill(0);
+  for (const m of msg) { const f = m ^ r[0]; r.shift(); r.push(0); if (f) for (let j = 0; j < RS_P; j++) r[j] ^= gmul(RS_GEN[j + 1], f); }
+  return [...msg, ...r];
+}
+const polyEval = (p, x) => p.reduce((acc, c) => gmul(acc, x) ^ c, 0);          // p[0] = highest degree
+function rsDecodeBlock(cw) {                        // returns { msg, nerr } or { msg (uncorrected), fail: true }
+  const n = cw.length, S = []; let any = 0;
+  for (let j = 0; j < RS_P; j++) { S.push(polyEval(cw, gpow(j))); any |= S[j]; }
+  const k = n - RS_P;
+  if (!any) return { msg: cw.slice(0, k), nerr: 0 };
+  let C = [1], B = [1], L = 0, m = 1, b = 1;          // Berlekamp–Massey, C[0] = 1 (ascending powers)
+  for (let i = 0; i < RS_P; i++) {
+    let d = S[i]; for (let j = 1; j <= L; j++) d ^= gmul(C[j] || 0, S[i - j]);
+    if (!d) { m++; continue; }
+    const T = C.slice(), coef = gdiv(d, b), need = B.length + m;
+    while (C.length < need) C.push(0);
+    B.forEach((v, j) => { C[j + m] ^= gmul(coef, v); });
+    if (2 * L <= i) { L = i + 1 - L; B = T; b = d; m = 1; } else m++;
+  }
+  const lam = C.slice(0, L + 1), lamEval = x => lam.reduce((acc, c, j) => acc ^ gmul(c, gpow(GF_LOG[x] * j)), 0);
+  const omega = new Array(RS_P).fill(0);              // Omega = S(x) Lambda(x) mod x^32
+  for (let i = 0; i < RS_P; i++) for (let j = 0; j <= L && j <= i; j++) omega[i] ^= gmul(lam[j], S[i - j]);
+  const out = cw.slice(); let found = 0;
+  for (let p = 0; p < n; p++) {
+    const X = gpow(p), Xi = gpow(-p);
+    if (lamEval(Xi)) continue;
+    let om = 0, dl = 0;
+    for (let i = 0; i < RS_P; i++) om ^= gmul(omega[i], gpow(-p * i));
+    for (let j = 1; j <= L; j += 2) dl ^= gmul(lam[j], gpow(-p * (j - 1)));
+    if (!dl) return { msg: cw.slice(0, k), fail: true };
+    out[n - 1 - p] ^= gmul(X, gdiv(om, dl)); found++;
+  }
+  if (found !== L) return { msg: cw.slice(0, k), fail: true };
+  for (let j = 0; j < RS_P; j++) if (polyEval(out, gpow(j))) return { msg: cw.slice(0, k), fail: true };
+  return { msg: out.slice(0, k), nerr: L };
+}
+// Bytes are split over B codewords and sent byte-interleaved, so a long burst is shared between codewords.
+function rsLayout(K) { const B = Math.ceil(K / RS_K), ks = []; for (let i = 0; i < B; i++) ks.push(Math.floor(K / B) + (i < K % B ? 1 : 0)); return ks; }
+function rsOrder(lens) { const o = [], mx = Math.max(...lens); for (let j = 0; j < mx; j++) lens.forEach((n, i) => { if (j < n) o.push([i, j]); }); return o; }
+const toBytes = bits => { const o = []; for (let i = 0; i < bits.length; i += 8) { let v = 0; for (let j = 0; j < 8; j++) v = 2 * v + (bits[i + j] || 0); o.push(v); } return o; };
+const toBits = bytes => bytes.flatMap(v => msb(v, 8));
+function rsEncode(d) {
+  const by = toBytes(d), ks = rsLayout(by.length); let s = 0;
+  const cws = ks.map(k => rsEncodeBlock(by.slice(s, s += k)));
+  return toBits(rsOrder(cws.map(c => c.length)).map(([i, j]) => cws[i][j]));
+}
+function rsDecode(c, n0) {
+  const ks = rsLayout(Math.ceil(n0 / 8)), lens = ks.map(k => k + RS_P), cws = lens.map(n => new Array(n)), by = toBytes(c);
+  rsOrder(lens).forEach(([i, j], q) => { cws[i][j] = by[q]; });
+  const res = cws.map(rsDecodeBlock);
+  return { bits: toBits(res.flatMap(r => r.msg)).slice(0, n0), fails: res.filter(r => r.fail).length, blocks: res.length };
+}
+
+function encodeFEC(code, d) {
+  if (code === 'hamming') return interleave(hamEncode(d));
+  if (code === 'conv') return interleave(convEncode(d));
+  if (TURBO_R[code]) return interleave(turboEncode(d, TURBO_R[code]));
+  if (code === 'rs') return rsEncode(d);
+  return Array.from(d);
+}
+// llr: channel LLRs after descrambling (> 0 means 1). Returns the n0 message bits.
+function decodeFEC(code, n0, llr, lim = 4) {   // lim: clipping of the soft values in the Viterbi decoder
+  const hard = a => a.map(r => r > 0 ? 1 : 0);
+  if (code === 'hamming') return { bits: hamDecode(hard(deinterleave(llr)), n0) };
+  if (code === 'conv') return { bits: convDecode(deinterleave(llr), n0, lim) };
+  if (TURBO_R[code]) return turboDecode(deinterleave(llr), n0, lim, 8, TURBO_R[code]);
+  if (code === 'rs') return rsDecode(hard(llr), n0);
+  return { bits: hard(llr) };
+}
+
+// ---- soft output: the plain ratio ln(E1/E0), or the LLR of non-coherent FSK calibrated on the preamble ----
+function lnI0(x) {                                  // ln I0(x), modified Bessel function (Abramowitz & Stegun 9.8.1-2)
+  if (x < 3.75) { const t = (x / 3.75) ** 2; return Math.log(1 + t * (3.5156229 + t * (3.0899424 + t * (1.2067492 + t * (0.2659732 + t * (0.0360768 + t * 0.0045813)))))); }
+  const t = 3.75 / x;
+  return x - 0.5 * Math.log(x) + Math.log(0.39894228 + t * (0.01328592 + t * (0.00225319 + t * (-0.00157565 + t * (0.00916281 + t * (-0.02057706 + t * (0.02635537 + t * (-0.01647633 + t * 0.00392377))))))));
+}
+// For each tone m, level A and noise variance s2 (per real dimension) from its energies E on the postamble:
+// E[E^2] = A^2 + 2 s2 when the tone is sent (Rician), 2 s2 when it is not (Rayleigh).
+// pE[m][j]: energy of tone m in postamble symbol j; S: the postamble's symbols (with 2 tones, its bits).
+function calibrate(pE, S) {
+  const tone = (e, m) => {
+    let sOn = 0, nOn = 0, sOff = 0, nOff = 0;
+    e.forEach((v, j) => { if (S[j] === m) { sOn += v * v; nOn++; } else { sOff += v * v; nOff++; } });
+    const pOn = sOn / nOn, pOff = sOff / nOff, a2 = Math.max(pOn - pOff, 1e-6 * pOn), s2 = Math.max(pOff / 2, 1e-12 * pOn);
+    return { mu: Math.sqrt(a2), s2, snrDb: 10 * Math.log10(a2 / (2 * s2)) };
+  };
+  const cal = { t: pE.map(tone) }, K = Math.log2(pE.length), r = [];
+  // The model assumes Gaussian noise. The echoes of short symbols have heavier tails, which makes its LLR too sure of
+  // itself: shrink it by the factor alpha (at most 1) that best predicts the postamble's own bits, P(bit) = 1 / (1 + e^(-alpha L)).
+  S.forEach((s, j) => { const b = symbolBits(s, K); softLLR('cal', cal, pE.map(e => e[j])).forEach((v, i) => r.push(v * (2 * b[i] - 1))); });
+  cal.alpha = fitScale(r);
+  return cal;
+}
+function fitScale(r) {   // r: LLRs times the sign of the known bits; alpha on a grid from 1 down to 0.05
+  let b = { a: 1, f: -Infinity };
+  for (let k = 0; k < 40; k++) { const a = Math.pow(0.05, k / 39); let f = 0; for (const v of r) f -= Math.log1p(Math.exp(-a * v)); if (f > b.f) b = { a, f }; }
+  return b.a;
+}
+// Without the postamble (not found, e.g. when the end of the sound was cut off), the same levels and noise are
+// estimated on the message itself. Its symbols are unknown, so each tone counts as sent with the probability given by
+// the current model, and the estimate is refined a few times (EM), starting from the hard decisions (strongest tone).
+function calibrateBlind(E, rounds = 8) {
+  const M = E.length, n = E[0].length;
+  const fit = (e, w) => {   // w[j]: probability that the tone is on in symbol j
+    let sOn = 0, nOn = 0, sOff = 0, nOff = 0;
+    e.forEach((v, j) => { sOn += w[j] * v * v; nOn += w[j]; sOff += (1 - w[j]) * v * v; nOff += 1 - w[j]; });
+    const pOn = sOn / Math.max(nOn, 1e-9), pOff = sOff / Math.max(nOff, 1e-9), a2 = Math.max(pOn - pOff, 1e-6 * pOn), s2 = Math.max(pOff / 2, 1e-12 * pOn);
+    return { mu: Math.sqrt(a2), s2, snrDb: 10 * Math.log10(a2 / (2 * s2)) };
+  };
+  const W = E.map(() => new Float64Array(n));
+  for (let j = 0; j < n; j++) { let s = 0; for (let m = 1; m < M; m++) if (E[m][j] > E[s][j]) s = m; W[s][j] = 1; }
+  for (let r = 0; ; r++) {
+    const cal = { t: E.map((e, m) => fit(e, W[m])) };
+    if (r === rounds) return cal;
+    for (let j = 0; j < n; j++) {   // probability of each tone: softmax of the symbol metrics
+      const lam = symbolMetrics(cal, E.map(e => e[j])), mx = Math.max(...lam), p = lam.map(v => Math.exp(v - mx)), t = p.reduce((a, b) => a + b, 0);
+      p.forEach((v, m) => { W[m][j] = v / t; });
+    }
+  }
+}
+// Log-likelihood of each tone being the one sent, up to a term common to all: the tone sent is Rician, the others
+// Rayleigh, so lambda_m = ln I0(A_m E_m / s2_m) - A_m^2 / 2 s2_m. g: local signal level relative to the preamble. In a
+// room most of the disturbance is the echo of the signal itself, so it rises and falls with the signal: dividing the
+// energies by g keeps the preamble's levels and noise valid.
+function symbolMetrics(cal, E, g = 1) { return E.map((e, m) => { const t = cal.t[m]; e /= g; return lnI0(t.mu * e / t.s2) - t.mu * t.mu / (2 * t.s2); }); }
+// Soft output of the K bits of one symbol (E: the energies of its M tones). 'cal': the LLR, ln of the sum of e^lambda
+// over the tones whose bit is 1, minus the same over the tones whose bit is 0; with 2 tones, lambda_1 - lambda_0.
+// 'ratio': the strongest tone whose bit is 1 against the strongest whose bit is 0; with 2 tones, ln(E1/E0).
+function softLLR(soft, cal, E, g = 1) {
+  const sets = bitSets(E.length);
+  if (soft === 'ratio') return sets.map(([s0, s1]) => { let a0 = 0, a1 = 0; for (const m of s0) a0 = Math.max(a0, E[m]); for (const m of s1) a1 = Math.max(a1, E[m]); return Math.log((a1 + 1e-9) / (a0 + 1e-9)); });
+  const lam = symbolMetrics(cal, E, g), lse = s => { let mx = -Infinity, t = 0; for (const m of s) mx = Math.max(mx, lam[m]); for (const m of s) t += Math.exp(lam[m] - mx); return mx + Math.log(t); };
+  return sets.map(([s0, s1]) => (cal.alpha || 1) * (lse(s1) - lse(s0)));
+}
+// Level tracking: the signal level (whichever tone is on), averaged over +-W symbols, relative to the preamble.
+function levelTrack(res, W = 24) {
+  const T = res.cal.t, q = (X, j) => { let v = 0; X.forEach((e, m) => { v = Math.max(v, e[j] * e[j] / (T[m].mu * T[m].mu)); }); return v; };
+  const R = res.found === false ? res.E : res.pE;   // without the postamble: relative to the message
+  let qref = 0; for (let j = 0; j < R[0].length; j++) qref += q(R, j); qref /= R[0].length;
+  const n = res.E[0].length, cs = new Float64Array(n + 1);
+  for (let j = 0; j < n; j++) cs[j + 1] = cs[j] + q(res.E, j);
+  return Array.from({ length: n }, (_, j) => { const a = Math.max(0, j - W), b = Math.min(n, j + W + 1); return Math.sqrt(Math.min(4, Math.max(0.01, (cs[b] - cs[a]) / (b - a) / qref))); });
+}
+// Errors on the known postamble, in bits, from the hard decisions (strongest tone)
+function postErrors(pE, S) {
+  const K = Math.log2(pE.length); let n = 0;
+  S.forEach((s, j) => { let h = 0; for (let m = 1; m < pE.length; m++) if (pE[m][j] > pE[h][j]) h = m; const a = symbolBits(h, K), b = symbolBits(s, K); a.forEach((x, i) => { n += x !== b[i]; }); });
+  return n;
+}
+// Decode a received frame with either soft output ('cal' or 'ratio'); returns the fields that depend on that choice.
+function decodeFrame(res, soft) {
+  const { hdr, key } = res;
+  let llr = [];
+  if (hdr.ofdm) { llr = Array.from(res.ofdm.llr); soft = 'cal'; }   // OFDM: the differential detector's LLRs, whatever the soft output chosen
+  else {
+    const g = soft === 'ratio' ? null : levelTrack(res);
+    for (let j = 0; j < res.E[0].length; j++) for (const r of softLLR(soft, res.cal, res.E.map(e => e[j]), g ? g[j] : 1)) if (llr.length < hdr.nc) llr.push(r);
+  }
+  const dec = decodeFEC(hdr.code, hdr.n0, llr.map((r, j) => key[j] ? -r : r), soft === 'ratio' ? 4 : Infinity);
+  const bits = Uint8Array.from(dec.bits), sent = Uint8Array.from(encodeFEC(hdr.code, bits), (x, j) => x ^ key[j]);
+  const chErr = llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0);    // channel errors the code corrected
+  return { soft, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks, iters: dec.iters };
+}
+
+// ---- QR code (byte mode, error level M, versions 1-9), built here so the page needs no network ----
+function qrMatrix(text) {
+  const data = Array.from(new TextEncoder().encode(text));
+  const EC = [null, [10, 1, 16, 0, 0], [16, 1, 28, 0, 0], [26, 1, 44, 0, 0], [18, 2, 32, 0, 0], [24, 2, 43, 0, 0],
+              [16, 4, 27, 0, 0], [18, 4, 31, 0, 0], [22, 2, 38, 2, 39], [22, 3, 36, 2, 37]];   // ec bytes per block, blocks x data bytes
+  const ALIGN = [null, [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46]];
+  let ver = 1; while (ver < 10 && EC[ver][1] * EC[ver][2] + EC[ver][3] * EC[ver][4] < data.length + 2) ver++;
+  if (ver > 9) throw new Error('text too long for the QR code');
+  const [ecLen, n1, k1, n2, k2] = EC[ver], cap = n1 * k1 + n2 * k2, size = 17 + 4 * ver;
+  // data codewords: mode 0100, 8-bit length, bytes, terminator, pad bytes
+  const bits = [0, 1, 0, 0, ...msb(data.length, 8), ...data.flatMap(b => msb(b, 8))];
+  for (let i = 0; i < 4 && bits.length < 8 * cap; i++) bits.push(0);
+  while (bits.length % 8) bits.push(0);
+  const cw = []; for (let i = 0; i < bits.length; i += 8) cw.push(bits.slice(i, i + 8).reduce((v, b) => 2 * v + b, 0));
+  for (let p = 0; cw.length < cap; p ^= 1) cw.push(p ? 0x11 : 0xec);
+  // Reed–Solomon parity per block (same GF(256) as the modem), then interleave the blocks
+  let gen = [1]; for (let i = 0; i < ecLen; i++) { const h = new Array(gen.length + 1).fill(0); gen.forEach((c, j) => { h[j] ^= c; h[j + 1] ^= gmul(c, gpow(i)); }); gen = h; }
+  const blocks = []; let s = 0;
+  for (let i = 0; i < n1 + n2; i++) {
+    const d = cw.slice(s, s += i < n1 ? k1 : k2), r = new Array(ecLen).fill(0);
+    for (const m of d) { const f = m ^ r.shift(); r.push(0); for (let j = 0; j < ecLen; j++) r[j] ^= gmul(gen[j + 1], f); }
+    blocks.push([d, r]);
+  }
+  const all = [];
+  for (let i = 0; i < Math.max(k1, k2); i++) blocks.forEach(([d]) => { if (i < d.length) all.push(d[i]); });
+  for (let i = 0; i < ecLen; i++) blocks.forEach(([, r]) => all.push(r[i]));
+  // function patterns
+  const M = Array.from({ length: size }, () => new Array(size).fill(false)), F = M.map(r => r.map(() => false));
+  const set = (x, y, v) => { M[y][x] = v; F[y][x] = true; };
+  for (let i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+  for (const [cx, cy] of [[3, 3], [size - 4, 3], [3, size - 4]])
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+      const x = cx + dx, y = cy + dy, dist = Math.max(Math.abs(dx), Math.abs(dy));
+      if (x >= 0 && y >= 0 && x < size && y < size) set(x, y, dist !== 2 && dist !== 4);
+    }
+  const al = ALIGN[ver];
+  al.forEach((ax, i) => al.forEach((ay, j) => {
+    if ((i === 0 && j === 0) || (i === 0 && j === al.length - 1) || (i === al.length - 1 && j === 0)) return;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) set(ax + dx, ay + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+  }));
+  const formatBits = mask => {                       // level M = 00
+    let r = mask; for (let i = 0; i < 10; i++) r = (r << 1) ^ ((r >> 9) * 0x537);
+    const b = ((mask << 10) | r) ^ 0x5412, bit = i => ((b >> i) & 1) === 1;
+    for (let i = 0; i <= 5; i++) set(8, i, bit(i));
+    set(8, 7, bit(6)); set(8, 8, bit(7)); set(7, 8, bit(8));
+    for (let i = 9; i < 15; i++) set(14 - i, 8, bit(i));
+    for (let i = 0; i < 8; i++) set(size - 1 - i, 8, bit(i));
+    for (let i = 8; i < 15; i++) set(8, size - 15 + i, bit(i));
+    set(8, size - 8, true);
+  };
+  formatBits(0);
+  if (ver >= 7) {
+    let r = ver; for (let i = 0; i < 12; i++) r = (r << 1) ^ ((r >> 11) * 0x1f25);
+    const b = (ver << 12) | r;
+    for (let i = 0; i < 18; i++) { const v = ((b >> i) & 1) === 1, a = size - 11 + i % 3, c = Math.floor(i / 3); set(a, c, v); set(c, a, v); }
+  }
+  // data in the zigzag order
+  let i = 0;
+  for (let right = size - 1; right >= 1; right -= 2) {
+    if (right === 6) right = 5;
+    for (let v = 0; v < size; v++) for (let j = 0; j < 2; j++) {
+      const x = right - j, y = ((right + 1) & 2) === 0 ? size - 1 - v : v;
+      if (!F[y][x] && i < all.length * 8) { M[y][x] = ((all[i >> 3] >> (7 - (i & 7))) & 1) === 1; i++; }
+    }
+  }
+  // pick the mask with the lowest penalty
+  const MASKS = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, x => x % 3 === 0, (x, y) => (x + y) % 3 === 0,
+    (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => x * y % 2 + x * y % 3 === 0,
+    (x, y) => (x * y % 2 + x * y % 3) % 2 === 0, (x, y) => ((x + y) % 2 + x * y % 3) % 2 === 0];
+  const applyMask = k => { for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!F[y][x] && MASKS[k](x, y)) M[y][x] = !M[y][x]; };
+  const penalty = () => {
+    let p = 0, dark = 0;
+    const line = get => { let run = 1; for (let k = 1; k < size; k++) { if (get(k) === get(k - 1)) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else run = 1; } };
+    for (let y = 0; y < size; y++) { line(k => M[y][k]); line(k => M[k][y]); }
+    for (let y = 0; y < size - 1; y++) for (let x = 0; x < size - 1; x++) { const c = M[y][x]; if (c === M[y][x + 1] && c === M[y + 1][x] && c === M[y + 1][x + 1]) p += 3; }
+    const pat = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0], tap = [...pat].reverse();
+    for (let y = 0; y < size; y++) for (let x = 0; x + 11 <= size; x++) for (const q of [pat, tap]) {
+      if (q.every((b, k) => M[y][x + k] === !!b)) p += 40;
+      if (q.every((b, k) => M[x + k][y] === !!b)) p += 40;
+    }
+    M.forEach(r => r.forEach(v => { dark += v; }));
+    return p + 10 * Math.floor(Math.abs(20 * dark / (size * size) - 10));
+  };
+  let best = 0, bestP = Infinity;
+  for (let k = 0; k < 8; k++) { applyMask(k); formatBits(k); const p = penalty(); if (p < bestP) { bestP = p; best = k; } applyMask(k); }
+  applyMask(best); formatBits(best);
+  return M;
+}
+function drawQR(cv, text, px = 8) {
+  const M = qrMatrix(text), q = 4, n = M.length + 2 * q;
+  cv.width = cv.height = n * px; const g = cv.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = '#000';
+  M.forEach((row, y) => row.forEach((v, x) => { if (v) g.fillRect((x + q) * px, (y + q) * px, px, px); }));
+}
+
+
+// ---- frame ----
+// Control part, in a mode every receiver knows in advance (like the SIGNAL field of Wi-Fi), 4 / 8 kHz at 400 bit/s,
+// or tone hopping at 400 bit/s when the message hops:
+//   0.1 s warm-up | MLS preamble (127, 255 or 511 bits) | header, sent 1, 2 or 4 times
+// then the message part, in the tones and rate the header announces:
+//   coded and scrambled message | MLS postamble (same sequence as the preamble)
+// or, with OFDM (v3, after a hopping control part): reference symbol | data symbols | reference symbol (see ofdmSymbols)
+// Header: type 2 | a 11 | b 11 | code 2 | rate 2 | tones 2 | 0 0, then CRC-8, all through the convolutional code.
+// Code: 0 none, 1 Hamming, 2 convolutional, 3 Reed–Solomon (received only, from v0); the turbo codes of rate 1/2, 1/3 and 1/4
+// (4, 5, 6) are sent as 0, 1 and 2 with the CRC inverted, the way 4G signals the number of antennas by masking a CRC,
+// so receivers that predate them simply ignore the frame.
+// Tones: 0 low (4 / 8 kHz), 1 high (8 / 16 kHz), 2 tone hopping (3.2 to 16 kHz, see hopSet).
+// v2: tones 3 means 4 tones per symbol (4-FSK), with the tone set (0, 1 or 2 as above) in the last two bits and the rate
+// read in RATES4. Receivers that predate it find no tone set 3 and ignore the frame. The message and the postamble then
+// go 2 bits per symbol, each padded with a 0 to a whole number of symbols. Tone set 3 with rate field 3 is 6400 bit/s:
+// one group of 4 tones over the whole band (see RATE_WIDE); receivers that predate it ignore the frame.
+// v3: tone set 3 with rate field 0 or 1 is OFDM with the long or the short guard (see OFDM_MODES); receivers that
+// predate it ignore the frame.
+// v4: an OFDM frame with a coherent mapping (QPSK, 8PSK or 16QAM, see OFDM_MAPS) xors its CRC with 0x33, 0x55 or 0x66,
+// on top of the 0xFF of codes 4 to 6; receivers that predate it ignore the frame.
+// Types: 0 text (a = characters), 1 image (a = height, b = width), 2 room sounding (a = MLS order, b = periods).
+const CTRL = { tones: 'low', rate: 400 };
+const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high', 'hop'], RATES4 = [400, 800, 1600, 3200];
+// 6400 bit/s, 4 tones only: one group of 4 tones spaced 3.2 kHz fills the band 3.2-12.8 kHz, so there is nothing left to
+// hop over (H = 1). It is as fast as FSK goes in this band: one tone at a time carries at most 1/2 bit/s per Hz.
+const RATE_WIDE = 6400;
+function crc8(bits) {   // CRC-8, generator x^8 + x^2 + x + 1
+  let r = 0;
+  for (const b of bits) { const fb = ((r >> 7) & 1) ^ b; r = (r << 1) & 0xff; if (fb) r ^= 0x07; }
+  return msb(r, 8);
+}
+function headerBits(h) {   // 6400 bit/s: tone set 3, rate field 3; OFDM: tone set 3, rate field = its mode
+  const c = CODES.indexOf(h.code), om = h.ofdm ? OFDM_MODES.findIndex(m => m.name === h.ofdm) : -1, wide = h.rate === RATE_WIDE;
+  const t = wide || om >= 0 ? 3 : TONE_SETS.indexOf(h.tones), four = h.mod === 4 || om >= 0;
+  const v = [...msb(h.type, 2), ...msb(h.a, 11), ...msb(h.b, 11), ...msb(c & 3, 2),
+             ...msb(om >= 0 ? om : wide ? 3 : (four ? RATES4 : RATES).indexOf(h.rate), 2), ...msb(four ? 3 : t, 2), ...msb(four ? t : 0, 2)];
+  const mask = (c >> 2 ? 0xff : 0) ^ (om >= 0 ? OFDM_MASKS[Math.max(0, OFDM_MAPS.indexOf(h.map))] : 0);   // v4: the OFDM mapping's mask
+  return encodeFEC('conv', [...v, ...crc8(v).map((b, i) => b ^ ((mask >> (7 - i)) & 1))]);
+}
+// msg = {type:'text', text} | {type:'image', h, w, pixels (col-major, 1 = white)} | {type:'sound', order, periods}
+function buildFrame(msg, cfg) {
+  if (msg.type === 'sound') return buildSounding(msg, cfg);
+  const M = +cfg.mod === 4 ? 4 : 2, code = cfg.code || 'none', pre = PILOTS[cfg.pre] ? +cfg.pre : 127;
+  const rate = (M === 4 ? [...RATES4, RATE_WIDE] : RATES).includes(+cfg.rate) ? +cfg.rate : 400;
+  const tones = rate === RATE_WIDE ? 'hop' : TONE_SETS.includes(cfg.tones) ? cfg.tones : 'low';   // 6400 bit/s: the one group of the whole band
+  let type, a, b, data;
+  if (msg.type === 'text') { const c = textCodes(msg.text); type = 0; a = c.length; b = 0; data = c.flatMap(v => msb(v, 8)); }
+  else { type = 1; a = msg.h; b = msg.w; data = Array.from(msg.pixels); }
+  if (cfg.mod === 'ofdm') {   // OFDM: a hopping control part, then the OFDM symbols
+    const m = ofdmMode(cfg.guard), map = OFDM_MAPS.includes(cfg.map) ? cfg.map : 'dqpsk', hdr = headerBits({ type, a, b, code, ofdm: m.name, map }), ch = encodeFEC(code, data);
+    const [ns, cap] = ofdmLayout(m, map, ch.length), n = map === 'dqpsk' ? ch.length : cap, key = prbs(n);   // coherent: the last symbol filled up with scrambled zeros
+    const warm = Array.from({ length: Math.round(0.1 * CTRL.rate) }, (_, i) => (i + 1) % 2), ctrl = [...warm, ...PILOTS[pre], ...Array(HREPS[pre]).fill(hdr).flat()];
+    const wave = ofdmSymbols(Array.from({ length: n }, (_, i) => (ch[i] || 0) ^ key[i]), m, map);   // (plain zeros, the same point on many subcarriers, would add up to a peak)
+    return { segs: [{ bits: ctrl, tones: 'hop', rate: CTRL.rate, k0: -warm.length }, { wave }], bits: ctrl, data, n0: data.length, nc: ch.length, warm: warm.length,
+             M: 0, ofdm: m.name, map, ns, dur: ctrl.length / CTRL.rate + wave.length / FS_TX };
+  }
+  const P = PILOTS[pre], hdr = headerBits({ type, a, b, code, rate, tones, mod: M });
+  const ch = encodeFEC(code, data), key = prbs(ch.length);
+  const warm = Array.from({ length: Math.round(0.1 * CTRL.rate) }, (_, i) => (i + 1) % 2);
+  const ctrl = [...warm, ...P, ...Array(HREPS[pre]).fill(hdr).flat()], body = [...ch.map((x, i) => x ^ key[i]), ...P];
+  const ctl = tones === 'hop' ? 'hop' : CTRL.tones;   // a hopping message has a hopping control part
+  const mp = M === 2 ? { bits: body, tones, rate } : { syms: [...toSymbols(body.slice(0, ch.length), M), ...toSymbols(P, M)], M, tones, rate };   // 4 tones: 2 bits per symbol
+  const segs = [{ bits: ctrl, tones: ctl, rate: CTRL.rate, k0: -warm.length }, mp];
+  return { segs, bits: [...ctrl, ...body], data, n0: data.length, nc: ch.length, warm: warm.length, M, dur: ctrl.length / CTRL.rate + (mp.syms || body).length * Math.log2(M) / rate };
+}
+function modulate(frame, fs = FS_TX) {
+  const sym = g => Math.round(fs * Math.log2(g.M || 2) / g.rate), len = g => g.wave ? Math.round(g.wave.length * fs / FS_TX) : (g.syms || g.bits).length * sym(g);
+  const pad = Math.round(0.2 * fs), n = frame.segs.reduce((s, g) => s + len(g), 0);
+  const x = new Float32Array(2 * pad + n);
+  let o = pad;
+  for (const g of frame.segs) {
+    if (g.wave) {   // a waveform at FS_TX (room sounding), linearly resampled if needed
+      const r = FS_TX / fs, m = len(g);
+      for (let i = 0; i < m; i++) { const t = i * r, k = Math.floor(t), u = t - k; x[o + i] = (1 - u) * g.wave[k] + u * (g.wave[k + 1] || 0); }
+      o += m; continue;
+    }
+    const S = g.syms || g.bits, M = g.M || 2, L = sym(g);   // the tone of each symbol: its bit, or with 4 tones its Gray-mapped pair of bits
+    if (g.tones === 'hop') {   // tone hopping: symbol j of the segment on the pair (group of M tones) of k0 + j (k0 < 0 for the warm-up)
+      const hs = hopSet(g.rate, M);
+      S.forEach((m, j) => { const f = hs.tones(hs.pair((g.k0 || 0) + j))[m]; for (let i = 0; i < L; i++) x[o + i] = 0.9 * Math.sin(2 * Math.PI * f * i / fs); o += L; });
+      continue;
+    }
+    const W = toneSet(g.tones, M).map(f => { const w = new Float32Array(L); for (let j = 0; j < L; j++) w[j] = 0.9 * Math.sin(2 * Math.PI * f * j / fs); return w; });
+    for (const m of S) { x.set(W[m], o); o += L; }
+  }
+  return x;
+}
+function parseHeader(hb) {   // hb: the 40 decoded header bits; null unless the CRC and the fields are valid
+  const crc = crc8(hb.slice(0, 32)), x = crc.reduce((v, b, i) => 2 * v + (b ^ hb[32 + i]), 0);   // the mask: 0xFF for codes 4 to 7, xor that of a coherent OFDM mapping (v4)
+  let ext = -1, mi = 0;
+  OFDM_MASKS.forEach((mk, i) => [0, 1].forEach(e => { if (ext < 0 && x === (mk ^ (0xff * e))) { ext = e; mi = i; } }));
+  if (ext < 0) return null;   // none of the masks
+  const val = (s, n) => hb.slice(s, s + n).reduce((v, x) => 2 * v + x, 0);
+  const tf = val(28, 2), four = tf === 3, M = four ? 4 : 2;   // tones 3: 4-FSK, its tone set in the last two bits
+  // tone set 3: 6400 bit/s, one hopping group over the whole band (rate field 3), or OFDM (v3, rate field 0 or 1)
+  const set3 = four && val(30, 2) === 3, ofdm = set3 ? OFDM_MODES[val(26, 2)] : null;
+  const type = val(0, 2), a = val(2, 11), b = val(13, 11), code = CODES[val(24, 2) + 4 * ext];
+  const rate = ofdm ? ofdmRate(ofdm) : set3 ? (val(26, 2) === 3 ? RATE_WIDE : 0) : (four ? RATES4 : RATES)[val(26, 2)];
+  const tones = ofdm ? 'ofdm' : set3 ? 'hop' : TONE_SETS[four ? val(30, 2) : tf];
+  if (!tones || !rate || !code || (!four && val(30, 2)) || (mi && !ofdm)) return null;   // a mapping mask on anything but OFDM: not ours
+  let h = null;
+  if (type === 0 && a >= 1 && b === 0) h = { type: 'text', len: a, n0: 8 * a };
+  if (type === 1 && a >= 1 && b >= 1 && a <= 256 && b <= 256 && a * b <= 20000) h = { type: 'image', h: a, w: b, n0: a * b };
+  if (type === 2 && !four && SOUND_TAPS[a] && b >= 1 && b <= 8) h = { type: 'sound', order: a, periods: b, n0: 0 };
+  if (h && ofdm) { const nc = codedLength(code, h.n0), map = OFDM_MAPS[mi]; Object.assign(h, { code, nc, rate: ofdmRate(ofdm, map), tones, M: 0, ofdm: ofdm.name, map, ns: ofdmLayout(ofdm, map, nc)[0] }); }   // ns: data symbols
+  else if (h) { const nc = codedLength(code, h.n0), K = Math.log2(M); Object.assign(h, { code, nc, rate, tones, M, baud: rate / K, ns: Math.ceil(nc / K) }); }   // ns: message symbols
+  return h;
+}
+
+// ---- channel sounding (header type 2): a periodic MLS at the full sample rate, then the postamble ----
+// The room's impulse response h is the circular cross-correlation of one received period with the MLS:
+// the MLS autocorrelation is N at lag 0 and -1 elsewhere, so h[t] = (c[t] + sum r) / (N + 1).
+const SOUND_TAPS = { 14: [14, 13, 12, 2], 15: [15, 14], 16: [16, 15, 13, 4] }, SOUND_AMP = 0.35;
+function buildSounding(msg, cfg) {
+  const pre = PILOTS[cfg.pre] ? +cfg.pre : 127, order = SOUND_TAPS[msg.order] ? msg.order : 15, periods = msg.periods || 3;
+  const ctl = cfg.tones === 'hop' ? 'hop' : CTRL.tones;   // control part and postamble: hopping or 4 / 8 kHz
+  const P = PILOTS[pre], hdr = headerBits({ type: 2, a: order, b: periods, code: 'none', rate: CTRL.rate, tones: ctl });
+  const warm = Array.from({ length: Math.round(0.1 * CTRL.rate) }, (_, i) => (i + 1) % 2);
+  const ctrl = [...warm, ...P, ...Array(HREPS[pre]).fill(hdr).flat()];
+  const s = mls(order, SOUND_TAPS[order]), N = s.length, wave = new Float32Array((periods + 1) * N);   // one extra period first: the room reaches its periodic steady state
+  for (let i = 0; i < wave.length; i++) wave[i] = s[i % N] ? SOUND_AMP : -SOUND_AMP;
+  const segs = [{ bits: ctrl, tones: ctl, rate: CTRL.rate, k0: -warm.length }, { wave }, { bits: P, tones: ctl, rate: CTRL.rate }];
+  return { segs, data: [], n0: 0, nc: 0, dur: (ctrl.length + P.length) / CTRL.rate + wave.length / FS_TX, sound: { order, periods, N } };
+}
+function fft(re, im, inv = false) {   // in place, radix 2
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) { let b = n >> 1; for (; j & b; b >>= 1) j ^= b; j ^= b; if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const a = (inv ? 2 : -2) * Math.PI / len, wr = Math.cos(a), wi = Math.sin(a);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let j = 0; j < len / 2; j++) {
+        const k = i + j, l = k + len / 2, tr = re[l] * cr - im[l] * ci, ti = re[l] * ci + im[l] * cr;
+        re[l] = re[k] - tr; im[l] = im[k] - ti; re[k] += tr; im[k] += ti;
+        const t = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = t;
+      }
+    }
+  }
+  if (inv) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+}
+function welch(x, nfft = 2048) {   // power spectral density (arbitrary scale), Hann window, 50 % overlap
+  const p = new Float64Array(nfft / 2 + 1), w = Float64Array.from({ length: nfft }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / nfft));
+  let cnt = 0;
+  for (let o = 0; o + nfft <= x.length; o += nfft / 2) {
+    const re = Float64Array.from(w, (v, i) => v * x[o + i]), im = new Float64Array(nfft); fft(re, im);
+    for (let k = 0; k <= nfft / 2; k++) p[k] += re[k] * re[k] + im[k] * im[k];
+    cnt++;
+  }
+  return cnt ? p.map(v => v / cnt) : null;
+}
+// average a spectrum p (bins of df Hz) over 1/frac octave around each frequency of the grid
+function octSmooth(p, df, grid, frac) {
+  return grid.map(f => { const lo = Math.max(1, Math.floor(f * 2 ** (-0.5 / frac) / df)), hi = Math.min(p.length - 1, Math.ceil(f * 2 ** (0.5 / frac) / df)); let s = 0; for (let k = lo; k <= hi; k++) s += p[k]; return s / (hi - lo + 1); });
+}
+// y[t - base]: recording at fs; first: receiver time of the first chip; step: receiver samples per chip; noise: recording before the frame
+function analyseSounding(y, base, fs, first, step, order, periods, noise) {
+  const s = mls(order, SOUND_TAPS[order]), N = s.length, L = 1 << (order + 2);
+  const Sr = new Float64Array(L), Si = new Float64Array(L);
+  s.forEach((v, i) => { Sr[i] = 2 * v - 1; }); fft(Sr, Si);
+  const lanczos = t => {   // band-limited interpolation of the recording at time t (Lanczos, a = 6)
+    const i0 = Math.floor(t); let v = 0;
+    for (let i = i0 - 5; i <= i0 + 6; i++) { const x = t - i, k = x === 0 ? 1 : 6 * Math.sin(Math.PI * x) * Math.sin(Math.PI * x / 6) / (Math.PI * Math.PI * x * x); v += (y[i - base] || 0) * k; }
+    return v;
+  };
+  const period = (j, st, o = 0) => Float64Array.from({ length: N }, (_, k) => lanczos(first + (j * N + k + o) * st));
+  const ir = r => {
+    const re = new Float64Array(L), im = new Float64Array(L); let sum = 0;
+    for (let k = 0; k < N; k++) { re[k] = re[k + N] = r[k]; sum += r[k]; }
+    fft(re, im);
+    for (let k = 0; k < L; k++) { const a = re[k], b = im[k]; re[k] = a * Sr[k] + b * Si[k]; im[k] = b * Sr[k] - a * Si[k]; }   // times conj(S)
+    fft(re, im, true);
+    return Float64Array.from({ length: N }, (_, t) => (re[t] + sum) / (N + 1));
+  };
+  const lowpass = (x, fc) => {   // circular windowed-sinc (Blackman) filter, cutoff fc in cycles per sample: the band above 20 kHz only carries interpolation errors
+    const K = 48, w = Float64Array.from({ length: 2 * K + 1 }, (_, i) => { const u = i - K; return (u ? Math.sin(2 * Math.PI * fc * u) / (Math.PI * u) : 2 * fc) * (0.42 + 0.5 * Math.cos(Math.PI * u / K) + 0.08 * Math.cos(2 * Math.PI * u / K)); });
+    const g = w.reduce((a, b) => a + b, 0), n = x.length, xp = new Float64Array(n + 2 * K), y = new Float64Array(n);
+    for (let i = 0; i < n + 2 * K; i++) xp[i] = x[(i - K + n) % n];
+    for (let t = 0; t < n; t++) { let v = 0; for (let i = 0; i <= 2 * K; i++) v += w[i] * xp[t + i]; y[t] = v / g; }
+    return y;
+  };
+  const peak = h => { let m = 0; for (let i = 1; i < h.length; i++) if (Math.abs(h[i]) > Math.abs(h[m])) m = i;
+    const a = Math.abs(h[(m + N - 1) % N]), b = Math.abs(h[m]), c = Math.abs(h[(m + 1) % N]), den = a - 2 * b + c; return m + (den ? 0.5 * (a - c) / den : 0); };
+  // pass 1: the direct-path peak of each period. Its drift from one period to the next measures the residual clock offset;
+  // a jump (samples lost or repeated by the audio system) is absorbed by realigning each period on its own peak
+  let drift = 0, glitch = false, use = Array.from({ length: periods }, (_, j) => j + 1), pk = [];
+  const off = new Float64Array(periods + 1);
+  if (periods >= 2) {
+    for (let j = 1; j <= periods; j++) pk.push(peak(ir(period(j, step))));
+    for (let j = 1; j < pk.length; j++) { while (pk[j] - pk[0] > N / 2) pk[j] -= N; while (pk[j] - pk[0] < -N / 2) pk[j] += N; }
+    const mj = (pk.length - 1) / 2, mp = pk.reduce((u, v) => u + v, 0) / pk.length;
+    drift = pk.reduce((u, v, j) => u + (j - mj) * (v - mp), 0) / pk.reduce((u, _, j) => u + (j - mj) ** 2, 0);   // chips per period
+    if (Math.abs(drift) > 50 || pk.some((v, j) => Math.abs(v - mp - (j - mj) * drift) > 1)) {
+      glitch = true;
+      const dd = pk.slice(1).map((v, j) => v - pk[j]).filter(v => Math.abs(v) <= 50).sort((a, b) => a - b);
+      drift = dd.length ? (dd[(dd.length - 1) >> 1] + dd[dd.length >> 1]) / 2 : 0;
+      pk.forEach((v, j) => { off[j + 1] = v - pk[0] - j * drift; });
+    }
+  }
+  let st = step * (1 + drift / N);
+  const r = new Float64Array(N);
+  if (glitch) {   // the period cut by the jump holds two partial responses: drop the periods far from the median response
+    const hs = use.map(j => ir(period(j, st, off[j]))), dev = hs.map(() => 0), col = new Float64Array(hs.length);
+    for (let t = 0; t < N; t++) { hs.forEach((h, i) => { col[i] = h[t]; }); col.sort(); const m = hs.length % 2 ? col[hs.length >> 1] : (col[hs.length / 2 - 1] + col[hs.length / 2]) / 2; hs.forEach((h, i) => { dev[i] += (h[t] - m) ** 2; }); }
+    if (hs.length >= 3) { const md = [...dev].sort((a, b) => a - b)[Math.floor(dev.length / 2)]; use = use.filter((_, i) => dev[i] <= 3 * md); }
+    else { const pe = hs.map(h => { const p = Math.round(peak(h)); let s = 0; for (let k = -48; k <= 48; k++) s += h[(p + k + N) % N] ** 2; return s; }); use = [use[pe[0] >= pe[1] ? 0 : 1]]; }
+    // the clock drift again, from consecutive periods that are both kept and have no jump between them
+    const dd = use.filter(j => use.includes(j + 1) && Math.abs(pk[j] - pk[j - 1] - drift) < 5).map(j => pk[j] - pk[j - 1]);
+    if (dd.length) { drift = dd.reduce((a, b) => a + b, 0) / dd.length; pk.forEach((v, j) => { off[j + 1] = v - pk[0] - j * drift; }); st = step * (1 + drift / N); }
+  }
+  for (const j of use) period(j, st, off[j]).forEach((v, k) => { r[k] += v / use.length; });
+  const h0 = lowpass(ir(r), Math.min(20000, 0.45 * fs) / FS_TX), pre = Math.round(0.005 * FS_TX), p = Math.round(peak(h0));
+  const h = Float32Array.from({ length: N }, (_, i) => h0[(i + p - pre + 2 * N) % N]), e = Float64Array.from(h, v => v * v);
+  // noise floor of the response: the last 10 % of the period (just before the direct sound)
+  const floor = e.subarray(Math.round(0.9 * N)).reduce((u, v) => u + v, 0) / (N - Math.round(0.9 * N));
+  const W = Math.round(0.002 * FS_TX), cs = new Float64Array(N + 1); for (let i = 0; i < N; i++) cs[i + 1] = cs[i] + e[i];
+  const env = Float64Array.from({ length: N }, (_, i) => { const a = Math.max(0, i - W), b = Math.min(N, i + W + 1); return (cs[b] - cs[a]) / (b - a); });
+  let iend = Math.round(0.9 * N); for (let i = pre + W; i < 0.9 * N; i++) if (env[i] < 2 * floor) { iend = i; break; }
+  // Schroeder backward integration (noise floor removed), and the reverberation time from its slope.
+  // The decay hidden under the noise after iend is added back from the fitted slope (as in Lundeby's method), then the slope is fitted again.
+  let edc, edcDb, comp = 0;
+  const schroeder = () => {
+    edc = new Float64Array(iend + 1); edc[iend] = comp;
+    for (let i = iend - 1; i >= 0; i--) edc[i] = edc[i + 1] + Math.max(0, e[i] - floor);
+    edcDb = Array.from(edc, v => 10 * Math.log10(v / edc[0] + 1e-30));
+  };
+  schroeder();
+  const fit = (hiDb, loDb) => {
+    const idx = []; edcDb.forEach((v, i) => { if (i > pre && v <= hiDb && v >= loDb) idx.push(i); });
+    if (idx.length < 10) return null;
+    const tm = idx.reduce((u, i) => u + i, 0) / idx.length, vm = idx.reduce((u, i) => u + edcDb[i], 0) / idx.length;
+    const sl = idx.reduce((u, i) => u + (i - tm) * (edcDb[i] - vm), 0) / idx.reduce((u, i) => u + (i - tm) ** 2, 0);   // dB per sample
+    return sl < 0 ? { rt60: -60 / sl / FS_TX, slope: sl, at: vm - sl * tm, i0: idx[0], i1: idx[idx.length - 1] } : null;
+  };
+  const inr = 10 * Math.log10(env[pre] / floor);   // decay range above the noise: T20 needs about 35 dB, T10 about 25 dB
+  const reverb = () => { const f20 = inr >= 35 ? fit(-5, -25) : null, f10 = !f20 && inr >= 25 ? fit(-5, -15) : null; return f20 ? { ...f20, method: 'T20' } : f10 ? { ...f10, method: 'T10' } : null; };
+  let rt = reverb();
+  for (let it = 0; it < 2 && rt; it++) { comp = edc[0] * 10 ** ((rt.at + rt.slope * iend) / 10); schroeder(); rt = reverb(); }
+  const sum = (a, b) => cs[Math.min(N, Math.max(0, b))] - cs[Math.min(N, Math.max(0, a))];
+  const d25 = Math.round(0.0025 * FS_TX), d50 = Math.round(0.05 * FS_TX);
+  const direct = sum(pre - d25, pre + d25), late = Math.max(1e-30, sum(pre + d25, iend) - floor * (iend - pre - d25) + comp);
+  const drr = 10 * Math.log10(direct / late);
+  const c50 = 10 * Math.log10(Math.max(1e-30, sum(pre - d25, pre + d50) - floor * (d50 + d25)) / Math.max(1e-30, sum(pre + d50, iend) - floor * (iend - pre - d50) + comp));
+  let m0 = 0, m1 = 0, m2 = 0; for (let i = pre - d25; i < iend; i++) { const v = Math.max(0, e[i] - floor), t = (i - pre) / FS_TX; m0 += v; m1 += v * t; m2 += v * t * t; }
+  if (rt && comp) {   // moments of the exponential decay after iend
+    const ts = -10 / (rt.slope * Math.LN10) / FS_TX, te = (iend - pre) / FS_TX;
+    m0 += comp; m1 += comp * (te + ts); m2 += comp * (te * te + 2 * te * ts + 2 * ts * ts);
+  }
+  const tauRms = Math.sqrt(Math.max(0, m2 / m0 - (m1 / m0) ** 2));
+  // frequency response of the whole chain (speaker, room, microphone), 1/6 octave
+  const nf = 1 << Math.ceil(Math.log2(iend + 1)), hr = new Float64Array(nf), hi = new Float64Array(nf);
+  for (let i = 0; i <= iend && i < N; i++) hr[i] = h[i];
+  fft(hr, hi);
+  const pw = Float64Array.from({ length: nf / 2 + 1 }, (_, k) => hr[k] * hr[k] + hi[k] * hi[k]);
+  const fmax = Math.min(20000, 0.45 * fs), grid = []; for (let f = 100; f <= fmax; f *= 2 ** (1 / 24)) grid.push(f);
+  const H = octSmooth(pw, FS_TX / nf, grid, 6), Hmax = Math.max(...H), Hdb = H.map(v => 10 * Math.log10(v / Hmax + 1e-30));
+  // signal-to-noise ratio per frequency: received sounding versus the noise heard before the frame
+  let snr = null;
+  if (noise && noise.length >= 4096) {
+    const seg = Float64Array.from({ length: Math.round(periods * N * step) }, (_, i) => y[Math.round(first + N * step) + i - base] || 0);
+    const ps = welch(seg), pn = welch(noise);
+    if (ps && pn) { const a = octSmooth(ps, fs / 2048, grid, 3), b = octSmooth(pn, fs / 2048, grid, 3); snr = a.map((v, i) => 10 * Math.log10(Math.max(1e-12, v - b[i]) / b[i])); }
+  }
+  const at = (arr, f) => { if (!arr) return null; let k = 0; grid.forEach((g, i) => { if (Math.abs(Math.log(g / f)) < Math.abs(Math.log(grid[k] / f))) k = i; }); return f <= fmax ? arr[k] : null; };
+  const tones = [4000, 8000, 16000].map(f => ({ f, gain: at(Hdb, f), snr: at(snr, f) }));
+  return { fsIR: FS_TX, h, pre, iend, inr, env, edcDb, rt, drr, c50, tauRms, grid, Hdb, snr, tones, drift, glitch, used: use.length, N };
+}
+
+// ---- tone hopping (tones 'hop'): many tone pairs, visited in turn, so that the echo of a bit lands on idle tones ----
+// At R bit/s there are H = 6400 / R pairs of adjacent tones, bit 0 -> 3200 + 2pR Hz and bit 1 -> 3200 + (2p + 1)R Hz,
+// p = 0 .. H - 1 (3.2 to 16 kHz). The pairs started at 1.6 kHz at first, but in a real room that tone, low in a small
+// speaker's range and close to the room's noise, caused nearly all the errors. Symbol k of a segment (counted from the first preamble bit, from the first message bit
+// through the postamble, or from the first bit of a sounding's postamble) uses pair p = s k mod H, s = H/2 - 1 (1 if H = 4):
+// a pair comes back only every H symbols, so the echo it hears is the one left after H bits of decay. The control
+// part hops too (at 400 bit/s, 16 pairs), otherwise far receivers would never find the frame.
+const HOP_F0 = 3200, HOP_BAND = 12800;
+// The postamble is looked for only where the clocks of two devices can put it: they differ by far less than 300 ppm
+// (0.03 %), plus a quarter of a symbol. In a strong echo the contrast can peak a symbol or more after the true
+// instant, and with a wider search such a peak was taken for a clock offset of several thousand ppm.
+const MAX_PPM = 300;
+// v2, 4 tones: the same H groups, each now of 4 tones spaced by the symbol rate R / 2, so they fill the same band.
+function hopSet(rate, M = 2) {
+  const H = HOP_BAND / (2 * rate), s = H > 4 ? H / 2 - 1 : 1, df = rate / Math.log2(M);
+  return { H, s, rate, M, pair: k => ((s * k) % H + H) % H, tones: p => Array.from({ length: M }, (_, m) => HOP_F0 + 2 * p * rate + m * df) };
+}
+function toneDesc(tones, rate, M = 2) {   // for the page: the tones of a frame, in words
+  if (tones !== 'hop') return `${toneSet(tones, M).map(f => f / 1000).join(' / ')} kHz`;
+  const hs = hopSet(rate, M), top = hs.tones(hs.H - 1)[M - 1] / 1000;
+  if (hs.H === 1) return `${hs.tones(0).map(f => f / 1000).join(' / ')} kHz (the whole band, no hopping)`;
+  return `tone hopping, ${hs.H} ${M === 2 ? 'pairs' : `groups of ${M} tones`} from ${HOP_F0 / 1000} to ${top} kHz`;
+}
+const TONE_TABS = new Map();
+function toneTab(f, fs, L) {   // cos and sin of a tone over a window of L samples
+  const key = `${f}/${fs}/${L}`;
+  let t = TONE_TABS.get(key);
+  if (!t) {
+    t = { c: new Float64Array(L), s: new Float64Array(L) };
+    for (let n = 0; n < L; n++) { t.c[n] = Math.cos(2 * Math.PI * f * n / fs); t.s[n] = Math.sin(2 * Math.PI * f * n / fs); }
+    TONE_TABS.set(key, t);
+  }
+  return t;
+}
+function energyAt(y, i, t) {   // |sum of y[i + n] exp(-j 2 pi f n / fs)| over the window of the tone table t
+  const c = t.c, s = t.s, L = c.length; let re = 0, im = 0;
+  for (let n = 0; n < L; n++) { const v = y[i + n]; re += v * c[n]; im += v * s[n]; }
+  return Math.sqrt(re * re + im * im);
+}
+// Speaker, room and microphone give each tone its own level, so each tone's energies are divided by its level, so that
+// one model fits all the tones. With 2 tones, that level is the rms over the symbols that used its pair (half of them
+// carry the tone, half only the echo). With 4 tones a tone is sent in only a quarter of the symbols of its group, too
+// few in a short frame for that rms to be fair (a tone never sent in a group would be raised to the level of the
+// others): its level is the rms over the symbols where it is the strongest, or its group's if it never is.
+function hopNormalize(hs, E) {   // E[m]: energies of tone m in symbols 0, 1, 2 ... of a hopped segment
+  const H = hs.H, M = E.length, n = new Float64Array(H), S = E.map(() => new Float64Array(H)), c = E.map(() => new Float64Array(H));
+  E[0].forEach((v, k) => {
+    const p = hs.pair(k); n[p]++;
+    if (M === 2) { E.forEach((e, m) => { S[m][p] += e[k] * e[k]; c[m][p]++; }); return; }
+    let s = 0; for (let m = 1; m < M; m++) if (E[m][k] > E[s][k]) s = m;
+    S[s][p] += E[s][k] * E[s][k]; c[s][p]++;
+  });
+  const grp = Array.from(n, (_, p) => Math.sqrt(S.reduce((t, x) => t + x[p], 0) / Math.max(1, n[p])) || 1);   // used only for a tone never the strongest
+  const G = S.map((x, m) => Array.from(x, (v, p) => c[m][p] ? Math.sqrt(v / c[m][p]) || 1 : grp[p])), lv = G.flatMap((g, m) => g.filter((v, p) => c[m][p] > 0));
+  return { E: E.map((e, m) => e.map((v, k) => v / G[m][hs.pair(k)])), G, spread: 20 * Math.log10(Math.max(...lv) / Math.min(...lv)) };
+}
+// How distinct the tones of a symbol are: (strongest - second) / sum, |E1 - E0| / (E1 + E0) with 2 tones
+function contrast(e) { let a = 0, b = 0, t = 0; for (const v of e) { t += v; if (v > a) { b = a; a = v; } else if (v > b) b = v; } return (a - b) / (t + 1e-12); }
+// How much the known tone s stands out: 1 if only it is heard, about 0 in noise; +-(E1 - E0) / (E1 + E0) with 2 tones
+function knownContrast(e, s) {
+  if (e.length === 2) return (2 * s - 1) * (e[1] - e[0]) / (e[1] + e[0] + 1e-12);
+  let t = 0; for (const v of e) t += v;
+  return (e.length * e[s] - t) / ((e.length - 1) * t + 1e-12);
+}
+// Fine timing at the message's rate, with tone hopping. The symbol instants come from the 400 bit/s preamble and the
+// postamble. The preamble's long symbols tolerate an error of several samples, the short symbols of a fast message do
+// not: in a real room their best instant was a quarter of a symbol away at 1600 bit/s. So, in up to 8 blocks of the
+// message, find the shift (at most R samples) that makes the tones most distinct, mean contrast, and fit a straight
+// line through these shifts. read(j, s): energies of the tones of message symbol j read s samples after its instant.
+// (With fixed tones the echo of the earlier bits lies on the same two tones, and in simulated rooms this measure then
+// often favoured a worse instant: they keep the instants of the preamble and postamble.)
+function fineTiming(read, nc, R) {
+  const K = Math.max(1, Math.min(8, Math.floor(nc / 128))), step = Math.max(1, Math.round(R / 6)), pts = [];
+  const blk = (j0, j1, s) => { let c = 0; for (let j = j0; j < j1; j++) c += contrast(read(j, s)); return c / (j1 - j0); };
+  for (let k = 0; k < K; k++) {
+    const j0 = Math.floor(k * nc / K), j1 = Math.floor((k + 1) * nc / K);
+    let best = { c: -1, s: 0 };
+    for (let s = -R; s <= R; s += step) { const c = blk(j0, j1, s); if (c > best.c) best = { c, s }; }   // coarse grid, then sample by sample
+    const s0 = best.s;
+    for (let s = Math.max(-R, s0 - step + 1); s <= Math.min(R, s0 + step - 1); s++) if (s !== s0) { const c = blk(j0, j1, s); if (c > best.c) best = { c, s }; }
+    pts.push([(j0 + j1 - 1) / 2, best.s]);
+  }
+  const n = pts.length, mx = pts.reduce((t, p) => t + p[0], 0) / n, my = pts.reduce((t, p) => t + p[1], 0) / n;
+  const sxx = pts.reduce((t, p) => t + (p[0] - mx) ** 2, 0), b = sxx > 0 ? pts.reduce((t, p) => t + (p[0] - mx) * (p[1] - my), 0) / sxx : 0;
+  const shift = j => Math.max(-2 * R, Math.min(2 * R, Math.round(my + b * (j - mx))));
+  const E = read(0, 0).map(() => []);
+  for (let j = 0; j < nc; j++) read(j, shift(j)).forEach((v, m) => E[m].push(v));
+  return { E, from: shift(0), to: shift(nc - 1) };
+}
+// Are the tones clearly more distinct with energies A than with B (A[m][j]: tone m, symbol j)? (paired t-test, t > 2)
+function sharper(A, B) {
+  const n = A[0].length, d = Array.from({ length: n }, (_, j) => contrast(A.map(e => e[j])) - contrast(B.map(e => e[j])));
+  const m = d.reduce((t, v) => t + v, 0) / n, sd = Math.sqrt(d.reduce((t, v) => t + (v - m) ** 2, 0) / Math.max(1, n - 1));
+  return m > 2 * sd / Math.sqrt(n);
+}
+function searchMax(f, lo, hi, Lw) {   // largest f(m), lo <= m <= hi: on a grid of Lw/8 samples, then sample by sample around the best
+  const c = Math.max(1, Math.floor(Lw / 8)); let b = { v: -2, m: lo };
+  for (let m = lo; m <= hi; m += c) { const v = f(m); if (v > b.v) b = { v, m }; }
+  const a = b.m;
+  for (let m = Math.max(lo, a - c + 1); m <= Math.min(hi, a + c - 1); m++) { const v = f(m); if (v > b.v) b = { v, m }; }
+  return b;
+}
+
+// Sliding non-coherent energies at M tones (frequencies F) over a window of Lw samples, for every window start m >= m0.
+// z[k][m]: energy of tone k; d[m]: with 2 tones the contrast (E1 - E0) / (E1 + E0), else the contrast of the symbol.
+class ToneEnergies {
+  constructor(fs, F, Lw, m0, len) {
+    const M = F.length;
+    Object.assign(this, { M, Lw, m0, len, next: m0, nz: m0, w: F.map(f => 2 * Math.PI * f / fs) });
+    this.z = F.map(() => new Float32Array(len)); this.d = new Float32Array(len); this.e = new Float64Array(M);
+    this.C = new Float64Array(2 * M); this.H = new Float64Array(2 * M * Lw);
+  }
+  feed(y, base, n) {   // y[t - base] holds sample t; consume up to sample n - 1
+    const { C, H, Lw, m0, M, w, z, e } = this, end = Math.min(n, m0 + this.len + Lw - 1);
+    for (let t = this.next; t < end; t++) {
+      const v = y[t - base], u = t - m0, h = 2 * M * (u % Lw);
+      for (let k = 0; k < M; k++) {
+        const p = w[k] * u, a = 2 * k; C[a] += v * Math.cos(p); C[a + 1] += v * Math.sin(p);
+        const re = C[a] - H[h + a], im = C[a + 1] - H[h + a + 1]; H[h + a] = C[a]; H[h + a + 1] = C[a + 1]; e[k] = Math.hypot(re, im);
+      }
+      if (u >= Lw - 1) { const m = u - Lw + 1; for (let k = 0; k < M; k++) z[k][m] = e[k]; this.d[m] = M === 2 ? (e[1] - e[0]) / (e[1] + e[0] + 1e-12) : contrast(e); }
+    }
+    this.next = Math.max(this.next, end); this.nz = this.next - Lw + 1;
+  }
+  known(b, s) {   // knownContrast of tone s in the window starting at m0 + b (0 outside)
+    if (b < 0 || b >= this.len) return 0;
+    return this.M === 2 ? (2 * s - 1) * this.d[b] : knownContrast(this.z.map(z => z[b]), s);
+  }
+}
+
+// ---- OFDM (v3): many tones at once, each with its own phase ----
+// An inverse FFT of N points at 48 kHz puts one complex number on each subcarrier k (at k 48000 / N Hz) from 3.2 to
+// 16 kHz, and the last CP samples of each symbol are sent again just before it: the cyclic prefix, or guard interval.
+// An echo that arrives within the guard then only multiplies each subcarrier by a complex gain (the room's frequency
+// response) instead of spilling into the next symbol. Each subcarrier carries 2 bits per symbol as a phase step from
+// one symbol to the next (DQPSK), so the receiver needs no estimate of that gain: it compares each symbol with the one
+// before on the same subcarrier. A known reference symbol comes first and again last: the first starts the phase
+// steps, and the pair gives the receiver its timing and the time scale.
+//   long guard:  N 2048, CP 1024 (21.3 ms), 546 subcarriers 23.4 Hz apart, a symbol every 64 ms: 17.1 kbit/s before the code
+//   short guard: N 1024, CP 256 (5.3 ms), 273 subcarriers 46.9 Hz apart, a symbol every 26.7 ms: 20.5 kbit/s
+const OFDM_MODES = [{ name: 'long', N: 2048, CP: 1024 }, { name: 'short', N: 1024, CP: 256 }];   // header rate field 0, 1
+const OFDM_F0 = 3200, OFDM_F1 = 16000;
+const OFDM_RMS = 0.45;        // half the 0.9 peak of FSK (6 dB below it); higher peaks (4.5% of the samples) are clipped at 0.9
+const OFDM_GROUP = 32;        // subcarriers per noise estimate
+const OFDM_BACK = 8;          // FFT windows this many samples early: the direct sound must not fall outside the guard
+const OFDM_MAX_PPM = 500;     // time-scale search: clock offset plus the motion of the phone (0.1 m/s is 290 ppm)
+const ofdmMode = name => OFDM_MODES.find(m => m.name === name) || OFDM_MODES[0];
+function ofdmCarriers(N) { const k = []; for (let i = 0; i <= N / 2; i++) if (i * FS_TX >= OFDM_F0 * N && i * FS_TX < OFDM_F1 * N) k.push(i); return k; }
+const ofdmRate = (m, map = 'dqpsk') => { const K = ofdmCarriers(m.N).length; return OFDM_BITS[map] * (map === 'dqpsk' ? K : K * (1 - 1 / OFDM_PSTEP)) * FS_TX / (m.N + m.CP); };   // channel bits per second
+function ofdmReference(K) { return Array.from({ length: K }, (_, j) => Math.PI * ((j * j) % (2 * K)) / K); }   // Newman phases: low peaks
+
+// ---- coherent OFDM (v4): pilots, and an estimate of the room's response ----
+// DQPSK needs no knowledge of the channel, but it pays for it: comparing two noisy symbols doubles the noise, and a
+// phase step carries 2 bits at most in practice. With pilots, known values on some subcarriers of every data symbol,
+// the receiver estimates each subcarrier's gain and phase (the room's frequency response) and decides on the symbol
+// itself: QPSK (2 bits, 2 dB less SNR than DQPSK), 8PSK (3 bits) or 16QAM (4 bits: the amplitude carries bits too).
+// Pilots: subcarrier j of data symbol i (1 .. ns) carries the reference symbol's value if (j - 3 i) mod 12 = 0, one
+// subcarrier in 12, shifted by 3 from one symbol to the next (8 % of the subcarriers). The other subcarriers, in
+// increasing frequency, symbol after symbol, carry the bits; the last data symbol is filled up with scrambled zeros.
+const OFDM_MAPS = ['dqpsk', 'qpsk', '8psk', '16qam'], OFDM_MASKS = [0x00, 0x33, 0x55, 0x66];   // header: the CRC xor the mapping's mask
+const OFDM_BITS = { dqpsk: 2, qpsk: 2, '8psk': 3, '16qam': 4 }, OFDM_NAMES = { dqpsk: 'DQPSK', qpsk: 'QPSK', '8psk': '8PSK', '16qam': '16QAM' };
+const OFDM_PSTEP = 12, OFDM_PSHIFT = 3;
+const OFDM_DMAX = 8;       // delay change of a symbol (moving phone) searched within +-8 samples
+const OFDM_ITERS = 3;      // rounds of channel estimate <-> per-symbol gain, phase and delay
+const OFDM_ALPHA = 0.01;   // channel smoothing A (A + alpha)^-1, see ofdmSmooth
+function ofdmPoints(map) {   // a coherent mapping's points (mean energy 1): [re, im, bits of each point (MSB first, Gray)]
+  const s = Math.SQRT1_2, q = 1 / Math.sqrt(10), A = [-3, -1, 1, 3], g = [0, 1, 3, 2], P = [...Array(map === '8psk' ? 8 : 16).keys()];
+  if (map === 'qpsk') return [[s, s, -s, -s], [s, -s, s, -s], [0, 1, 2, 3]];
+  if (map === '8psk') return [P.map(p => Math.cos(Math.PI * p / 4)), P.map(p => Math.sin(Math.PI * p / 4)), P.map(p => p ^ (p >> 1))];
+  return [P.map(p => A[p >> 2] * q), P.map(p => A[p & 3] * q), P.map(p => g[p >> 2] << 2 | g[p & 3])];   // 16QAM: 2 Gray bits for the real part, 2 for the imaginary
+}
+const ofdmPilot = (j, i) => (((j - OFDM_PSHIFT * i) % OFDM_PSTEP) + OFDM_PSTEP) % OFDM_PSTEP === 0;   // subcarrier j of data symbol i (1 .. ns)
+function ofdmLayout(m, map, nc) {   // [data symbols for nc channel bits, the channel bits they hold]
+  const K = ofdmCarriers(m.N).length, b = OFDM_BITS[map];
+  if (map === 'dqpsk') { const ns = Math.ceil(nc / (2 * K)); return [ns, 2 * K * ns]; }
+  let ns = 0, cap = 0;
+  while (cap < nc) { ns++; for (let j = 0; j < K; j++) if (!ofdmPilot(j, ns)) cap += b; }
+  return [ns, cap];
+}
+// Smoothing a channel estimate across the band: an echo that arrives within the guard (-16 .. CP samples after the FFT
+// window starts) makes a response that varies slowly from one subcarrier to the next. A: to the delay domain (inverse
+// FFT), keep -16 .. CP, back (FFT); A[j][l] = a[j - l] (a Toeplitz matrix). A alone would bend the estimate near the
+// band's edges; A (A + alpha I)^-1 G = G - alpha x, with (A + alpha I) x = G solved by Levinson's recursion, keeps
+// what the guard holds well (eigenvalues of A near 1) and drops what it does not (near 0): with the long guard, about
+// half the noise goes.
+const _smooth = {};
+function ofdmSmooth(m, gr, gi) {   // G = gr + j gi on the K subcarriers -> the smoothed [re, im]
+  const { N, CP } = m, K = gr.length;
+  if (!_smooth[m.name]) {
+    const re = new Float64Array(N), im = new Float64Array(N);
+    for (let n = -16; n <= CP; n++) re[(n + N) % N] = 1;
+    fft(re, im);
+    _smooth[m.name] = [Float64Array.from({ length: K }, (_, k) => re[k] / N + (k === 0 ? OFDM_ALPHA : 0)), Float64Array.from({ length: K }, (_, k) => im[k] / N)];   // first column of A + alpha I
+  }
+  const [tr, ti] = _smooth[m.name], [xr, xi] = levinson(tr, ti, gr, gi);
+  return [Float64Array.from(gr, (v, j) => v - OFDM_ALPHA * xr[j]), Float64Array.from(gi, (v, j) => v - OFDM_ALPHA * xi[j])];
+}
+// Solves T x = y for a Hermitian Toeplitz T, T[j][l] = t[j - l] for j >= l, conj(t[l - j]) otherwise (t = tr + j ti):
+// Levinson's recursion grows the solution one row at a time, with the forward and backward vectors f, b (T f = e_first,
+// T b = e_last), in K^2 operations instead of K^3.
+function levinson(tr, ti, yr, yi) {
+  const n = tr.length, xr = new Float64Array(n), xi = new Float64Array(n);
+  let fr = new Float64Array(n), fi = new Float64Array(n), br = new Float64Array(n), bi = new Float64Array(n);
+  let gr = new Float64Array(n), gi = new Float64Array(n), hr = new Float64Array(n), hi = new Float64Array(n);
+  fr[0] = br[0] = 1 / tr[0]; xr[0] = yr[0] / tr[0]; xi[0] = yi[0] / tr[0];
+  for (let k = 1; k < n; k++) {
+    let efr = 0, efi = 0, ebr = 0, ebi = 0, exr = 0, exi = 0;   // what row k of [f; 0], row 0 of [0; b] and row k of [x; 0] give
+    for (let i = 0; i < k; i++) {
+      const ar = tr[k - i], ai = ti[k - i], cr = tr[i + 1], ci = -ti[i + 1];
+      efr += ar * fr[i] - ai * fi[i]; efi += ar * fi[i] + ai * fr[i];
+      ebr += cr * br[i] - ci * bi[i]; ebi += cr * bi[i] + ci * br[i];
+      exr += ar * xr[i] - ai * xi[i]; exi += ar * xi[i] + ai * xr[i];
+    }
+    const dr = 1 - (efr * ebr - efi * ebi), di = -(efr * ebi + efi * ebr), dd = dr * dr + di * di, ur = dr / dd, ui = -di / dd;   // 1 / (1 - ef eb)
+    for (let i = 0; i <= k; i++) {   // f = ([f; 0] - ef [0; b]) / (1 - ef eb), b = ([0; b] - eb [f; 0]) / (1 - ef eb)
+      const pr = i < k ? fr[i] : 0, pi = i < k ? fi[i] : 0, qr = i > 0 ? br[i - 1] : 0, qi = i > 0 ? bi[i - 1] : 0;
+      const sr = pr - (efr * qr - efi * qi), si = pi - (efr * qi + efi * qr), tr2 = qr - (ebr * pr - ebi * pi), ti2 = qi - (ebr * pi + ebi * pr);
+      gr[i] = sr * ur - si * ui; gi[i] = sr * ui + si * ur; hr[i] = tr2 * ur - ti2 * ui; hi[i] = tr2 * ui + ti2 * ur;
+    }
+    [fr, gr] = [gr, fr]; [fi, gi] = [gi, fi]; [br, hr] = [hr, br]; [bi, hi] = [hi, bi];
+    const er = yr[k] - exr, ei = yi[k] - exi;   // x = [x; 0] + (y_k - ex) b
+    for (let i = 0; i <= k; i++) { xr[i] += er * br[i] - ei * bi[i]; xi[i] += er * bi[i] + ei * br[i]; }
+  }
+  return [xr, xi];
+}
+// Channel bits (coded, scrambled) -> the OFDM part at 48 kHz: the reference symbol, ceil(len / 2K) data symbols and
+// the reference symbol again, each preceded by its cyclic prefix. Bits b0 b1 of a subcarrier -> phase step
+// pi/4 + m pi/2, m = (b0 xor b1) + 2 b1 (Gray: 00, 10, 11, 01): the signs of the real and imaginary parts of the step give b0 and b1.
+// Coherent mappings (v4): the pilots keep the reference symbol's value, the other subcarriers take the points of ofdmPoints.
+function ofdmSymbols(bits, m, map = 'dqpsk') {
+  const { N, CP } = m, kk = ofdmCarriers(N), K = kk.length, L = N + CP, th = ofdmReference(K), coh = map !== 'dqpsk';
+  const ns = coh ? ofdmLayout(m, map, bits.length)[0] : Math.ceil(bits.length / (2 * K));
+  const [pr, pim, lab] = coh ? ofdmPoints(map) : [], nb = OFDM_BITS[map], inv = []; if (coh) lab.forEach((l, p) => { inv[l] = p; });
+  let q = 0;
+  const g = N / 2 * (OFDM_RMS * Math.sqrt(2 / K));   // each subcarrier a cosine of amplitude OFDM_RMS sqrt(2 / K)
+  const x = new Float32Array((ns + 2) * L), P = new Int32Array(K), re = new Float64Array(N), im = new Float64Array(N);
+  for (let i = 0; i < ns + 2; i++) {
+    if (!coh && i > 0 && i <= ns) for (let j = 0; j < K; j++) { const q = 2 * (K * (i - 1) + j), b0 = bits[q] || 0, b1 = bits[q + 1] || 0; P[j] = (P[j] + 1 + 2 * ((b0 ^ b1) + 2 * b1)) % 8; }
+    if (i === ns + 1) P.fill(0);
+    re.fill(0); im.fill(0);
+    kk.forEach((k, j) => {
+      const ph = th[j] + P[j] * Math.PI / 4;
+      let c = Math.cos(ph), s = Math.sin(ph);
+      if (coh && i > 0 && i <= ns && !ofdmPilot(j, i)) { let v = 0; for (let t = 0; t < nb; t++) v = 2 * v + (bits[q++] || 0); c = pr[inv[v]]; s = pim[inv[v]]; }
+      re[k] = c; im[k] = s; re[N - k] = c; im[N - k] = -s;
+    });
+    fft(re, im, true);
+    for (let n = 0; n < N; n++) { const v = Math.max(-0.9, Math.min(0.9, re[n] * g)); x[i * L + CP + n] = v; if (n >= N - CP) x[i * L + n - N + CP] = v; }
+  }
+  return x;
+}
+// y at the positions t0 + (m0 + i) step, i = 0 .. n - 1 (sample t is y[t - off], valid for t - off < len): band-limited
+// interpolation, a sinc with a Hann window, A samples each side
+function fracRead(y, off, len, t0, step, m0, n, A = 16) {
+  const out = new Float64Array(n), cb = new Float64Array(2 * A), sb = new Float64Array(2 * A);
+  for (let k = -A + 1; k <= A; k++) { cb[k + A - 1] = Math.cos(Math.PI * k / A); sb[k + A - 1] = Math.sin(Math.PI * k / A); }
+  for (let i = 0; i < n; i++) {
+    const t = t0 + (m0 + i) * step, k0 = Math.floor(t), f = t - k0, sf = Math.sin(Math.PI * f) / Math.PI, ca = Math.cos(Math.PI * f / A), sa = Math.sin(Math.PI * f / A);
+    let v = 0;
+    for (let k = -A + 1; k <= A; k++) {
+      const j = k0 + k - off; if (j < 0 || j >= len) continue;
+      const u = f - k, c = k + A - 1, w = u === 0 ? 1 : ((k & 1) ? -sf : sf) / u;   // sinc(u): sin(pi (f - k)) = (-1)^k sin(pi f)
+      v += w * (0.5 + 0.5 * (ca * cb[c] + sa * sb[c])) * y[j];   // Hann window: cos(pi (f - k) / A)
+    }
+    out[i] = v;
+  }
+  return out;
+}
+// The OFDM part of a frame whose first reference symbol (its guard first) starts near sample t0 of the recording
+// (sample t is y[t - off], valid for t - off < len). 1. Read it on a 48 kHz grid, whatever the microphone's rate.
+// 2. Timing: a reference symbol gives the room's impulse response as seen in the band (the inverse FFT of the received
+// subcarriers divided by the sent ones); the FFT windows are placed so that the guard covers the stretch of that
+// response with the most energy, from the direct sound on. 3. Time scale: a clock offset, or a moving phone,
+// stretches the recording by eps; between the two reference symbols, (ns + 1) (N + CP) samples apart, the phase on
+// subcarrier f then turns by 2 pi f (ns + 1) (N + CP) eps / 48000, and eps is the slope that best lines up the
+// subcarriers; the part is then read again on a grid stretched by 1 + eps. 4. Differential detection: z = Y_i
+// conj(Y_i-1), LLR(b0) = -sqrt(2) Re z / N0 and LLR(b1) = -sqrt(2) Im z / N0 (> 0 means 1), N0 measured from the
+// decisions per group of 32 subcarriers: the noise and the echo that arrives after the guard. v4: a phone that moves
+// changes its delay d from one symbol to the next, which turns subcarrier f by 2 pi f d / 48000 (90 degrees at 16 kHz
+// for 0.75 sample, a 2 cm swing); z^4 has no data left (every step is pi/4 + m pi/2), so d is the delay that best lines
+// up -z^4 across the band, and z is turned back by it before the decisions. 4'. Coherent mappings: see ofdmCoherent.
+function ofdmReceive(y, off, len, fs, t0, m, ns, nc, map = 'dqpsk') {
+  const { N, CP } = m, kk = ofdmCarriers(N), K = kk.length, L = N + CP, th = ofdmReference(K), sc = fs / FS_TX, pad = N / 2, nr = (ns + 2) * L + 2 * pad;
+  const cr = th.map(Math.cos), ci = th.map(Math.sin), re = new Float64Array(N), im = new Float64Array(N);
+  const read = eps => fracRead(y, off, len, t0, sc * (1 + eps * 1e-6), -pad, nr);
+  const spec = (r, i, start) => {   // the subcarriers of symbol i, window from i L + start: [re[], im[]]
+    const o = pad + i * L + start;
+    for (let n = 0; n < N; n++) { re[n] = r[o + n] || 0; im[n] = 0; }
+    fft(re, im);
+    return [Float64Array.from(kk, k => re[k]), Float64Array.from(kk, k => im[k])];
+  };
+  const b0 = CP / 2, taper = Float64Array.from({ length: K }, (_, j) => 0.5 - 0.5 * Math.cos(2 * Math.PI * (j + 1) / (K + 1)));
+  const response = (r, refs, start) => {   // |h|^2 at (CP - start + delay) mod N, from the reference symbols
+    const e = new Float64Array(N);
+    for (const i of refs) {
+      const [a, b] = spec(r, i, start);
+      re.fill(0); im.fill(0);
+      kk.forEach((k, j) => { re[k] = (a[j] * cr[j] + b[j] * ci[j]) * taper[j]; im[k] = (b[j] * cr[j] - a[j] * ci[j]) * taper[j]; });
+      fft(re, im, true);
+      for (let n = 0; n < N; n++) e[n] += re[n] * re[n] + im[n] * im[n];
+    }
+    return e;
+  };
+  const timing = e => {   // the latest stretch of CP + 1 samples with 99% of the most energy
+    const c = new Float64Array(2 * N + 1);
+    for (let n = 0; n < 2 * N; n++) c[n + 1] = c[n] + e[n % N];
+    const E = [];
+    for (let s = b0 - N / 4; s <= b0 + N / 4; s++) { const q = ((s % N) + N) % N; E.push(c[q + CP + 1] - c[q]); }
+    const mx = Math.max(...E);
+    let best = 0; E.forEach((v, i) => { if (v >= 0.99 * mx) best = i; });
+    return best - N / 4;
+  };
+  let r = read(0);
+  let tau = timing(response(r, [0], CP - b0));
+  // time scale, from the two reference symbols (windows in the middle of the guard: a drift of up to CP/2 fits)
+  const [a1, b1] = spec(r, ns + 1, CP / 2 + tau), [a0, b0_] = spec(r, 0, CP / 2 + tau);
+  const zr = Float64Array.from(a1, (v, j) => v * a0[j] + b1[j] * b0_[j]), zi = Float64Array.from(a1, (v, j) => b1[j] * a0[j] - v * b0_[j]);
+  const c2 = 2 * Math.PI * (ns + 1) * L / FS_TX * 1e-6, score = [];
+  for (let e = -OFDM_MAX_PPM; e <= OFDM_MAX_PPM; e++) {
+    let sr = 0, si = 0;
+    for (let j = 0; j < K; j++) { const p = c2 * e * (kk[j] * FS_TX / N), c = Math.cos(p), s = Math.sin(p); sr += zr[j] * c - zi[j] * s; si += zr[j] * s + zi[j] * c; }
+    score.push(Math.hypot(sr, si));
+  }
+  let i = 0; score.forEach((v, k) => { if (v > score[i]) i = k; });
+  let eps = i - OFDM_MAX_PPM;
+  if (i > 0 && i < score.length - 1) { const [s0, s1, s2] = [score[i - 1], score[i], score[i + 1]]; eps += 0.5 * (s0 - s2) / (s0 - 2 * s1 + s2 - 1e-30); }   // parabola through the peak
+  if (Math.abs(eps) > 0.05) r = read(eps);
+  tau = timing(response(r, [0, ns + 1], CP - b0));   // both references, now aligned
+  const w = CP + tau - OFDM_BACK;   // start of the FFT windows
+  // the response as these windows see it: what arrives within the guard (index 0 .. CP) only scales each subcarrier,
+  // the rest (echo after the guard, noise) spreads over all the indices
+  const h = response(r, [0, ns + 1], w);
+  let hin = 0, hall = 0; h.forEach((v, n) => { hall += v; if (n <= CP) hin += v; });
+  const Y = Array.from({ length: ns + 2 }, (_, i) => spec(r, i, w));   // the two references and the data
+  if (map !== 'dqpsk') return Object.assign(ofdmCoherent(Y, ns, nc, m, map), { eps, tau, inside: hin / Math.max(hall, 1e-30), K, h, N, CP, map });
+  const Zr = [], Zi = [];   // z = Y_i conj(Y_i-1), turned back by the delay change between the two symbols
+  for (let i = 1; i <= ns; i++) {
+    const [ar, ai] = Y[i], [br, bi] = Y[i - 1], xr = new Float64Array(K), xi = new Float64Array(K), wr = new Float64Array(K), wi = new Float64Array(K);
+    for (let j = 0; j < K; j++) {
+      xr[j] = ar[j] * br[j] + ai[j] * bi[j]; xi[j] = ai[j] * br[j] - ar[j] * bi[j];
+      const a2 = xr[j] * xr[j] - xi[j] * xi[j], b2 = 2 * xr[j] * xi[j], m2 = Math.max(xr[j] * xr[j] + xi[j] * xi[j], 1e-30);   // z^2
+      wr[j] = -(a2 * a2 - b2 * b2) / m2; wi[j] = -2 * a2 * b2 / m2;   // -z^4 / |z|^2: no data left
+    }
+    let best = -Infinity, dl = 0;
+    for (let s = 0; s <= 800; s++) {   // d from -4 to 4 samples: Re sum -z^4 exp(j 8 pi k d / N), the phase advanced subcarrier by subcarrier
+      const d = -4 + 0.01 * s, st = 8 * Math.PI * d / N, sr = Math.cos(st), si = Math.sin(st);
+      let cr = Math.cos(st * kk[0]), ci = Math.sin(st * kk[0]), v = 0;
+      for (let j = 0; j < K; j++) { v += wr[j] * cr - wi[j] * ci; const t = cr * sr - ci * si; ci = cr * si + ci * sr; cr = t; }
+      if (v > best) { best = v; dl = d; }
+    }
+    for (let j = 0; j < K; j++) { const ph = 2 * Math.PI * kk[j] * dl / N, c = Math.cos(ph), s = Math.sin(ph), t = xr[j] * c - xi[j] * s; xi[j] = xr[j] * s + xi[j] * c; xr[j] = t; }
+    Zr.push(xr); Zi.push(xi);
+  }
+  const llr = new Float64Array(nc), snr = [], pr = new Float32Array(ns * K), pi = new Float32Array(ns * K), Pj = new Float64Array(K);   // pr, pi: z / Pj, for the plot
+  for (let i = 1; i <= ns; i++) for (let j = 0; j < K; j++) Pj[j] += 0.5 * (Y[i][0][j] ** 2 + Y[i][1][j] ** 2 + Y[i - 1][0][j] ** 2 + Y[i - 1][1][j] ** 2) / ns;   // each subcarrier's power
+  for (let g = 0; g < K; g += OFDM_GROUP) {
+    const g1 = Math.min(K, g + OFDM_GROUP);
+    let q = 0, pw = 0;
+    for (let i = 1; i <= ns; i++) for (let j = g; j < g1; j++) {
+      const [ar, ai] = Y[i], [br, bi] = Y[i - 1], x = Zr[i - 1][j], v = Zi[i - 1][j];
+      const dr = Math.sign(x), di = Math.sign(v);   // decision (times sqrt 2); noise across it: Im(z conj(d)) / sqrt 2
+      q += ((v * dr - x * di) / Math.SQRT2) ** 2; pw += 0.5 * (ar[j] ** 2 + ai[j] ** 2 + br[j] ** 2 + bi[j] ** 2);
+    }
+    const n = ns * (g1 - g), P = Math.max(pw / n, 1e-30), N0 = Math.max(1e-30, (q / n) / P);
+    snr.push(10 * Math.log10(Math.max(1e-3, P / N0 - 1)));
+    for (let i = 1; i <= ns; i++) for (let j = g; j < g1; j++) {
+      const q0 = 2 * (K * (i - 1) + j);
+      if (q0 < nc) llr[q0] = -Math.SQRT2 * Zr[i - 1][j] / N0;
+      if (q0 + 1 < nc) llr[q0 + 1] = -Math.SQRT2 * Zi[i - 1][j] / N0;
+      pr[K * (i - 1) + j] = Zr[i - 1][j] / Math.max(Pj[j], 1e-30); pi[K * (i - 1) + j] = Zi[i - 1][j] / Math.max(Pj[j], 1e-30);
+    }
+  }
+  return { llr, eps, tau, inside: hin / Math.max(hall, 1e-30), snr, K, h, N, CP, map, zr: pr, zi: pi };
+}
+// 4'. Coherent detection (v4). Y: [re, im] of the reference, the ns data symbols and the reference. The channel of
+// symbol i is H(f) c_i exp(-j 2 pi f d_i / 48000): the room's response H times a gain and phase c_i and a delay change
+// d_i (a moving phone), fitted on the symbol's pilots (weighted least squares, d_i searched within +-8 samples). H is
+// the average of the two reference symbols and of all the pilots once their c_i and d_i are removed, smoothed across
+// the band (ofdmSmooth). Three rounds. N0 per group of 32 subcarriers from what the references and pilots leave
+// (x 1.25: the estimate absorbs some of the noise). LLR of each bit: ln sum over the points s with that bit 1 of
+// exp(-|Y - H_i s|^2 / N0), minus the same over the points with that bit 0.
+function ofdmCoherent(Y, ns, nc, m, map) {
+  const { N } = m, kk = ofdmCarriers(N), K = kk.length, th = ofdmReference(K), rr = th.map(Math.cos), ri = th.map(Math.sin);
+  const [pr, pim, lab] = ofdmPoints(map), nb = OFDM_BITS[map], M = pr.length, all = [...Array(K).keys()];
+  const pil = Array.from({ length: ns + 2 }, (_, i) => i === 0 || i === ns + 1 ? all : all.filter(j => ofdmPilot(j, i)));
+  const Cr = Array.from({ length: ns + 2 }, () => new Float64Array(K).fill(1)), Ci = Array.from({ length: ns + 2 }, () => new Float64Array(K));
+  let Hr = new Float64Array(K), Hi = new Float64Array(K);
+  const fit = i => {   // c_i exp(-j 2 pi f d_i / 48000) on the pilots of symbol i
+    const p = pil[i], [yr, yi] = Y[i], qr = [], qi = [];
+    let ee = 0;
+    for (const j of p) {   // q = Y conj(e), e = ref H: what the pilot became, against what it would be without the change
+      const er = rr[j] * Hr[j] - ri[j] * Hi[j], ei = rr[j] * Hi[j] + ri[j] * Hr[j];
+      qr.push(yr[j] * er + yi[j] * ei); qi.push(yi[j] * er - yr[j] * ei); ee += er * er + ei * ei;
+    }
+    let best = -1, dl = 0, sr = 0, si = 0;
+    for (let s = 0; s <= Math.round(2 * OFDM_DMAX / 0.02); s++) {
+      const d = -OFDM_DMAX + 0.02 * s;
+      let ar = 0, ai = 0;
+      p.forEach((j, t) => { const ph = 2 * Math.PI * kk[j] * d / N, c = Math.cos(ph), sn = Math.sin(ph); ar += qr[t] * c - qi[t] * sn; ai += qr[t] * sn + qi[t] * c; });
+      const v = ar * ar + ai * ai; if (v > best) { best = v; dl = d; sr = ar; si = ai; }
+    }
+    const cr = sr / Math.max(ee, 1e-30), ci = si / Math.max(ee, 1e-30);
+    for (let j = 0; j < K; j++) { const ph = -2 * Math.PI * kk[j] * dl / N, c = Math.cos(ph), s = Math.sin(ph); Cr[i][j] = cr * c - ci * s; Ci[i][j] = cr * s + ci * c; }
+  };
+  [Hr, Hi] = ofdmSmooth(m, Float64Array.from(all, j => Y[0][0][j] * rr[j] + Y[0][1][j] * ri[j]), Float64Array.from(all, j => Y[0][1][j] * rr[j] - Y[0][0][j] * ri[j]));   // the first reference alone
+  for (let it = 0; it < OFDM_ITERS; it++) {
+    for (let i = 1; i < ns + 2; i++) fit(i);
+    const ar = new Float64Array(K), ai = new Float64Array(K), cnt = new Float64Array(K);
+    for (let i = 0; i < ns + 2; i++) for (const j of pil[i]) {   // Y / (ref C)
+      const er = rr[j] * Cr[i][j] - ri[j] * Ci[i][j], ei = rr[j] * Ci[i][j] + ri[j] * Cr[i][j], e2 = er * er + ei * ei;
+      ar[j] += (Y[i][0][j] * er + Y[i][1][j] * ei) / e2; ai[j] += (Y[i][1][j] * er - Y[i][0][j] * ei) / e2; cnt[j]++;
+    }
+    [Hr, Hi] = ofdmSmooth(m, ar.map((v, j) => v / cnt[j]), ai.map((v, j) => v / cnt[j]));
+  }
+  const HC = (i, j) => [Hr[j] * Cr[i][j] - Hi[j] * Ci[i][j], Hr[j] * Ci[i][j] + Hi[j] * Cr[i][j]];
+  const num = new Float64Array(K), den = new Float64Array(K);
+  for (let i = 0; i < ns + 2; i++) for (const j of pil[i]) {
+    const [hr, hi] = HC(i, j), er = rr[j] * hr - ri[j] * hi, ei = rr[j] * hi + ri[j] * hr;
+    num[j] += (Y[i][0][j] - er) ** 2 + (Y[i][1][j] - ei) ** 2; den[j]++;
+  }
+  const N0 = new Float64Array(K), snr = [];
+  for (let g = 0; g < K; g += OFDM_GROUP) {
+    const g1 = Math.min(K, g + OFDM_GROUP);
+    let a = 0, b = 0, h2 = 0;
+    for (let j = g; j < g1; j++) { a += num[j]; b += den[j]; h2 += Hr[j] ** 2 + Hi[j] ** 2; }
+    const n0 = Math.max(1e-30, 1.25 * a / Math.max(b, 1));
+    N0.fill(n0, g, g1); snr.push(10 * Math.log10(Math.max(1e-3, h2 / (g1 - g) / n0)));
+  }
+  const one = Array.from({ length: nb }, (_, k) => lab.map(l => (l >> (nb - 1 - k)) & 1)), d2 = new Float64Array(M), lse = (k, bit) => {
+    let mx = -Infinity, s = 0;
+    for (let p = 0; p < M; p++) if (one[k][p] === bit && d2[p] > mx) mx = d2[p];
+    for (let p = 0; p < M; p++) if (one[k][p] === bit) s += Math.exp(d2[p] - mx);
+    return mx + Math.log(s);
+  };
+  const llr = new Float64Array(nc), zr = [], zi = [];
+  let q = 0;
+  for (let i = 1; i <= ns; i++) for (let j = 0; j < K; j++) {
+    if (ofdmPilot(j, i)) continue;
+    const [hr, hi] = HC(i, j), yr = Y[i][0][j], yi = Y[i][1][j], h2 = Math.max(hr * hr + hi * hi, 1e-30);
+    for (let p = 0; p < M; p++) { const er = yr - (hr * pr[p] - hi * pim[p]), ei = yi - (hr * pim[p] + hi * pr[p]); d2[p] = -(er * er + ei * ei) / N0[j]; }
+    for (let k = 0; k < nb; k++, q++) if (q < nc) llr[q] = lse(k, 1) - lse(k, 0);
+    zr.push((yr * hr + yi * hi) / h2); zi.push((yi * hr - yr * hi) / h2);   // Y / (H C): the point as received
+  }
+  return { llr, snr, zr: Float32Array.from(zr), zi: Float32Array.from(zi) };
+}
+const ofdmDesc = (m, map = 'dqpsk') => { const K = ofdmCarriers(m.N).length; return `OFDM: ${K} subcarriers from ${OFDM_F0 / 1000} to ${OFDM_F1 / 1000} kHz, ${(FS_TX / m.N).toFixed(1)} Hz apart, ${OFDM_NAMES[map]}${map === 'dqpsk' ? '' : ` with pilots (1 subcarrier in ${OFDM_PSTEP})`}; symbol ${(1000 * m.N / FS_TX).toFixed(1)} ms + guard ${(1000 * m.CP / FS_TX).toFixed(1)} ms`; };
+
+// Streaming receiver: needs no settings. push() Float32 chunks; callbacks: onState(s, info), onProgress(info), onDone(res)
+class Receiver {
+  constructor(fs, cfg = {}, cb = {}) {
+    this.fs = fs; this.cfg = cfg; this.cb = cb;
+    [this.F0, this.F1] = TONES[CTRL.tones];
+    this.Lr = fs / CTRL.rate; this.Lw = Math.round(this.Lr);
+    // one correlator per preamble length, each with the same false-alarm rate: the noise on the correlation falls as 1/sqrt(length)
+    this.dets = Object.entries(PILOTS).map(([n, P]) => ({ NP: +n, P, a: Float32Array.from(P, x => 2 * x - 1),
+      offs: Int32Array.from(P, (_, j) => Math.round(j * this.Lr)), thr: 0.3 * Math.sqrt(127 / n) }));
+    this.look = Math.max(...this.dets.map(t => t.offs[t.NP - 1]));
+    this.cap = Math.ceil(fs * 160);
+    this.y = new Float32Array(this.cap); this.z0 = new Float32Array(this.cap); this.z1 = new Float32Array(this.cap); this.d = new Float32Array(this.cap);
+    this.base = 0; this.n = 0; this.nz = 0;
+    this.C = new Float64Array(4); this.H = new Float64Array(4 * this.Lw);
+    this.w0 = 2 * Math.PI * this.F0 / fs; this.w1 = 2 * Math.PI * this.F1 / fs; this.ph0 = 0; this.ph1 = 0;
+    this.thr = 0.3; this.state = 'search'; this.sp = 0; this.cand = -1;   // thr: detection line of the plot (scores are scaled to it)
+    this.cstep = Math.max(2, Math.floor(this.Lw / 12));   // step of the coarse search: the correlation peak is about 2 Lw wide
+    this.corrHist = new Float32Array(500); this.corrPos = 0; this.blk = 0; this.blkMax = 0; this.blkLen = Math.round(fs / 100);
+    // tone hopping: sliding energies of the 2H control tones; the contrast of each pair goes into a ring buffer of
+    // 2^18 windows, and the same three correlators run on the contrast of whichever pair each preamble bit uses
+    const hs = this.hs = hopSet(CTRL.rate), T2 = 2 * hs.H;
+    Object.assign(this, { RB: 18, hmask: (1 << 18) - 1, hd: new Float32Array(hs.H << 18), T2, hC: new Float64Array(2 * T2), hH: new Float64Array(2 * T2 * this.Lw),
+      hE: new Float64Array(T2), hc: new Float64Array(T2), hs_: new Float64Array(T2), hw: Float64Array.from({ length: T2 }, (_, i) => 2 * Math.PI * (HOP_F0 + i * CTRL.rate) / fs) });
+    this.hrc = this.hw.map(Math.cos); this.hrs = this.hw.map(Math.sin);
+    this.hdets = this.dets.map(t => ({ ...t, hop: true, pair: Int32Array.from(t.P, (_, j) => hs.pair(j)) }));
+  }
+  push(chunk) {
+    const { C, H, Lw } = this;
+    for (let t = 0; t < chunk.length; t++) {
+      if (this.n - this.base >= this.cap) { this.compact(true); }
+      const v = chunk[t], n = this.n, i = n - this.base;
+      this.y[i] = v;
+      this.ph0 += this.w0; if (this.ph0 > 6.283185307179586) this.ph0 -= 6.283185307179586;
+      this.ph1 += this.w1; if (this.ph1 > 6.283185307179586) this.ph1 -= 6.283185307179586;
+      C[0] += v * Math.cos(this.ph0); C[1] += v * Math.sin(this.ph0); C[2] += v * Math.cos(this.ph1); C[3] += v * Math.sin(this.ph1);
+      const h = 4 * (n % Lw);
+      const r0 = C[0] - H[h], i0 = C[1] - H[h + 1], r1 = C[2] - H[h + 2], i1 = C[3] - H[h + 3];
+      H[h] = C[0]; H[h + 1] = C[1]; H[h + 2] = C[2]; H[h + 3] = C[3];
+      if (n >= Lw - 1) {
+        const m = n - Lw + 1 - this.base;   // window [m, m+Lw-1]
+        if (m >= 0) {
+          const e0 = Math.hypot(r0, i0), e1 = Math.hypot(r1, i1);
+          this.z0[m] = e0; this.z1[m] = e1; this.d[m] = (e1 - e0) / (e1 + e0 + 1e-12);
+        }
+        this.nz = n - Lw + 2;
+      }
+      const T2 = this.T2, hC = this.hC, hH = this.hH, hE = this.hE, hc = this.hc, hsn = this.hs_, ho = 2 * T2 * (n % Lw);
+      if ((n & 1023) === 0) for (let k = 0; k < T2; k++) { const ph = (this.hw[k] * n) % 6.283185307179586; hc[k] = Math.cos(ph); hsn[k] = Math.sin(ph); }
+      for (let k = 0; k < T2; k++) {
+        const c = hc[k], s = hsn[k], re = (hC[2 * k] += v * c), im = (hC[2 * k + 1] += v * s), q = ho + 2 * k;
+        const dr = re - hH[q], di = im - hH[q + 1]; hH[q] = re; hH[q + 1] = im;
+        hE[k] = Math.sqrt(dr * dr + di * di);
+        hc[k] = c * this.hrc[k] - s * this.hrs[k]; hsn[k] = c * this.hrs[k] + s * this.hrc[k];
+      }
+      if (n >= Lw - 1) { const m = (n - Lw + 1) & this.hmask, RB = this.RB; for (let p = 0; 2 * p < T2; p++) { const a = hE[2 * p], b = hE[2 * p + 1]; this.hd[(p << RB) | m] = (b - a) / (b + a + 1e-12); } }
+      this.n++;
+    }
+    this.process();
+  }
+  corrAt(t, m) { let s = 0; const d = this.d, o = t.offs, a = t.a, b = m - this.base; for (let j = 0; j < t.NP; j++) s += a[j] * d[b + o[j]]; return s / t.NP; }
+  corrAtHop(t, m) { let s = 0; const d = this.hd, o = t.offs, a = t.a, p = t.pair, RB = this.RB, mk = this.hmask; for (let j = 0; j < t.NP; j++) s += a[j] * d[(p[j] << RB) | ((m + o[j]) & mk)]; return s / t.NP; }
+  hopTabs(hs, k, Lw) { return hs.tones(hs.pair(k)).map(f => toneTab(f, this.fs, Lw)); }
+  hopCorr(m, hs, k0, S, Ld, Lw) {   // correlation of a hopping preamble or postamble (symbols S) whose first symbol is symbol k0, computed from the signal
+    let s = 0;
+    for (let j = 0; j < S.length; j++) {
+      const i = Math.round(m + j * Ld) - this.base;
+      s += knownContrast(this.hopTabs(hs, k0 + j, Lw).map(t => energyAt(this.y, i, t)), S[j]);
+    }
+    return s / S.length;
+  }
+  logCorr(c, step) {
+    if (c > this.blkMax) this.blkMax = c;
+    if ((this.blk += step) >= this.blkLen) { this.corrHist[this.corrPos++ % this.corrHist.length] = this.blkMax; this.blk = 0; this.blkMax = -1; }
+  }
+  compact(force) {
+    // keep only what the search still needs, plus 1.2 s of noise before a frame (room sounding measures the SNR on it)
+    const keepFrom = Math.max(this.base, this.sp - 2 * this.Lw - Math.round(1.2 * this.fs));
+    const shift = keepFrom - this.base;
+    if (shift <= 0) { if (force) this.reset(); return; }
+    for (const arr of [this.y, this.z0, this.z1, this.d]) arr.copyWithin(0, shift, this.n - this.base);
+    this.base = keepFrom;
+  }
+  reset() { this.base = this.n; this.sp = this.n; this.nz = this.n; this.state = 'search'; this.cand = -1; this.dt = null; }
+  process() {
+    if (this.state === 'search') {
+      const last = this.nz - 1 - this.look;
+      while (this.sp <= last) {
+        if (this.sp < this.base) { this.sp = this.base; continue; }
+        let s = 0, det = null;   // best score relative to its threshold, over the three preamble lengths
+        for (const t of this.dets) { const v = this.corrAt(t, this.sp) / t.thr; if (v > s) { s = v; det = t; } }
+        if (this.sp >= this.nz - (1 << this.RB)) for (const t of this.hdets) { const v = this.corrAtHop(t, this.sp) / t.thr; if (v > s) { s = v; det = t; } }
+        const step = this.cand >= 0 ? 1 : this.cstep;   // coarse search, then sample by sample from just before a candidate
+        this.logCorr(this.thr * s, step);
+        if (this.cand < 0 && s > 0.85) { this.cand = this.sp; this.cbest = 0; this.sp = Math.max(this.base, this.sp - this.cstep + 1); continue; }
+        if (this.cand >= 0) {
+          if (s > this.cbest) { this.cbest = s; this.pbest = this.sp; this.dbest = det; }
+          if (this.sp > this.cand + 2 * this.Lw) {
+            if (this.cbest > 1) { this.startFrame(this.pbest, this.dbest); break; }
+            this.cand = -1;   // the peak stayed below the line
+          }
+        }
+        this.sp += step;
+      }
+      if (this.state === 'search' && this.n - this.base > this.fs * 20) this.compact(false);
+    }
+    if (this.state === 'frame') this.track();
+    if (this.state === 'final') this.finalize();
+    if (this.state === 'sound') this.finishSounding();
+    if (this.state === 'ofdm') this.finishOFDM();
+  }
+  startFrame(p1, det) {
+    const NP = det.NP, HR = HREPS[NP], NH = HR * NHC;
+    Object.assign(this, { state: 'frame', p1, det, NP, HR, NH, cmax: det.hop ? this.corrAtHop(det, p1) : this.corrAt(det, p1), pos: p1, k: 0, hdrLLR: [], hdr: null, dt: null,
+                          E: null, cand: -1, hop: !!det.hop, ce0: [], ce1: [], mhs: null });
+    this.cb.onState && this.cb.onState('detected', { t: p1 / this.fs, cmax: this.cmax, pre: NP, hop: this.hop });
+  }
+  readHeader() {   // add up the copies, then the Viterbi decoder and the CRC
+    const L = new Float64Array(NHC);
+    if (this.hop) {   // tone hopping: each tone's level normalized over the preamble and header, then ln(E1/E0)
+      const [e0, e1] = hopNormalize(this.hs, [this.ce0, this.ce1]).E;
+      for (let k = this.NP; k < e0.length; k++) L[(k - this.NP) % NHC] += Math.log((e1[k] + 1e-9) / (e0[k] + 1e-9));
+    } else this.hdrLLR.forEach((r, i) => { L[i % NHC] += r; });
+    const hb = Array.from(decodeFEC('conv', HBITS, Array.from(L)).bits), hdr = parseHeader(hb);
+    const fail = why => { this.cb.onState && this.cb.onState('lost', { reason: why }); this.state = 'search'; this.sp = this.p1 + this.Lw; };
+    if (!hdr) return fail('unreadable header');
+    if (hdr.type === 'sound') {   // room sounding: no tones to track, wait for the MLS and the postamble
+      Object.assign(this, { hdr, state: 'sound', chip0: this.pos + this.Lr, frac: 0 });
+      this.cb.onState && this.cb.onState('header', hdr);
+      return;
+    }
+    if (hdr.ofdm) {   // OFDM: the first reference symbol follows the control part; decoded once the whole part is in
+      const m = ofdmMode(hdr.ofdm), t0 = this.p1 + (this.NP + this.NH) * this.Lr, Ls = (m.N + m.CP) * this.fs / FS_TX, end = t0 + (hdr.ns + 2) * Ls * (1 + 1e-3);
+      if (Math.ceil(end) - this.base >= this.cap) return fail('message too long');
+      Object.assign(this, { hdr, state: 'ofdm', om: m, t0o: t0, Lso: Ls, endo: end, key: prbs(hdr.nc), frac: 0 });
+      this.cb.onState && this.cb.onState('header', hdr);
+      return;
+    }
+    const Ld = this.fs / hdr.baud, Lwd = Math.round(Ld), start = this.pos + this.Lr;   // first message symbol
+    const NPs = Math.ceil(this.NP / Math.log2(hdr.M)), PS = hdr.M === 2 ? this.det.P : toSymbols(this.det.P, hdr.M);   // the postamble's symbols
+    const span = (hdr.ns + NPs) * Ld, tol = Math.round(0.005 * (span + this.NH * this.Lr)) + Lwd;
+    const m0 = Math.max(this.base, Math.round(start) - 2 * Lwd - tol), len = Math.ceil(1.01 * span) + 2 * tol + 6 * Lwd;
+    if (m0 + len + Lwd - this.base >= this.cap) return fail('message too long');
+    Object.assign(this, { hdr, Ld, Lwd, NPs, PS, key: prbs(hdr.nc), bits: new Uint8Array(hdr.n0), E: Array.from({ length: hdr.M }, () => []) });
+    if (hdr.tones === 'hop') this.mhs = hopSet(hdr.rate, hdr.M);   // energies computed symbol by symbol from the signal
+    else this.dt = new ToneEnergies(this.fs, toneSet(hdr.tones, hdr.M), Lwd, m0, len);
+    this.cb.onState && this.cb.onState('header', hdr);
+  }
+  track() {
+    const mu = 0.05, eps = 1e-9;
+    while (this.state === 'frame') {
+      const ctl = this.k < this.NP + this.NH, k = this.k;
+      if (this.hdr && k >= this.NP + this.NH + this.hdr.ns) { this.state = 'final'; return; }
+      // control part on the receiver's own energies, message part on energies at the announced tones and rate;
+      // with tone hopping, the energies of the symbol's pair, computed from the stored signal
+      const hop = ctl ? this.hop : this.hdr.tones === 'hop', L = ctl ? this.Lr : this.Ld, Lw = ctl ? this.Lw : this.Lwd;
+      const delta = Math.max(1, Math.round(Lw / 4)), m = Math.round(this.pos), gate = k !== 0 && k !== this.NP + this.NH;
+      let E, dl = 0, dr = 0;   // E: energies of the symbol's tones
+      if (hop) {
+        if (m + delta + Lw > this.n) return;
+        const tabs = this.hopTabs(ctl ? this.hs : this.mhs, ctl ? k : k - this.NP - this.NH, Lw), b = m - this.base, at = i => tabs.map(t => energyAt(this.y, i, t));
+        E = at(b);
+        if (gate) { dl = contrast(at(b - delta)); dr = contrast(at(b + delta)); }
+      } else {
+        const src = ctl ? this : this.dt, off = ctl ? this.base : this.dt.m0;
+        if (!ctl) this.dt.feed(this.y, this.base, this.n);
+        if (m + delta >= src.nz) return;
+        const b = m - off; E = ctl ? [src.z0[b], src.z1[b]] : src.z.map(z => z[b]);
+        if (gate) { dl = src.d[b - delta]; dr = src.d[b + delta]; }
+      }
+      if (gate) this.pos += mu * (Math.abs(dr) - Math.abs(dl)) * delta;
+      if (ctl) {
+        if (this.hop) { this.ce0.push(E[0]); this.ce1.push(E[1]); }
+        if (k >= this.NP) { this.hdrLLR.push(Math.log((E[1] + eps) / (E[0] + eps))); if (k === this.NP + this.NH - 1) { this.readHeader(); if (!this.hdr) return; } }
+      } else {
+        const j = k - this.NP - this.NH, h = this.hdr, K = Math.log2(h.M), plain = h.code === 'none';
+        E.forEach((v, m) => this.E[m].push(v));
+        if (plain) {   // the strongest tone; coded frames are decoded at the end
+          let s = 0; for (let m = 1; m < E.length; m++) if (E[m] > E[s]) s = m;
+          symbolBits(s, K).forEach((b, i) => { const q = K * j + i; if (q < h.nc) this.bits[q] = b ^ this.key[q]; });
+        }
+        if (j % 32 === 31 || j === h.ns - 1) this.cb.onProgress && this.cb.onProgress({ hdr: h, bits: plain ? this.bits : null, done: Math.min(h.nc, K * (j + 1)) });
+      }
+      this.pos += L; this.k++;
+    }
+  }
+  finalize() {
+    if (this.mhs) return this.finalizeHop();
+    const { hdr, Lr, Ld, p1, NP, NH, NPs, PS, dt } = this, ns = hdr.ns;
+    dt.feed(this.y, this.base, this.n);
+    const Delta = (NP + NH) * Lr + ns * Ld, tol = Math.round(MAX_PPM * 1e-6 * Delta + Ld / 4);   // nominal p1 -> postamble
+    const offs = Int32Array.from({ length: NPs }, (_, j) => Math.round(j * Ld)), hi = Math.round(p1 + Delta) + tol;
+    if (hi + offs[NPs - 1] >= Math.min(dt.nz, dt.m0 + dt.len)) {   // wait for more samples, unless the buffer is full
+      if (dt.nz < dt.m0 + dt.len) return;
+    }
+    const corr = m => { let s = 0; for (let j = 0; j < NPs; j++) s += dt.known(m + offs[j] - dt.m0, PS[j]); return s / NPs; };
+    let best = -2, p2 = 0;
+    for (let m = Math.round(p1 + Delta) - tol; m <= hi; m++) { const c = corr(m); if (c > best) { best = c; p2 = m; } }
+    const found = best >= 0.5 * this.cmax, rho = found ? (p2 - p1) / Delta : 1;
+    let E = this.E, pilotErr = null;
+    const at = x => Math.round(x) - dt.m0, q2 = found ? p2 : p1 + Delta;
+    if (found) {   // re-read the tone energies at the instants corrected for the clock offset
+      E = dt.z.map(() => []);
+      for (let j = 0; j < ns; j++) { const b = at(p1 + ((NP + NH) * Lr + j * Ld) * rho); dt.z.forEach((z, m) => E[m].push(z[b])); }
+    }
+    // the postamble is sent at the message's tones and rate: it calibrates the soft output
+    const pE = dt.z.map(() => []);
+    for (let j = 0; j < NPs; j++) { const b = at(q2 + j * Ld * rho); dt.z.forEach((z, m) => pE[m].push(z[b] || 0)); }
+    if (found) pilotErr = postErrors(pE, PS);
+    const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(p1 + Delta + NPs * Ld + 0.3 * this.fs));
+    const res = { hdr, NP, E, pE, PS, cal: found ? calibrate(pE, PS) : calibrateBlind(E), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, pilotErr,
+                  t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
+    Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
+    this.state = 'search'; this.sp = Math.round(p1 + Delta + NPs * Ld); this.dt = null;
+    this.cb.onDone && this.cb.onDone(res);
+  }
+  finalizeHop() {   // tone hopping: postamble searched near where the tracking expects it, then everywhere within MAX_PPM
+    const { hdr, Lr, Ld, Lwd, p1, NP, NH, NPs, PS, mhs } = this, ns = hdr.ns;
+    const Delta = (NP + NH) * Lr + ns * Ld, tol = Math.round(MAX_PPM * 1e-6 * Delta + Ld / 4), mid = Math.round(p1 + Delta), here = Math.round(this.pos);
+    if (Math.max(mid + tol, here + 2 * Lwd) + Math.round((NPs - 1) * Ld) + Lwd > this.n) return;   // wait for the postamble
+    const corr = m => this.hopCorr(m, mhs, ns, PS, Ld, Lwd);
+    // At 6400 bit/s every symbol uses the same 4 tones, so the early echoes (a few ms, many symbols) cap the
+    // postamble's contrast near 0.4 even in a quiet room: a fifth of the preamble's score is enough there (its side
+    // lobes, a symbol or more away, stay near 0.02).
+    const thr = (hdr.rate === RATE_WIDE ? 0.2 : 0.5) * this.cmax;
+    let best = searchMax(corr, Math.max(mid - tol, here - 2 * Lwd), Math.min(mid + tol, here + 2 * Lwd), Lwd);
+    if (best.v < thr) { const b = searchMax(corr, mid - tol, mid + tol, Lwd); if (b.v > best.v) best = b; }
+    const found = best.v >= thr, rho = found ? (best.m - p1) / Delta : 1, q2 = found ? best.m : here;
+    const at = (x, k) => { const i = Math.round(x) - this.base; return this.hopTabs(mhs, k, Lwd).map(t => energyAt(this.y, i, t)); };
+    let E = this.E;
+    if (found) {   // re-read the tone energies at the instants corrected for the clock offset
+      E = E.map(() => []);
+      for (let j = 0; j < ns; j++) at(p1 + ((NP + NH) * Lr + j * Ld) * rho, j).forEach((v, m) => E[m].push(v));
+    }
+    // fine timing on the message, kept if it makes the tones clearly more distinct than the energies read so far
+    // (re-read above, or tracked during the frame when the postamble is missing)
+    const ft = fineTiming((j, s) => at(p1 + ((NP + NH) * Lr + j * Ld) * rho + s, j), ns, Math.min(Math.floor(Ld / 2), Math.round(5e-4 * this.fs)));
+    const timing = sharper(ft.E, E) ? [ft.from, ft.to] : null;
+    if (timing) E = ft.E;
+    const R = E.map(() => []);
+    for (let j = 0; j < NPs; j++) at(q2 + j * Ld * rho, ns + j).forEach((v, m) => R[m].push(v));
+    const nm = hopNormalize(mhs, E.map((e, m) => [...e, ...R[m]])), mE = nm.E.map(e => e.slice(0, ns)), pE = nm.E.map(e => e.slice(ns));
+    const pilotErr = found ? postErrors(pE, PS) : null;
+    const s0 = Math.max(this.base, Math.round(p1 - 0.3 * this.fs)), s1 = Math.min(this.n, Math.round(q2 + NPs * Ld * rho + 0.3 * this.fs));
+    const res = { hdr, NP, E: mE, pE, PS, cal: found ? calibrate(pE, PS) : calibrateBlind(mE), key: this.key, found, ppm: found ? (rho - 1) * 1e6 : null,
+                  cmax: this.cmax, cmax2: best.v, pilotErr, timing, hopCtl: this.hop, spread: nm.spread, t: p1 / this.fs, recording: this.y.slice(s0 - this.base, s1 - this.base), fs: this.fs };
+    Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
+    this.state = 'search'; this.sp = Math.round(q2 + NPs * Ld * rho); this.mhs = null;
+    this.cb.onDone && this.cb.onDone(res);
+  }
+  finishOFDM() {   // once the whole OFDM part is in: timing, time scale, differential detection, then the decoder
+    const { hdr, om, t0o, Lso, endo, fs } = this;
+    if (this.n < endo) {
+      const frac = Math.max(0, Math.min(1, (this.n - t0o) / (endo - t0o)));
+      if (frac - this.frac > 0.02) { this.frac = frac; this.cb.onProgress && this.cb.onProgress({ hdr, ofdm: true, frac }); }
+      return;
+    }
+    const o = ofdmReceive(this.y, this.base, this.n - this.base, fs, t0o, om, hdr.ns, hdr.nc, hdr.map);
+    const s0 = Math.max(this.base, Math.round(this.p1 - 0.3 * fs)), s1 = Math.min(this.n, Math.round(endo + 0.3 * fs));
+    const res = { hdr, NP: this.NP, ofdm: o, key: this.key, found: true, ppm: o.eps, cmax: this.cmax, hopCtl: this.hop, t: this.p1 / fs,
+                  recording: this.y.slice(s0 - this.base, s1 - this.base), fs };
+    Object.assign(res, decodeFrame(res, this.cfg.soft || 'cal'));
+    this.state = 'search'; this.sp = Math.round(t0o + (hdr.ns + 2) * Lso);
+    this.cb.onDone && this.cb.onDone(res);
+  }
+  finishSounding() {   // once the postamble is in: clock offset, then the room's impulse response
+    const { hdr, p1, NP, NH, Lr, det, fs } = this, N = (1 << hdr.order) - 1, sc = fs / FS_TX;
+    const Delta = (NP + NH) * Lr + (hdr.periods + 1) * N * sc, tol = Math.round(0.005 * Delta) + this.Lw, hi = Math.round(p1 + Delta) + tol;
+    if (hi + det.offs[NP - 1] >= this.nz) {
+      const frac = Math.max(0, Math.min(1, (this.nz - this.chip0) / (p1 + Delta + NP * Lr - this.chip0)));
+      if (frac - this.frac > 0.02) { this.frac = frac; this.cb.onProgress && this.cb.onProgress({ hdr, sound: true, frac }); }
+      return;
+    }
+    let best = -2, p2 = 0;   // the postamble is sent in the control mode (hopping from its first bit, or 4 / 8 kHz)
+    if (hdr.tones === 'hop') ({ v: best, m: p2 } = searchMax(m => this.hopCorr(m, this.hs, 0, det.P, Lr, this.Lw), Math.max(this.base, Math.round(p1 + Delta) - tol), hi, this.Lw));
+    else for (let m = Math.max(this.base, Math.round(p1 + Delta) - tol); m <= hi; m++) { const c = this.corrAt(det, m); if (c > best) { best = c; p2 = m; } }
+    const found = best >= 0.5 * this.cmax && Math.abs((p2 - p1) / Delta - 1) < 1e-3, rho = found ? (p2 - p1) / Delta : 1;   // clocks are within 1000 ppm
+    const first = found ? p1 + (NP + NH) * Lr * rho : this.chip0;
+    const n0 = Math.max(this.base, Math.round(p1 - 1.1 * fs)), n1 = Math.round(p1 - 0.15 * fs);   // noise: before the warm-up
+    const noise = n1 - n0 >= 4096 ? this.y.subarray(n0 - this.base, n1 - this.base) : null;
+    const sound = analyseSounding(this.y, this.base, fs, first, sc * rho, hdr.order, hdr.periods, noise);
+    const s0 = Math.max(this.base, Math.round(p1 - 0.3 * fs)), s1 = Math.min(this.n, Math.round(p1 + Delta * rho + NP * Lr + 0.3 * fs));
+    const res = { hdr, NP, found, ppm: found || hdr.periods >= 2 ? (rho * (1 + sound.drift / N) - 1) * 1e6 : null, cmax: this.cmax, cmax2: best, t: p1 / fs, sound,
+                  recording: this.y.slice(s0 - this.base, s1 - this.base), fs };
+    this.state = 'search'; this.sp = Math.round(p1 + Delta * rho + NP * Lr);
+    this.cb.onDone && this.cb.onDone(res);
+  }
+}
+
+function decodeText(bits) { let s = ''; for (let i = 0; i + 8 <= bits.length; i += 8) { let v = 0; for (let j = 0; j < 8; j++) v = 2 * v + bits[i + j]; s += String.fromCharCode(v); } return s; }
+function wavBlob(x, fs) {
+  const buf = new ArrayBuffer(44 + 2 * x.length), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + 2 * x.length, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, fs, true); v.setUint32(28, 2 * fs, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, 2 * x.length, true);
+  for (let i = 0; i < x.length; i++) v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, x[i])) * 32767, true);
+  return new Blob([buf], { type: 'audio/wav' });
+}
+const DEMO = { h: 74, w: 57, b64: "//////////////////////////////////////////wB//////////4AH+H///////8AA8A///////gH8AAH//////gD/gAQ/////4AB/8B+H///8AAA//h/h///AAAGP/4f8f//gAD/j/8H/D//4A//w/GA/4//+D//8PxgP+P//wf//j8Yh/h//4H//4/+If8f/8D//+H/iH/H/+D///x/4z/wP/gf//8OOP/8B/+D///gAD//AP/g///8AA//xD/wf//+AAP/8Y/4P///h/B//GAeD///w/8P/xwHwP//4f/D/8eD+D//+P/4f/H//g///j//H/x//wf//w//x/8f/4P//8P88f/H/+B///D/HH/h//wP//4/zx/g///D//+P/4f4P8/h///h/+P/D/Hwf//8f/D/4fx8B///B/h//H8fAP//4Pg//5/H+D///AAf///h/h///4AP///4fw////gP///+P4B///////PwD/Af//////gAA/4H/////48AAf/j/////+PAH//w/////wDw///8B///+AAcf///AP//4AAAH///+H//gAHwB////h//AA/+A////wH8AD//5////8B4AP////////4QAf////////+AB//////////gD//////////4H//////////+P//////////////////////////////////A" };
+const DEMO2 = { h: 148, w: 114, b64: "//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4AH/////////////////////8AAD/////////////////////AAAH////////////////////4AAAH//wH////////////////AAAAP/4AH///////////////4AAAAf8AAP//////////////AAB/gA+AAAf/////////////wAA//gAAAAA/////////////+AAH//gAAAAB/////////////AAB///AAABgH///////////8AAAP//+AAB/AP//////////gAAAA///8AA/+Af////////+AAAAAH///4Af/8B////////wAAAAAA////wH//wH///////AAAAAAYD////Af//gP/////4AAAAAAHgf///8B//+A//////AAAAAAf+B////gH//8B/////4AAAAD//4H///8Af//wH/////gAAAf///Af///gA///gf////+AAB////8B//B8AB//+A/////4AH/////wH/8HgAD//4D/////wB//////Af/gOAAP//wP/////gD/////8B/+A4DAf//Af/////AH/////4H/8HgcB//8B/////8Af/////gf/4+BwH//wH/////AB/////+A///4HAf//gf////wAH/////4D///gcB//+B////+AA//////wH//+BwH//4D////wAP//////Af//4HAf//gD////AD//////+A///geD//+AB///8AP//////4B//+B4P//8AD///wAP//////wD8D4H////wAH///gAf//////AAAAgf////AAP///gA//////+AAAAB////8AAf///gD//////8AAAAH////wAB///8AP//////4AAAAf////AwH///gB///////gAAAB////8DgP//8AP//////8AAAAD////wOA///gB///////gA/8AH////A4AA/8Af//////+AP/8Af///8DwAB/wB///////wD//8A////wPAAH/AD//////+Af//4B////A+AAf8AD//////4D///wH///8D8AB/4AH//////Af///AP///wP4AP/4AP/////8B///+A///+A/////wA//////gP///8B///4D/////AD/////+A////wH///gP////4Af/////4H////gf//+A/////AD//////gf///+B///4D////4Af/////8B////4H///gf////AD//////wH//5/gP//+B////8Af//////Af/+D+A///4H////wA//////8B//4H4D///gf////AB//////wH//gfgP//8B////+AB//////Af/+B+B//8AH////8AD/////+B//4P4H//wA/////8AP/////4H//5/gf/+AD/////4A//////gP///8B//8AP//D//AH/////+A////wH//wA//4H/4A//////8B///+A///gD//gf/AH//////wH///wD///AH/+B/8Af//////gP///Af//+AP/4H/gAf/////+Af//4B///8A//gf+AAf/////8Af/+AP///4D/+B/4AA//////4A//wB////wP/4H/wAB//////gA/8AP////h//gf/4AH//////AAAAA///////+B//8Af/////+AAAAP///////wH//wD//////+AAAB////////Af/+Af//////8AAAP///////8B//wD///////8AAD////////wP//AP///////8AA/////////A//4AH////////h/////////4D//AAH/////////////+D/4AAP/8AAP/////////////wPgAAB//4AA//////////////AAAAAH//gAD///////////+H8AAAAA///wAP///////////wP4AAAAD///8B////////////A/gAAAA////gP///////////4D/AAB/////8A///////////wAP8AH//////wD//////////gAA/wH//////+AAf////////AAAD/A///////4AA////////AAAAH4D///////gAB///////AAAAAfgP///////AAH//////AAAAAAAA///////+AAf/////AAAAD4AAH////////gD/////AAAAH/wAAf///////+Af////gAAAP//AAD////////4B////gAAAP//+AAf////////AA///wAAAf///+AH////////8AA//wAAAf////+H/////////wAD/4AAAP////////////////AAP8AAAP/////////////////AA+AAAP//////////////////wGAAAH///////////////////AAAAH///////////////////8AAAD////////////////////gAAB////////////////////+AAB/////////////////////4AA//////////////////////gAf/////////////////////+AP//////////////////////8H///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////" };   // the same picture at full size (bartS.png); DEMO takes every other pixel of it
+function demoPixels(s = 1) {   // s = 2: the large demo image
+  const D = s === 2 ? DEMO2 : DEMO, raw = atob(D.b64), n = D.h * D.w, p = new Uint8Array(n);
+  for (let i = 0; i < n; i++) p[i] = (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
+  return { type: 'image', h: D.h, w: D.w, pixels: p };
+}
+if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, RATES4, RATE_WIDE, TONES4, toneSet, symbolBits, toSymbols, bitSets, symbolMetrics, postErrors, contrast, knownContrast, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
+  SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
+  turboPerm, turboEncode, turboDecode, bcjr, TURBO_R,
+  OFDM_MODES, OFDM_F0, OFDM_F1, ofdmMode, ofdmCarriers, ofdmRate, ofdmReference, ofdmSymbols, fracRead, ofdmReceive, ofdmDesc,
+  OFDM_MAPS, OFDM_MASKS, OFDM_BITS, OFDM_NAMES, OFDM_PSTEP, ofdmPoints, ofdmPilot, ofdmLayout, ofdmSmooth, levinson, ofdmCoherent };
+</script>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const params = new URLSearchParams(location.search);
+const MOD0 = params.get('mod') === '4' ? 4 : params.get('mod') === 'ofdm' ? 'ofdm' : 2, rateList = M => M === 4 ? [...RATES4, RATE_WIDE] : RATES;   // tones per symbol: 2 (binary) or 4, or OFDM
+const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: rateList(MOD0).includes(+params.get('rate')) ? +params.get('rate') : 400,
+              code: CODES.includes(params.get('code')) && params.get('code') !== 'rs' ? params.get('code') : 'none', soft: params.get('soft') === 'ratio' ? 'ratio' : 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127,
+              guard: params.get('guard') === 'short' ? 'short' : 'long',   // OFDM: the long (21 ms) or the short (5 ms) guard interval
+              map: OFDM_MAPS.includes(params.get('map')) ? params.get('map') : 'dqpsk' };   // OFDM (v4): DQPSK, or QPSK, 8PSK, 16QAM with pilots
+if (cfg.rate === RATE_WIDE) cfg.tones = 'hop';   // 6400 bit/s: one group of 4 tones over the whole band
+const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
+let msgMode = 'text', pen = 0, actx = null, imgScale = params.get('img') === 'large' ? 2 : 1;   // image size: 1 normal, 2 large (twice the width and height)
+
+function seg(el, value, onPick) {
+  const set = v => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v))));
+  set(value);
+  el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); onPick(b.dataset.v); });
+}
+function ctx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }
+function syncUrl() { const u = new URL(location.href); u.searchParams.set('mod', cfg.mod); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); if (cfg.mod === 'ofdm') { u.searchParams.set('guard', cfg.guard); u.searchParams.set('map', cfg.map); } else { u.searchParams.delete('guard'); u.searchParams.delete('map'); } if (imgScale === 2) u.searchParams.set('img', 'large'); else u.searchParams.delete('img'); history.replaceState(null, '', u); }
+// QR code: the online copy of this page (also when the laptop runs it from a local file); receivers need no settings
+function phoneUrl() {   // from a local file: the online copy of the same file (the latest version if the name is not one of ours)
+  if (location.protocol === 'https:') return location.origin + location.pathname;
+  const name = location.pathname.split('/').pop();
+  return PAGE_SITE + (/^acoustic_modem(_v\d+)?\.html$/.test(name) ? name : 'acoustic_modem.html');
+}
+$('qrBtn').onclick = () => { const u = phoneUrl(); drawQR($('qrCanvas'), u); $('qrUrl').textContent = u; $('qrOverlay').classList.remove('hidden'); };
+$('qrOverlay').onclick = () => $('qrOverlay').classList.add('hidden');
+addEventListener('keydown', e => { if (e.key === 'Escape') $('qrOverlay').classList.add('hidden'); });
+
+// 6400 bit/s takes the whole band, as one hopping group: choosing it selects Hopping, and fixed tones bring it back to 3200
+seg($('tonesSeg'), cfg.tones, v => { cfg.tones = v; if (v !== 'hop' && cfg.rate === RATE_WIDE) $('rateSeg').querySelector('[data-v="3200"]').click(); syncUrl(); txInfo(); });
+seg($('rateSeg'), cfg.rate, v => { cfg.rate = +v; if (cfg.rate === RATE_WIDE && cfg.tones !== 'hop') $('tonesSeg').querySelector('[data-v="hop"]').click(); syncUrl(); txInfo(); });
+function showMod() {   // the rates and tone labels of binary or 4-tone FSK; OFDM has a guard interval instead of tones and a rate
+  $('txOpts').classList.toggle('ofdm', cfg.mod === 'ofdm');
+  $('rateSeg').querySelectorAll('button').forEach(b => b.classList.toggle('hidden', !rateList(cfg.mod).includes(+b.dataset.v)));
+  $('tonesSeg').querySelectorAll('button').forEach(b => { if (b.dataset.v !== 'hop') b.textContent = cfg.mod === 4 ? `${TONES4[b.dataset.v][0] / 1000} to ${TONES4[b.dataset.v][3] / 1000} kHz` : TONES[b.dataset.v].map(f => f / 1000).join(' / ') + ' kHz'; });
+}
+seg($('modSeg'), cfg.mod, v => {
+  cfg.mod = v === 'ofdm' ? 'ofdm' : +v;
+  if (cfg.mod !== 'ofdm' && !rateList(cfg.mod).includes(cfg.rate)) { cfg.rate = cfg.mod === 4 ? 400 : 1600; $('rateSeg').querySelector(`[data-v="${cfg.rate}"]`).click(); }   // 200 is binary only, 3200 and 6400 4 tones only
+  showMod(); syncUrl(); txInfo();
+});
+showMod();
+seg($('preSeg'), cfg.pre, v => { cfg.pre = +v; syncUrl(); txInfo(); });
+seg($('guardSeg'), cfg.guard, v => { cfg.guard = v; syncUrl(); txInfo(); });
+function guardLabels() { $('guardSeg').querySelectorAll('button').forEach(b => { const m = ofdmMode(b.dataset.v); b.textContent = `${(1000 * m.CP / FS_TX).toFixed(0)} ms · ${(ofdmRate(m, cfg.map) / 1000).toFixed(0)} kbit/s`; }); }   // the rate depends on the mapping
+seg($('mapSeg'), cfg.map, v => { cfg.map = v; guardLabels(); syncUrl(); txInfo(); });
+guardLabels();
+const role = matchMedia('(max-width:860px)').matches && params.get('role') === 'tx' ? 'tx' : 'rx';
+$('main').dataset.role = role;
+seg($('roleSeg'), role, v => { $('main').dataset.role = v; });
+
+// ---------- transmitter ----------
+const pad = { h: 32 * imgScale, w: 32 * imgScale, pixels: new Uint8Array(1024 * imgScale * imgScale).fill(1) };
+let photo = null, photoImg = null;   // photo: the pixels sent, made from photoImg at the chosen size
+const snd = { order: 15, periods: 4 };   // room sounding: MLS order (period 2^order - 1 samples at 48 kHz) and periods averaged
+function currentMsg() {
+  if (msgMode === 'sound') return { type: 'sound', ...snd };
+  if (msgMode === 'text') return { type: 'text', text: $('txtIn').value || ' ' };
+  if (msgMode === 'demo') return demoPixels(imgScale);
+  if (msgMode === 'draw') return { type: 'image', ...pad };
+  return photo ? { type: 'image', ...photo } : demoPixels(imgScale);
+}
+function drawPixels(cv, img, done = img.h * img.w, scale = 4) {
+  cv.width = img.w; cv.height = img.h;
+  const z = Math.max(2, Math.floor(Math.min(220 / img.h, 240 / img.w)));
+  cv.style.width = img.w * z + 'px'; cv.style.height = img.h * z + 'px';
+  const g = cv.getContext('2d'), id = g.createImageData(img.w, img.h);
+  for (let k = 0; k < img.h * img.w; k++) {
+    const r = k % img.h, c = Math.floor(k / img.h), o = 4 * (r * img.w + c);
+    const v = k < done ? (img.pixels[k] ? 255 : 0) : 136;
+    id.data[o] = id.data[o + 1] = id.data[o + 2] = v; id.data[o + 3] = 255;
+  }
+  g.putImageData(id, 0, 0);
+}
+function showTx() {
+  $('txText').classList.toggle('hidden', msgMode !== 'text');
+  $('txImg').classList.toggle('hidden', msgMode === 'text' || msgMode === 'sound');
+  $('txOpts').classList.toggle('sounding', msgMode === 'sound');
+  $('drawTools').classList.toggle('hidden', msgMode !== 'draw');
+  $('photoTools').classList.toggle('hidden', msgMode !== 'photo');
+  const m = currentMsg(); if (m.type === 'image') drawPixels($('txCanvas'), m);
+  txInfo();
+}
+function txInfo() {
+  const f = buildFrame(currentMsg(), cfg);
+  if (f.sound) { $('txInfo').textContent = `Room sounding · MLS of ${f.sound.N} samples (${(f.sound.N / FS_TX).toFixed(2)} s) played ${f.sound.periods + 1} times, the first to fill the room · preamble and header ${cfg.tones === 'hop' ? 'hopping' : 'at 4 / 8 kHz'} · ${(f.dur + 0.4).toFixed(1)} s of sound`; return; }
+  const desc = msgMode === 'text' ? `${textCodes($('txtIn').value).length} characters` : (() => { const m = currentMsg(); return `${m.w}×${m.h} image`; })();
+  const coded = cfg.code === 'none' ? '' : ` → ${f.nc} coded bits`;
+  const long = f.dur + 0.4 > 150 ? ' · Too long: the receivers record at most 160 s, so choose a higher rate or a smaller message.' : '';
+  if (f.ofdm) {
+    const m = ofdmMode(f.ofdm), K = ofdmCarriers(m.N).length, what = f.map === 'dqpsk' ? `${K} subcarriers × 2 bits (DQPSK)` : `${K} subcarriers, 1 in ${OFDM_PSTEP} a pilot, the others × ${OFDM_BITS[f.map]} bits (${OFDM_NAMES[f.map]})`;
+    $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, OFDM: ${what} every ${(1000 * (m.N + m.CP) / FS_TX).toFixed(1)} ms = ${(ofdmRate(m, f.map) / 1000).toFixed(1)} kbit/s before the code, ${f.ns} data symbol${f.ns > 1 ? 's' : ''} between two reference symbols` + long;
+    return;
+  }
+  $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, message at ${cfg.rate} bit/s` + (cfg.mod === 4 ? `, 4 tones (${cfg.rate / 2} symbols/s)` : '') + (cfg.tones === 'hop' ? `, ${toneDesc('hop', cfg.rate, cfg.mod)}` : '') + long;
+}
+seg($('msgSeg'), msgMode, v => { msgMode = v; showTx(); });
+let turboCode = TURBO_R[cfg.code] ? cfg.code : 'turbo';   // the turbo rate last chosen
+const showTurbo = () => $('txOpts').classList.toggle('turbo', !!TURBO_R[cfg.code]);
+seg($('codeSeg'), TURBO_R[cfg.code] ? 'turbo' : cfg.code, v => { cfg.code = v === 'turbo' ? turboCode : v; showTurbo(); syncUrl(); txInfo(); });
+seg($('trSeg'), turboCode, v => { cfg.code = turboCode = v; syncUrl(); txInfo(); });
+showTurbo();
+seg($('ordSeg'), snd.order, v => { snd.order = +v; txInfo(); });
+seg($('perSeg'), snd.periods, v => { snd.periods = +v; txInfo(); });
+seg($('penSeg'), 0, v => { pen = +v; });
+function resizePad(s) {   // keeps the drawing on the new grid: a new cell is black if any old cell under it is
+  const h = 32 * s, w = 32 * s, p = new Uint8Array(h * w).fill(1);
+  for (let c = 0; c < w; c++) for (let r = 0; r < h; r++)
+    for (let cc = Math.floor(c * pad.w / w); cc < Math.ceil((c + 1) * pad.w / w); cc++)
+      for (let rr = Math.floor(r * pad.h / h); rr < Math.ceil((r + 1) * pad.h / h); rr++) p[c * h + r] &= pad.pixels[cc * pad.h + rr];
+  Object.assign(pad, { h, w, pixels: p });
+}
+const sizeLabels = () => { $('padDim').textContent = `${pad.w}×${pad.h}`; $('photoMax').textContent = 64 * imgScale; };
+seg($('sizeSeg'), imgScale, v => { imgScale = +v; resizePad(imgScale); if (photoImg) photo = photoPixels(photoImg); sizeLabels(); syncUrl(); showTx(); });
+sizeLabels();
+$('txtIn').addEventListener('input', txInfo);
+$('clearPad').onclick = () => { pad.pixels.fill(1); showTx(); };
+function padPaint(e) {
+  const r = $('txCanvas').getBoundingClientRect();
+  const c = Math.floor((e.clientX - r.left) / r.width * pad.w), rr = Math.floor((e.clientY - r.top) / r.height * pad.h);
+  if (c < 0 || rr < 0 || c >= pad.w || rr >= pad.h) return;
+  const [c0, r0] = lastCell || [c, rr], n = Math.max(Math.abs(c - c0), Math.abs(rr - r0), 1);
+  for (let s = 0; s <= n; s++) { const cc = Math.round(c0 + (c - c0) * s / n), r = Math.round(r0 + (rr - r0) * s / n); pad.pixels[cc * pad.h + r] = pen; }
+  lastCell = [c, rr]; drawPixels($('txCanvas'), pad);
+}
+let painting = false, lastCell = null;
+$('txCanvas').addEventListener('pointerdown', e => { if (msgMode !== 'draw') return; e.preventDefault(); painting = true; $('txCanvas').setPointerCapture(e.pointerId); padPaint(e); });
+$('txCanvas').addEventListener('pointermove', e => { if (painting) padPaint(e); });
+$('txCanvas').addEventListener('pointerup', () => { painting = false; lastCell = null; txInfo(); });
+function photoPixels(im) {   // scaled to at most 64 pixels (128 when large), black or white around the mean brightness
+  const s = 64 * imgScale / Math.max(im.width, im.height), w = Math.max(1, Math.round(im.width * s)), h = Math.max(1, Math.round(im.height * s));
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.drawImage(im, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data, lum = new Float32Array(w * h); let mean = 0;
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) { const o = 4 * (r * w + c), L = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2]; lum[c * h + r] = L; mean += L; }
+  mean /= w * h; return { h, w, pixels: Uint8Array.from(lum, L => L > mean ? 1 : 0) };
+}
+$('photoIn').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const im = new Image();
+  im.onload = () => { photoImg = im; photo = photoPixels(im); showTx(); };
+  im.src = URL.createObjectURL(f);
+};
+let playing = null;
+// Each Send uses a fresh AudioContext, closed shortly after playback ends. A long-lived context can end up
+// suspended or "interrupted" (sleep, idle, output device change) and then plays silence.
+$('sendBtn').onclick = async () => {
+  if (playing) { playing.stop(); return; }
+  const a = new (window.AudioContext || window.webkitAudioContext)();
+  try { await a.resume(); } catch (e) {}
+  const x = modulate(buildFrame(currentMsg(), cfg));
+  const buf = a.createBuffer(1, x.length, FS_TX); buf.copyToChannel(x, 0);
+  const src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination);
+  const dur = x.length / FS_TX; let t0 = a.currentTime;
+  playing = src; $('sendBtn').textContent = '■ Stop'; $('txStatus').textContent = `Sending ${dur.toFixed(1)} s… turn the volume up.`;
+  const tick = () => { if (playing !== src) return; $('txProg').style.width = Math.min(100, 100 * (a.currentTime - t0) / dur) + '%'; requestAnimationFrame(tick); };
+  const finish = msg => {
+    if (playing !== src) return;
+    playing = null; $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = msg;
+    // The speaker may still be playing the end of the buffer (output latency, up to a few tenths of a second with
+    // Bluetooth): closing the context now would cut it off, and the postamble with it. So wait before closing.
+    setTimeout(() => a.close().catch(() => {}), 2000 + 1000 * ((a.outputLatency || 0) + (a.baseLatency || 0)));
+  };
+  src.onended = () => finish('Sent.');
+  src.start(); t0 = a.currentTime; tick();
+  // If the audio clock does not move, the browser is not playing anything: reset instead of hanging on "Stop".
+  setTimeout(() => { if (playing === src && a.currentTime - t0 < 0.1) finish('The browser gave no audio output. Click Send again.'); }, 1500);
+};
+function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+$('wavBtn').onclick = () => {
+  const m = currentMsg();
+  download(wavBlob(modulate(buildFrame(m, cfg)), FS_TX), m.type === 'sound' ? `acoustic_sounding_mls${m.order}_x${m.periods}.wav` : `acoustic_${m.type}_${cfg.mod === 'ofdm' ? `ofdm_${cfg.map}_${cfg.guard}` : `${cfg.mod === 4 ? '4fsk_' : ''}${cfg.tones}_${cfg.rate}bps`}.wav`);
+};
+showTx();
+
+// ---------- receiver ----------
+let rx = null, stream = null, proc = null, analyser = null, lastRec = null;
+const pill = (t, cls = '') => { $('rxPill').textContent = t; $('rxPill').className = 'pill ' + cls; };
+function makeRx() {
+  rx = new Receiver(actx.sampleRate, { ...cfg }, {
+    onState: (s, info) => {
+      if (s === 'detected') { pill('Frame detected', 'live'); clearOut(); }
+      if (s === 'header' && info.type === 'sound') pill(`Measuring the room · ${info.periods} × ${(((1 << info.order) - 1) / FS_TX).toFixed(2)} s`, 'live');
+      else if (s === 'header') { pill((info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`) + (info.ofdm ? ` · OFDM ${OFDM_NAMES[info.map]}, ${info.ofdm} guard` : ` · ${info.rate} bit/s` + (info.M === 4 ? ' · 4 tones' : '') + (info.tones === 'hop' ? (info.rate === RATE_WIDE ? ' · whole band' : ' · hopping') : '')) + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`), 'live'); }
+      if (s === 'lost') { pill('Listening', 'live'); }
+    },
+    onProgress: p => { if (p.sound || p.ofdm) { $('rxProg').style.width = (100 * p.frac) + '%'; return; } $('rxProg').style.width = (100 * p.done / p.hdr.nc) + '%'; if (p.bits) showOut(p.hdr, p.bits, p.done); },
+    onDone: res => {
+      lastRec = res;
+      if (res.sound) { $('rxProg').style.width = '100%'; showSounding(res); pill('Room measured ✓', 'ok'); }
+      else { $('rxProg').style.width = '100%'; showOut(res.hdr, res.bits, res.hdr.n0); showStats(res); pill('Received ✓', 'ok'); } setTimeout(() => { if (stream) pill('Listening', 'live'); }, 4000); }
+  });
+}
+function restartRx() { if (rx && actx) { makeRx(); clearOut(); } }
+function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('irBtn').classList.add('hidden'); $('sndOut').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); $('ofdmOut').classList.add('hidden'); }
+function showOut(hdr, bits, done) {
+  if (hdr.type === 'text') { $('rxOutText').textContent = decodeText(bits.subarray(0, done - done % 8)); $('rxFig').classList.add('hidden'); }
+  else { $('rxOutText').textContent = ''; $('rxFig').classList.remove('hidden'); drawPixels($('rxCanvas'), { h: hdr.h, w: hdr.w, pixels: bits }, done); }
+}
+function showRaw(res) {
+  // what an uncoded frame would have shown with the same channel errors
+  const hdr = res.hdr; if (hdr.code === 'none') return;
+  const raw = Uint8Array.from(res.bits, (b, j) => b ^ ((res.llr[j] > 0 ? 1 : 0) ^ res.sent[j]));
+  if (hdr.type === 'text') { $('rxRawText').textContent = 'Without the code: ' + decodeText(raw); $('rxRawText').classList.remove('hidden'); }
+  else { drawPixels($('rawCanvas'), { h: hdr.h, w: hdr.w, pixels: raw }); $('rawFig').classList.remove('hidden'); }
+}
+function showStats(res) {
+  const st = [], code = res.hdr.code;
+  showRaw(res);
+  if (res.hdr.ofdm) st.push([`${(res.hdr.rate / 1000).toFixed(1)} k`, `bit/s before the code, ${ofdmDesc(ofdmMode(res.hdr.ofdm), res.hdr.map)}, ${res.hdr.ns} data symbol${res.hdr.ns > 1 ? 's' : ''}, preamble ${res.NP} (read from the header)`]);
+  else st.push([`${res.hdr.rate}`, `bit/s, ${res.hdr.M === 4 ? `4 tones (2 bits per symbol, ${res.hdr.baud} symbols/s), ` : ''}${toneDesc(res.hdr.tones, res.hdr.rate, res.hdr.M)}, preamble ${res.NP} (read from the header)`]);
+  st.push([res.hdr.n0, 'message bits']);
+  if (code !== 'none') {
+    st.push([CODE_INFO[code].rate, `code rate, ${CODE_INFO[code].short}`]);
+    st.push([res.chErr, `channel bit errors corrected (of ${res.hdr.nc} bits)`]);
+    if (code === 'rs') st.push([`${res.rsFails} / ${res.rsBlocks}`, 'Reed–Solomon blocks with too many errors']);
+    if (TURBO_R[code]) st.push([res.iters, 'iterations of the turbo decoder (at most 8; it stops when its decisions no longer change)']);
+  }
+  if (res.hdr.ofdm) {
+    const o = res.ofdm, sn = [...o.snr].sort((a, b) => a - b), med = sn[Math.floor(sn.length / 2)];
+    st.push([`${sn[0].toFixed(0)} to ${sn[sn.length - 1].toFixed(0)} dB`, `SNR per subcarrier (median ${med.toFixed(0)} dB), measured ${res.hdr.map === 'dqpsk' ? 'on the decisions' : 'on the pilots and the reference symbols'} per group of 32 subcarriers: the noise plus the echo after the guard`]);
+    st.push([`${(100 * (1 - o.inside)).toFixed(0)} %`, 'of the received energy arrives after the guard interval and acts as noise (from the reference symbols)']);
+    st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'time scale Rx vs Tx (clock offset, or a moving phone), from the two reference symbols']);
+    st.push([`${o.tau >= 0 ? '+' : ''}${o.tau}`, 'samples (at 48 kHz) from the timing given by the preamble to the start of the guard chosen on the reference symbols']);
+  } else {
+  const T = res.cal.t, M = res.hdr.M, snr = `${T.map(t => t.snrDb.toFixed(0)).join(' / ')} dB`, from = `from the ${res.found ? 'postamble' : 'message: postamble not found'}`;
+  if (res.hdr.tones === 'hop') {
+    st.push([snr, `SNR per symbol, ${M === 2 ? 'bit-0 / bit-1 tones' : 'tones 1 to 4 of each group'}, after levelling each tone (${from})`]);
+    st.push([`${res.spread.toFixed(0)} dB`, 'spread of the tone levels across the band (speaker, room, microphone)']);
+  } else {
+    st.push([snr, `SNR per symbol, ${M === 2 ? 'low / high tone' : 'tones from low to high'} (${from})`]);
+    st.push([`${(20 * Math.log10(T[M - 1].mu / T[0].mu)).toFixed(1)} dB`, `level of the ${M === 2 ? 'high' : 'highest'} tone relative to the ${M === 2 ? 'low' : 'lowest'} tone`]);
+  }
+  st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
+  st.push([res.pilotErr === null ? 'not found' : `${res.pilotErr} / ${res.PS.length * Math.log2(M)}`, 'bit errors on the postamble']);
+  if (res.cal.alpha !== undefined) st.push([res.cal.alpha.toFixed(2), 'scale of the calibrated LLR, fitted on the postamble (below 1: the noise model was too sure of itself)']);
+  if (res.timing) st.push([res.timing.map(v => (v > 0 ? '+' : '') + v).join(' → '), 'samples of fine timing on the message, start → end']);
+  }
+  let truth = null;
+  const demo = res.hdr.type === 'image' ? [1, 2].map(s => demoPixels(s)).find(d => d.h === res.hdr.h && d.w === res.hdr.w) : null;   // the demo image, normal or large
+  if (demo) truth = demo.pixels;
+  if (truth) {
+    let e = 0; for (let i = 0; i < truth.length; i++) e += truth[i] !== res.bits[i];
+    st.push([(e / truth.length).toExponential(1), `bit error rate${code === 'none' ? '' : ' after decoding'} (${e} errors)`]);
+    drawPixels($('refCanvas'), demo); $('refFig').classList.remove('hidden');
+  }
+  $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  drawHist(res, truth ? Uint8Array.from(encodeFEC(code, truth), (x, j) => x ^ res.key[j]) : res.sent);
+  if (res.hdr.ofdm) drawOFDM(res.ofdm);
+  $('recBtn').classList.remove('hidden');
+}
+function drawOFDM(o) {   // |h|^2 in dB as the FFT windows see it, index 0 = start of the guard; the guard shaded
+  $('ofdmOut').classList.remove('hidden');
+  const { g, W, H, L, B } = plotArea($('ofdmPlot')), N = o.N, d0 = -N / 16, d1 = N + d0, mx = Math.max(...o.h);
+  const X = d => L + (d - d0) / (d1 - d0) * (W - L - 4), Y = v => 4 + -v / 50 * (H - B - 8);
+  g.fillStyle = css('--f0'); g.globalAlpha = 0.3; g.fillRect(X(0), 0, X(o.CP) - X(0), H - B); g.globalAlpha = 1;
+  g.strokeStyle = '#ffffff22'; g.fillStyle = '#ffffff99';
+  for (let v = 0; v >= -50; v -= 10) { g.beginPath(); g.moveTo(L, Y(v)); g.lineTo(W, Y(v)); g.stroke(); label(g, W, H, `${v}`, 4, Y(v), 'middle'); }
+  const step = N / FS_TX > 0.03 ? 0.01 : 0.005;
+  for (let t = 0; t * FS_TX <= d1; t += step) { g.beginPath(); g.moveTo(X(t * FS_TX), 0); g.lineTo(X(t * FS_TX), H - B); g.stroke(); label(g, W, H, `${Math.round(1000 * t)} ms`, X(t * FS_TX) + 2, H - B + 2, 'top'); }
+  const px = Math.max(1, Math.floor((d1 - d0) / (W - L)));   // one point per pixel column: the largest value in it
+  curve(g, Math.ceil((d1 - d0) / px), j => X(d0 + j * px), j => { let v = 0; for (let i = j * px; i < Math.min(d1 - d0, (j + 1) * px); i++) v = Math.max(v, o.h[(d0 + i + N) % N]); return Y(Math.max(-50, 10 * Math.log10(v / mx + 1e-12))); }, css('--f1'), 1);
+  g.fillStyle = '#fff'; g.textBaseline = 'top'; g.fillText(`guard ${(1000 * o.CP / FS_TX).toFixed(1)} ms`, X(0) + 4 * devicePixelRatio, 6 * devicePixelRatio);
+  drawConst(o);
+}
+function drawConst(o) {   // the received points of the data subcarriers: Y / H (coherent), or the normalized phase steps (DQPSK)
+  const { g, W, H } = plotArea($('ofdmConst')), cx = W / 2, cy = H / 2, sc = Math.min(W, H) / 2 / 1.6, d = devicePixelRatio;
+  g.strokeStyle = '#ffffff22'; g.beginPath(); g.moveTo(0, cy); g.lineTo(W, cy); g.moveTo(cx, 0); g.lineTo(cx, H); g.stroke();
+  const n = o.zr.length, step = Math.max(1, Math.floor(n / 5000));
+  g.fillStyle = css('--f1'); g.globalAlpha = 0.45;
+  for (let i = 0; i < n; i += step) { const x = cx + sc * o.zr[i], y = cy - sc * o.zi[i]; if (x >= 0 && x <= W && y >= 0 && y <= H) g.fillRect(x - d, y - d, 2 * d, 2 * d); }
+  g.globalAlpha = 1;
+  const [pr, pim] = o.map === 'dqpsk' ? [[1, -1, -1, 1].map(v => v * Math.SQRT1_2), [1, 1, -1, -1].map(v => v * Math.SQRT1_2)] : ofdmPoints(o.map);
+  g.strokeStyle = '#fff'; g.lineWidth = 1.5 * d;
+  pr.forEach((x, p) => { g.beginPath(); g.arc(cx + sc * x, cy - sc * pim[p], 4 * d, 0, 2 * Math.PI); g.stroke(); });
+  g.fillStyle = '#ffffffcc'; g.textBaseline = 'top'; g.fillText(OFDM_NAMES[o.map], 6 * d, 6 * d);
+}
+function drawHist(res, sent) {   // sent: transmitted channel bits (known for the demo image, else the decoder's decision)
+  const cv = $('hist'); cv.classList.remove('hidden'); $('histLegend').classList.remove('hidden');
+  const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
+  g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H);
+  const a = res.llr.map(Math.abs).sort((x, y) => x - y), lim = res.soft === 'ratio' ? 6 : Math.max(6, 1.3 * (a[Math.floor(0.95 * (a.length - 1))] || 0));
+  $('histLegend').firstElementChild.innerHTML = res.soft === 'ratio' ? (res.hdr.M === 2 ? 'soft output ln(E<sub>high</sub>/E<sub>low</sub>) per bit' : 'soft output ln(E<sub>strongest tone for 1</sub>/E<sub>strongest tone for 0</sub>) per bit') + ': two well separated humps mean a clean channel'
+    : `calibrated LLR per bit (axis ±${lim.toFixed(0)}): two well separated humps mean a clean channel`;
+  const nb = 80, h0 = new Float32Array(nb), h1 = new Float32Array(nb);
+  res.llr.forEach((r, i) => {
+    const k = Math.max(0, Math.min(nb - 1, Math.floor((r + lim) / (2 * lim) * nb)));
+    (sent[i] ? h1 : h0)[k]++;
+  });
+  const mx = Math.max(...h0, ...h1, 1), bw = W / nb;
+  [[h0, css('--f0')], [h1, css('--f1')]].forEach(([h, col]) => { g.fillStyle = col; g.globalAlpha = .8; h.forEach((v, k) => g.fillRect(k * bw, H - v / mx * (H - 6), bw - 1, v / mx * (H - 6))); });
+  g.globalAlpha = 1; g.strokeStyle = '#fff8'; g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke();
+}
+seg($('softSeg'), cfg.soft, v => {   // re-decode the last message with the other soft output
+  cfg.soft = v; if (rx) rx.cfg.soft = v;
+  if (lastRec && !lastRec.sound) { Object.assign(lastRec, decodeFrame(lastRec, v)); clearOut(); $('rxProg').style.width = '100%'; showOut(lastRec.hdr, lastRec.bits, lastRec.hdr.n0); showStats(lastRec); }
+});
+$('recBtn').onclick = () => { if (lastRec) download(wavBlob(lastRec.recording, lastRec.fs), lastRec.sound ? `received_sounding_${Math.round(lastRec.fs)}Hz.wav` : `received_${lastRec.hdr.ofdm ? `ofdm_${lastRec.hdr.map}_${lastRec.hdr.ofdm}` : `${lastRec.hdr.M === 4 ? '4fsk_' : ''}${lastRec.hdr.tones}_${lastRec.hdr.rate}bps`}_${Math.round(lastRec.fs)}Hz.wav`); };
+$('irBtn').onclick = () => {   // the measured response, peak at 0.9, from 5 ms before the direct sound to the end of the decay
+  if (!lastRec || !lastRec.sound) return;
+  const s = lastRec.sound, n = Math.min(s.N, s.iend + Math.round(0.05 * FS_TX)), pk = s.h.reduce((m, v) => Math.max(m, Math.abs(v)), 0) || 1;
+  download(wavBlob(Float32Array.from(s.h.subarray(0, n), v => 0.9 * v / pk), FS_TX), 'room_impulse_response_48kHz.wav');
+};
+
+// ---------- room sounding results ----------
+const ESN0_400 = 10 * Math.log10(0.405 / SOUND_AMP ** 2 * (FS_TX / 2) / 400);   // tone of amplitude 0.9 at 400 bit/s vs the MLS spread over 0..24 kHz
+function showSounding(res) {
+  const s = res.sound, db = v => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)} dB`, st = [];
+  $('sndOut').classList.remove('hidden');
+  $('rxOutText').textContent = (s.rt ? `RT60 ${s.rt.rt60.toFixed(2)} s · ` : '') + `DRR ${s.drr >= 0 ? '+' : '−'}${Math.abs(s.drr).toFixed(1)} dB`;
+  st.push(s.rt ? [`${s.rt.rt60.toFixed(2)} s`, `reverberation time RT60 (${s.rt.method})`] : ['—', 'reverberation time: the decay is too short above the noise']);
+  st.push([`${(1000 * s.tauRms).toFixed(1)} ms`, 'rms delay spread τ<sub>rms</sub> (a bit lasts 2.5 ms at 400 bit/s)']);
+  st.push([db(s.drr), 'direct-to-reverberant ratio']);
+  st.push([db(s.c50), 'clarity C50, first 50 ms vs the rest']);
+  const [t4, t8, t16] = s.tones;
+  st.push([db(t8.gain - t4.gain) + (t16.gain === null ? '' : ` / ${db(t16.gain - t8.gain)}`), 'gain of 8 vs 4 kHz' + (t16.gain === null ? '' : ' / 16 vs 8 kHz') + ' (speaker, room, microphone)']);
+  if (s.snr) { const t = s.tones.filter(x => x.snr !== null); st.push([t.map(x => (x.snr + ESN0_400).toFixed(0)).join(' / ') + ' dB', `E<sub>s</sub>/N<sub>0</sub> of a tone at 400 bit/s, ${t.map(x => x.f / 1000).join(' / ')} kHz (noise only)`]); }
+  st.push([`${s.inr.toFixed(0)} dB`, 'decay range above the noise']);
+  st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
+  if (s.glitch) st.push([`${s.used} / ${res.hdr.periods}`, 'periods used: the audio skipped or repeated samples, periods realigned']);
+  $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  drawIR(s); drawFR(s);
+  $('irBtn').classList.remove('hidden'); $('recBtn').classList.remove('hidden');
+}
+function plotArea(cv) {
+  const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
+  g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H); g.font = `${11 * devicePixelRatio}px system-ui,sans-serif`;
+  return { g, W, H, L: 34 * devicePixelRatio, B: 16 * devicePixelRatio };
+}
+function label(g, W, H, txt, x, y, base) {   // text kept inside the plot
+  g.textBaseline = base; const w = g.measureText(txt).width;
+  if (x + w <= W - 2) g.fillText(txt, x, base === 'middle' ? Math.max(7 * devicePixelRatio, Math.min(H - 7 * devicePixelRatio, y)) : y);
+}
+function curve(g, n, X, Y, col, w = 1.5) { g.strokeStyle = col; g.lineWidth = w * devicePixelRatio; g.beginPath(); let on = false; for (let i = 0; i < n; i++) { const y = Y(i); if (!isFinite(y)) { on = false; continue; } on ? g.lineTo(X(i), y) : g.moveTo(X(i), y); on = true; } g.stroke(); }
+function drawIR(s) {   // energy envelope and decay curve, in dB against time after the direct sound
+  const { g, W, H, L, B } = plotArea($('irPlot')), fs = s.fsIR, n = Math.min(s.N, Math.max(Math.round(0.1 * fs), Math.round(1.25 * s.iend)));
+  const t0 = -s.pre / fs, t1 = (n - s.pre) / fs, X = t => L + (t - t0) / (t1 - t0) * (W - L - 4), Y = d => 4 + -d / 70 * (H - B - 8);
+  const em = Math.max(...s.env);
+  g.strokeStyle = '#ffffff22'; g.fillStyle = '#ffffff99';
+  for (let d = 0; d >= -70; d -= 10) { g.beginPath(); g.moveTo(L, Y(d)); g.lineTo(W, Y(d)); g.stroke(); label(g, W, H, `${d}`, 4, Y(d), 'middle'); }
+  const step = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5].find(v => (t1 - t0) / v <= 8) || 1;
+  for (let t = 0; t <= t1; t += step) { g.beginPath(); g.moveTo(X(t), 0); g.lineTo(X(t), H - B); g.stroke(); label(g, W, H, `${Math.round(1000 * t)} ms`, X(t) + 2, H - B + 2, 'top'); }
+  const px = Math.max(1, Math.floor(n / (W - L)));   // one point per pixel column: the largest value in it
+  curve(g, Math.ceil(n / px), j => X((j * px - s.pre) / fs), j => { let m = 0; for (let i = j * px; i < Math.min(n, (j + 1) * px); i++) m = Math.max(m, s.env[i]); return Y(Math.max(-70, 10 * Math.log10(m / em + 1e-12))); }, css('--f1'), 1);
+  if (s.rt) {   // the fitted slope, extended to -65 dB, under the decay curve
+    g.setLineDash([5 * devicePixelRatio, 4 * devicePixelRatio]);
+    const i1 = Math.min(n, (-65 - s.rt.at) / s.rt.slope), ia = Math.max(s.pre, (0 - s.rt.at) / s.rt.slope);
+    curve(g, 2, k => X(((k ? i1 : ia) - s.pre) / fs), k => Y(s.rt.at + s.rt.slope * (k ? i1 : ia)), '#ffffffcc', 1);
+    g.setLineDash([]); g.fillStyle = '#fff'; g.textBaseline = 'top'; g.fillText(`RT60 ≈ ${s.rt.rt60.toFixed(2)} s`, W - 110 * devicePixelRatio, 8 * devicePixelRatio);
+  }
+  curve(g, Math.min(n, s.edcDb.length), i => X((i - s.pre) / fs), i => s.edcDb[i] < -70 ? NaN : Y(s.edcDb[i]), css('--f0'), 2.5);
+}
+function drawFR(s) {   // frequency response and SNR, in dB against frequency (log scale)
+  const { g, W, H, L, B } = plotArea($('frPlot')), f0 = s.grid[0], f1 = s.grid[s.grid.length - 1];
+  const top = s.snr ? Math.max(10, 10 * Math.ceil(Math.max(...s.snr) / 10)) : 10, bot = -40;
+  const X = f => L + Math.log(f / f0) / Math.log(f1 / f0) * (W - L - 4), Y = d => 4 + (top - d) / (top - bot) * (H - B - 8);
+  g.strokeStyle = '#ffffff22'; g.fillStyle = '#ffffff99';
+  for (let d = top; d >= bot; d -= 10) { g.beginPath(); g.moveTo(L, Y(d)); g.lineTo(W, Y(d)); g.stroke(); label(g, W, H, `${d}`, 4, Y(d), 'middle'); }
+  for (const f of [100, 200, 500, 1000, 2000, 5000, 10000, 20000]) if (f >= f0 && f <= f1) { g.beginPath(); g.moveTo(X(f), 0); g.lineTo(X(f), H - B); g.stroke(); label(g, W, H, f >= 1000 ? `${f / 1000}k` : `${f}`, X(f) + 2, H - B + 2, 'top'); }
+  g.setLineDash([2 * devicePixelRatio, 3 * devicePixelRatio]); g.strokeStyle = '#ffffffaa';
+  for (const t of s.tones) if (t.gain !== null) { g.beginPath(); g.moveTo(X(t.f), 0); g.lineTo(X(t.f), H - B); g.stroke(); }
+  g.setLineDash([]);
+  if (s.snr) curve(g, s.grid.length, i => X(s.grid[i]), i => Y(Math.max(bot, s.snr[i])), css('--f0'), 2);
+  curve(g, s.grid.length, i => X(s.grid[i]), i => Y(Math.max(bot, s.Hdb[i])), css('--f1'), 2);
+}
+
+$('listenBtn').onclick = async () => {
+  const a = ctx();
+  if (stream) { stream.getTracks().forEach(t => t.stop()); proc.disconnect(); stream = null; $('listenBtn').textContent = '● Start listening'; pill('Idle'); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  } catch (e) { pill('No microphone', 'bad'); $('rxFs').textContent = 'Microphone access was refused or the page is not served over https.'; return; }
+  const src = a.createMediaStreamSource(stream);
+  analyser = a.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0; analyser.minDecibels = -100; analyser.maxDecibels = -25;
+  proc = a.createScriptProcessor(4096, 1, 1);
+  const mute = a.createGain(); mute.gain.value = 0;
+  src.connect(analyser); src.connect(proc); proc.connect(mute); mute.connect(a.destination);
+  makeRx(); clearOut();
+  proc.onaudioprocess = e => rx.push(e.inputBuffer.getChannelData(0));
+  $('listenBtn').textContent = '■ Stop listening'; pill('Listening', 'live');
+  $('rxFs').textContent = `microphone at ${a.sampleRate} Hz`;
+  draw();
+};
+
+// live plots
+const fbin = new Uint8Array(1024);
+function draw() {
+  if (!stream) return;
+  const sp = $('spec'), W = Math.round(sp.clientWidth * devicePixelRatio), H = Math.round(sp.clientHeight * devicePixelRatio);
+  if (sp.width !== W || sp.height !== H) { sp.width = W; sp.height = H; sp._img = false; }
+  const g = sp.getContext('2d');
+  if (!sp._img) { sp._img = true; g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H); }
+  const col = Math.max(2, Math.round(W / 300));
+  g.drawImage(sp, -col, 0);
+  analyser.getByteFrequencyData(fbin);
+  const fmax = Math.min(actx.sampleRate / 2, 1.5 * TONES.high[1]), nb = Math.floor(fmax / (actx.sampleRate / 2) * analyser.frequencyBinCount);
+  for (let y = 0; y < H; y++) {
+    const v = Math.pow(fbin[Math.floor((1 - y / H) * (nb - 1))] / 255, 2.2);
+    g.fillStyle = `hsl(${230 - 230 * v},85%,${6 + 52 * v}%)`; g.fillRect(W - col, y, col, 1);
+  }
+  const tn = rx.state === 'search' ? null : rx.hdr ? rx.hdr.tones : rx.hop ? 'hop' : CTRL.tones;   // the tones being received
+  if (tn === 'hop' || tn === 'ofdm') {   // tone hopping or OFDM: the edges of the band
+    const hs = tn === 'ofdm' ? null : rx.hdr ? hopSet(rx.hdr.rate, rx.hdr.M) : hopSet(CTRL.rate), fa = HOP_F0, fb = hs ? hs.tones(hs.H - 1)[hs.M - 1] : OFDM_F1;
+    g.fillStyle = css('--f0'); g.fillRect(W - 6, H * (1 - fa / fmax) - 1, 6, 3);
+    g.fillStyle = css('--f1'); g.fillRect(W - 6, H * (1 - fb / fmax) - 1, 6, 3);
+  } else {   // fixed tones: the lowest and the highest
+    const F = tn && rx.hdr ? toneSet(tn, rx.hdr.M) : TONES[tn || CTRL.tones], F0 = F[0], F1 = F[F.length - 1];
+    g.fillStyle = css('--f0'); g.fillRect(W - 6, H * (1 - F0 / fmax) - 1, 6, 3);
+    g.fillStyle = css('--f1'); g.fillRect(W - 6, H * (1 - F1 / fmax) - 1, 6, 3);
+  }
+  // correlation history
+  const cv = $('corr'), CW = cv.width = cv.clientWidth * devicePixelRatio, CH = cv.height = cv.clientHeight * devicePixelRatio, c = cv.getContext('2d');
+  c.fillStyle = css('--plot-bg'); c.fillRect(0, 0, CW, CH);
+  const y = v => CH - 4 - Math.max(0, v) * (CH - 8);
+  c.setLineDash([4, 4]); c.strokeStyle = '#ffffff66'; c.beginPath(); c.moveTo(0, y(rx.thr)); c.lineTo(CW, y(rx.thr)); c.stroke(); c.setLineDash([]);
+  c.strokeStyle = css('--accent'); c.lineWidth = 1.5 * devicePixelRatio; c.beginPath();
+  const L = rx.corrHist.length;
+  for (let i = 0; i < L; i++) { const v = rx.corrHist[(rx.corrPos + i) % L]; const xx = i / (L - 1) * CW; i ? c.lineTo(xx, y(v)) : c.moveTo(xx, y(v)); }
+  c.stroke();
+  requestAnimationFrame(draw);
+}
+})();
+</script>
+</body>
+</html>
