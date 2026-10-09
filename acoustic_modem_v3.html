@@ -120,13 +120,16 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   <div id="txImg" class="row hidden">
     <div class="imgbox">
       <canvas id="txCanvas" class="pix" width="57" height="74"></canvas>
-      <div id="drawTools" class="hidden">
-        <div class="row"><span class="seg" id="penSeg"><button data-v="0">Pen</button><button data-v="1">Eraser</button></span><button class="btn" id="clearPad">Clear</button></div>
-        <div class="muted">Draw on the 32×32 grid.</div>
-      </div>
-      <div id="photoTools" class="hidden">
-        <input type="file" id="photoIn" accept="image/*">
-        <div class="muted">Scaled to at most 64 pixels and turned black and white.</div>
+      <div>
+        <div class="row"><span class="muted">Size</span><span class="seg" id="sizeSeg"><button data-v="1">Normal</button><button data-v="2">Large, 2×</button></span></div>
+        <div id="drawTools" class="hidden">
+          <div class="row"><span class="seg" id="penSeg"><button data-v="0">Pen</button><button data-v="1">Eraser</button></span><button class="btn" id="clearPad">Clear</button></div>
+          <div class="muted">Draw on the <span id="padDim">32×32</span> grid.</div>
+        </div>
+        <div id="photoTools" class="hidden">
+          <input type="file" id="photoIn" accept="image/*">
+          <div class="muted">Scaled to at most <span id="photoMax">64</span> pixels and turned black and white.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1541,10 +1544,11 @@ function wavBlob(x, fs) {
   return new Blob([buf], { type: 'audio/wav' });
 }
 const DEMO = { h: 74, w: 57, b64: "//////////////////////////////////////////wB//////////4AH+H///////8AA8A///////gH8AAH//////gD/gAQ/////4AB/8B+H///8AAA//h/h///AAAGP/4f8f//gAD/j/8H/D//4A//w/GA/4//+D//8PxgP+P//wf//j8Yh/h//4H//4/+If8f/8D//+H/iH/H/+D///x/4z/wP/gf//8OOP/8B/+D///gAD//AP/g///8AA//xD/wf//+AAP/8Y/4P///h/B//GAeD///w/8P/xwHwP//4f/D/8eD+D//+P/4f/H//g///j//H/x//wf//w//x/8f/4P//8P88f/H/+B///D/HH/h//wP//4/zx/g///D//+P/4f4P8/h///h/+P/D/Hwf//8f/D/4fx8B///B/h//H8fAP//4Pg//5/H+D///AAf///h/h///4AP///4fw////gP///+P4B///////PwD/Af//////gAA/4H/////48AAf/j/////+PAH//w/////wDw///8B///+AAcf///AP//4AAAH///+H//gAHwB////h//AA/+A////wH8AD//5////8B4AP////////4QAf////////+AB//////////gD//////////4H//////////+P//////////////////////////////////A" };
-function demoPixels() {
-  const raw = atob(DEMO.b64), n = DEMO.h * DEMO.w, p = new Uint8Array(n);
+const DEMO2 = { h: 148, w: 114, b64: "//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////4AH/////////////////////8AAD/////////////////////AAAH////////////////////4AAAH//wH////////////////AAAAP/4AH///////////////4AAAAf8AAP//////////////AAB/gA+AAAf/////////////wAA//gAAAAA/////////////+AAH//gAAAAB/////////////AAB///AAABgH///////////8AAAP//+AAB/AP//////////gAAAA///8AA/+Af////////+AAAAAH///4Af/8B////////wAAAAAA////wH//wH///////AAAAAAYD////Af//gP/////4AAAAAAHgf///8B//+A//////AAAAAAf+B////gH//8B/////4AAAAD//4H///8Af//wH/////gAAAf///Af///gA///gf////+AAB////8B//B8AB//+A/////4AH/////wH/8HgAD//4D/////wB//////Af/gOAAP//wP/////gD/////8B/+A4DAf//Af/////AH/////4H/8HgcB//8B/////8Af/////gf/4+BwH//wH/////AB/////+A///4HAf//gf////wAH/////4D///gcB//+B////+AA//////wH//+BwH//4D////wAP//////Af//4HAf//gD////AD//////+A///geD//+AB///8AP//////4B//+B4P//8AD///wAP//////wD8D4H////wAH///gAf//////AAAAgf////AAP///gA//////+AAAAB////8AAf///gD//////8AAAAH////wAB///8AP//////4AAAAf////AwH///gB///////gAAAB////8DgP//8AP//////8AAAAD////wOA///gB///////gA/8AH////A4AA/8Af//////+AP/8Af///8DwAB/wB///////wD//8A////wPAAH/AD//////+Af//4B////A+AAf8AD//////4D///wH///8D8AB/4AH//////Af///AP///wP4AP/4AP/////8B///+A///+A/////wA//////gP///8B///4D/////AD/////+A////wH///gP////4Af/////4H////gf//+A/////AD//////gf///+B///4D////4Af/////8B////4H///gf////AD//////wH//5/gP//+B////8Af//////Af/+D+A///4H////wA//////8B//4H4D///gf////AB//////wH//gfgP//8B////+AB//////Af/+B+B//8AH////8AD/////+B//4P4H//wA/////8AP/////4H//5/gf/+AD/////4A//////gP///8B//8AP//D//AH/////+A////wH//wA//4H/4A//////8B///+A///gD//gf/AH//////wH///wD///AH/+B/8Af//////gP///Af//+AP/4H/gAf/////+Af//4B///8A//gf+AAf/////8Af/+AP///4D/+B/4AA//////4A//wB////wP/4H/wAB//////gA/8AP////h//gf/4AH//////AAAAA///////+B//8Af/////+AAAAP///////wH//wD//////+AAAB////////Af/+Af//////8AAAP///////8B//wD///////8AAD////////wP//AP///////8AA/////////A//4AH////////h/////////4D//AAH/////////////+D/4AAP/8AAP/////////////wPgAAB//4AA//////////////AAAAAH//gAD///////////+H8AAAAA///wAP///////////wP4AAAAD///8B////////////A/gAAAA////gP///////////4D/AAB/////8A///////////wAP8AH//////wD//////////gAA/wH//////+AAf////////AAAD/A///////4AA////////AAAAH4D///////gAB///////AAAAAfgP///////AAH//////AAAAAAAA///////+AAf/////AAAAD4AAH////////gD/////AAAAH/wAAf///////+Af////gAAAP//AAD////////4B////gAAAP//+AAf////////AA///wAAAf///+AH////////8AA//wAAAf////+H/////////wAD/4AAAP////////////////AAP8AAAP/////////////////AA+AAAP//////////////////wGAAAH///////////////////AAAAH///////////////////8AAAD////////////////////gAAB////////////////////+AAB/////////////////////4AA//////////////////////gAf/////////////////////+AP//////////////////////8H///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////" };   // the same picture at full size (bartS.png); DEMO takes every other pixel of it
+function demoPixels(s = 1) {   // s = 2: the large demo image
+  const D = s === 2 ? DEMO2 : DEMO, raw = atob(D.b64), n = D.h * D.w, p = new Uint8Array(n);
   for (let i = 0; i < n; i++) p[i] = (raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
-  return { type: 'image', h: DEMO.h, w: DEMO.w, pixels: p };
+  return { type: 'image', h: D.h, w: D.w, pixels: p };
 }
 if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, RATES4, RATE_WIDE, TONES4, toneSet, symbolBits, toSymbols, bitSets, symbolMetrics, postErrors, contrast, knownContrast, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
   SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
@@ -1563,7 +1567,7 @@ const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params
               guard: params.get('guard') === 'short' ? 'short' : 'long' };   // OFDM: the long (21 ms) or the short (5 ms) guard interval
 if (cfg.rate === RATE_WIDE) cfg.tones = 'hop';   // 6400 bit/s: one group of 4 tones over the whole band
 const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
-let msgMode = 'text', pen = 0, actx = null;
+let msgMode = 'text', pen = 0, actx = null, imgScale = params.get('img') === 'large' ? 2 : 1;   // image size: 1 normal, 2 large (twice the width and height)
 
 function seg(el, value, onPick) {
   const set = v => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v))));
@@ -1571,7 +1575,7 @@ function seg(el, value, onPick) {
   el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); onPick(b.dataset.v); });
 }
 function ctx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }
-function syncUrl() { const u = new URL(location.href); u.searchParams.set('mod', cfg.mod); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); if (cfg.mod === 'ofdm') u.searchParams.set('guard', cfg.guard); else u.searchParams.delete('guard'); history.replaceState(null, '', u); }
+function syncUrl() { const u = new URL(location.href); u.searchParams.set('mod', cfg.mod); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); if (cfg.mod === 'ofdm') u.searchParams.set('guard', cfg.guard); else u.searchParams.delete('guard'); if (imgScale === 2) u.searchParams.set('img', 'large'); else u.searchParams.delete('img'); history.replaceState(null, '', u); }
 // QR code: the online copy of this page (also when the laptop runs it from a local file); receivers need no settings
 function phoneUrl() {   // from a local file: the online copy of the same file (the latest version if the name is not one of ours)
   if (location.protocol === 'https:') return location.origin + location.pathname;
@@ -1603,15 +1607,15 @@ $('main').dataset.role = role;
 seg($('roleSeg'), role, v => { $('main').dataset.role = v; });
 
 // ---------- transmitter ----------
-const pad = { h: 32, w: 32, pixels: new Uint8Array(32 * 32).fill(1) };
-let photo = null;
+const pad = { h: 32 * imgScale, w: 32 * imgScale, pixels: new Uint8Array(1024 * imgScale * imgScale).fill(1) };
+let photo = null, photoImg = null;   // photo: the pixels sent, made from photoImg at the chosen size
 const snd = { order: 15, periods: 4 };   // room sounding: MLS order (period 2^order - 1 samples at 48 kHz) and periods averaged
 function currentMsg() {
   if (msgMode === 'sound') return { type: 'sound', ...snd };
   if (msgMode === 'text') return { type: 'text', text: $('txtIn').value || ' ' };
-  if (msgMode === 'demo') return demoPixels();
+  if (msgMode === 'demo') return demoPixels(imgScale);
   if (msgMode === 'draw') return { type: 'image', ...pad };
-  return photo ? { type: 'image', ...photo } : demoPixels();
+  return photo ? { type: 'image', ...photo } : demoPixels(imgScale);
 }
 function drawPixels(cv, img, done = img.h * img.w, scale = 4) {
   cv.width = img.w; cv.height = img.h;
@@ -1639,12 +1643,13 @@ function txInfo() {
   if (f.sound) { $('txInfo').textContent = `Room sounding · MLS of ${f.sound.N} samples (${(f.sound.N / FS_TX).toFixed(2)} s) played ${f.sound.periods + 1} times, the first to fill the room · preamble and header ${cfg.tones === 'hop' ? 'hopping' : 'at 4 / 8 kHz'} · ${(f.dur + 0.4).toFixed(1)} s of sound`; return; }
   const desc = msgMode === 'text' ? `${textCodes($('txtIn').value).length} characters` : (() => { const m = currentMsg(); return `${m.w}×${m.h} image`; })();
   const coded = cfg.code === 'none' ? '' : ` → ${f.nc} coded bits`;
+  const long = f.dur + 0.4 > 150 ? ' · Too long: the receivers record at most 160 s, so choose a higher rate or a smaller message.' : '';
   if (f.ofdm) {
     const m = ofdmMode(f.ofdm), K = ofdmCarriers(m.N).length;
-    $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, OFDM: ${K} subcarriers × 2 bits every ${(1000 * (m.N + m.CP) / FS_TX).toFixed(1)} ms = ${(ofdmRate(m) / 1000).toFixed(1)} kbit/s before the code, ${f.ns} data symbol${f.ns > 1 ? 's' : ''} between two reference symbols`;
+    $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, OFDM: ${K} subcarriers × 2 bits every ${(1000 * (m.N + m.CP) / FS_TX).toFixed(1)} ms = ${(ofdmRate(m) / 1000).toFixed(1)} kbit/s before the code, ${f.ns} data symbol${f.ns > 1 ? 's' : ''} between two reference symbols` + long;
     return;
   }
-  $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, message at ${cfg.rate} bit/s` + (cfg.mod === 4 ? `, 4 tones (${cfg.rate / 2} symbols/s)` : '') + (cfg.tones === 'hop' ? `, ${toneDesc('hop', cfg.rate, cfg.mod)}` : '');
+  $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, message at ${cfg.rate} bit/s` + (cfg.mod === 4 ? `, 4 tones (${cfg.rate / 2} symbols/s)` : '') + (cfg.tones === 'hop' ? `, ${toneDesc('hop', cfg.rate, cfg.mod)}` : '') + long;
 }
 seg($('msgSeg'), msgMode, v => { msgMode = v; showTx(); });
 let turboCode = TURBO_R[cfg.code] ? cfg.code : 'turbo';   // the turbo rate last chosen
@@ -1655,6 +1660,16 @@ showTurbo();
 seg($('ordSeg'), snd.order, v => { snd.order = +v; txInfo(); });
 seg($('perSeg'), snd.periods, v => { snd.periods = +v; txInfo(); });
 seg($('penSeg'), 0, v => { pen = +v; });
+function resizePad(s) {   // keeps the drawing on the new grid: a new cell is black if any old cell under it is
+  const h = 32 * s, w = 32 * s, p = new Uint8Array(h * w).fill(1);
+  for (let c = 0; c < w; c++) for (let r = 0; r < h; r++)
+    for (let cc = Math.floor(c * pad.w / w); cc < Math.ceil((c + 1) * pad.w / w); cc++)
+      for (let rr = Math.floor(r * pad.h / h); rr < Math.ceil((r + 1) * pad.h / h); rr++) p[c * h + r] &= pad.pixels[cc * pad.h + rr];
+  Object.assign(pad, { h, w, pixels: p });
+}
+const sizeLabels = () => { $('padDim').textContent = `${pad.w}×${pad.h}`; $('photoMax').textContent = 64 * imgScale; };
+seg($('sizeSeg'), imgScale, v => { imgScale = +v; resizePad(imgScale); if (photoImg) photo = photoPixels(photoImg); sizeLabels(); syncUrl(); showTx(); });
+sizeLabels();
 $('txtIn').addEventListener('input', txInfo);
 $('clearPad').onclick = () => { pad.pixels.fill(1); showTx(); };
 function padPaint(e) {
@@ -1669,16 +1684,17 @@ let painting = false, lastCell = null;
 $('txCanvas').addEventListener('pointerdown', e => { if (msgMode !== 'draw') return; e.preventDefault(); painting = true; $('txCanvas').setPointerCapture(e.pointerId); padPaint(e); });
 $('txCanvas').addEventListener('pointermove', e => { if (painting) padPaint(e); });
 $('txCanvas').addEventListener('pointerup', () => { painting = false; lastCell = null; txInfo(); });
+function photoPixels(im) {   // scaled to at most 64 pixels (128 when large), black or white around the mean brightness
+  const s = 64 * imgScale / Math.max(im.width, im.height), w = Math.max(1, Math.round(im.width * s)), h = Math.max(1, Math.round(im.height * s));
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.drawImage(im, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data, lum = new Float32Array(w * h); let mean = 0;
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) { const o = 4 * (r * w + c), L = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2]; lum[c * h + r] = L; mean += L; }
+  mean /= w * h; return { h, w, pixels: Uint8Array.from(lum, L => L > mean ? 1 : 0) };
+}
 $('photoIn').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   const im = new Image();
-  im.onload = () => {
-    const s = 64 / Math.max(im.width, im.height), w = Math.max(1, Math.round(im.width * s)), h = Math.max(1, Math.round(im.height * s));
-    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.drawImage(im, 0, 0, w, h);
-    const d = g.getImageData(0, 0, w, h).data, lum = new Float32Array(w * h); let mean = 0;
-    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) { const o = 4 * (r * w + c), L = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2]; lum[c * h + r] = L; mean += L; }
-    mean /= w * h; photo = { h, w, pixels: Uint8Array.from(lum, L => L > mean ? 1 : 0) }; showTx();
-  };
+  im.onload = () => { photoImg = im; photo = photoPixels(im); showTx(); };
   im.src = URL.createObjectURL(f);
 };
 let playing = null;
@@ -1777,11 +1793,12 @@ function showStats(res) {
   if (res.timing) st.push([res.timing.map(v => (v > 0 ? '+' : '') + v).join(' → '), 'samples of fine timing on the message, start → end']);
   }
   let truth = null;
-  if (res.hdr.type === 'image' && res.hdr.h === DEMO.h && res.hdr.w === DEMO.w) truth = demoPixels().pixels;
+  const demo = res.hdr.type === 'image' ? [1, 2].map(s => demoPixels(s)).find(d => d.h === res.hdr.h && d.w === res.hdr.w) : null;   // the demo image, normal or large
+  if (demo) truth = demo.pixels;
   if (truth) {
     let e = 0; for (let i = 0; i < truth.length; i++) e += truth[i] !== res.bits[i];
     st.push([(e / truth.length).toExponential(1), `bit error rate${code === 'none' ? '' : ' after decoding'} (${e} errors)`]);
-    drawPixels($('refCanvas'), demoPixels()); $('refFig').classList.remove('hidden');
+    drawPixels($('refCanvas'), demo); $('refFig').classList.remove('hidden');
   }
   $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
   drawHist(res, truth ? Uint8Array.from(encodeFEC(code, truth), (x, j) => x ^ res.key[j]) : res.sent);

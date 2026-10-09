@@ -52,7 +52,7 @@ decoded by the other. The receiver needs no settings: they travel in the header.
 
 Usage
   python audiocomm_v3.py tx --text "Hello" -o hello.wav     # write a WAV (add --play to play it)
-  python audiocomm_v3.py tx --image bartS.png --step 2 -o img.wav
+  python audiocomm_v3.py tx --image bartS.png --step 2 -o img.wav   # the page's demo image (57x74); without --step, the large one (114x148)
   python audiocomm_v3.py tx --text "Hello" --code conv -o coded.wav   # codes: none hamming conv turbo turbo3 turbo4
   python audiocomm_v3.py rx recording.wav                    # decode a recording
   python audiocomm_v3.py rx recording.wav --soft ratio       # soft output ln(E1/E0) instead of the calibrated LLR
