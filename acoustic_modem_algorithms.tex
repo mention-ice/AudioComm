@@ -269,7 +269,7 @@ The 40 bits go through the convolutional code of \cref{sec:conv}, with 6 tail bi
 \subsection{Message bits}
 \begin{itemize}
 \item \emph{Text}: each character is mapped to its Unicode code point if that is below 256 (Latin-1), else to \code{?}, and sent as 8 bits, most significant first. At most 1023 characters.
-\item \emph{Image}: $h \times w$ black-and-white pixels (1 = white), column by column. The demo image is $74 \times 57$ pixels. The page can also send it at twice the size, $148 \times 114$ pixels ($\nz = 16\,872$, the picture it is taken from), and likewise drawings ($64 \times 64$ instead of $32 \times 32$) and photos (at most 128 pixels instead of 64); with turbo $1/2$, the large demo image lasts $2.76$\,s with OFDM and $5.94$\,s with FSK at 6400 bit/s. Version~4 adds four times the size: $296 \times 228$ pixels ($\nz = 67\,488$), \code{bartS.png} at twice its size with its grey levels interpolated linearly between pixels (row $r$ of the result at $r/2 - 1/4$, then the same for the columns) before the threshold, so that the edges stay smooth (\code{-{}-up 2} in the script); drawings on a $128 \times 128$ grid, photos up to 256 pixels. Receivers made before it reject such headers. With turbo $1/2$ and the long guard the $4\times$ demo image lasts $2.95$\,s with 256QAM, $5.13$\,s with 16QAM and $8.71$\,s with DQPSK; $21.8$\,s with FSK at 6400 bit/s.
+\item \emph{Image}: $h \times w$ black-and-white pixels (1 = white), column by column. The demo image is $74 \times 57$ pixels. The page can also send it at twice the size, $148 \times 114$ pixels ($\nz = 16\,872$, the picture it is taken from), and likewise drawings ($64 \times 64$ instead of $32 \times 32$) and photos (at most 128 pixels instead of 64); with turbo $1/2$, the large demo image lasts $2.76$\,s with OFDM and $5.94$\,s with FSK at 6400 bit/s. Version~4 adds four times the size: $296 \times 228$ pixels ($\nz = 67\,488$), \code{bartS.png} at twice its size with its grey levels interpolated linearly between pixels (row $r$ of the result at $r/2 - 1/4$, then the same for the columns) before the threshold, so that the edges stay smooth (\code{-{}-up 2} in the script); drawings on a $128 \times 128$ grid, photos up to 256 pixels. Receivers made before it reject such headers. With turbo $1/2$ and the long guard the $4\times$ demo image lasts $2.95$\,s with 256QAM, $5.13$\,s with 16QAM and $8.71$\,s with DQPSK; $21.8$\,s with FSK at 6400 bit/s. Since 10 October 2026 version~4's demo image is Hokusai's \emph{Under the Wave off Kanagawa} (the Great Wave, about 1831, public domain; The Metropolitan Museum of Art, image DP130155) instead of \code{bartS.png}, which stays one switch away (\code{DEMO\_PICTURE} in the page): $54 \times 80$, $108 \times 160$ and $216 \times 320$ pixels ($\nz = 4320$, $17\,280$ and $69\,120$, files \code{greatwave\_80x54.png} and so on). A print does not survive a plain threshold: averaging erases its thin dark outline. Its luminance is averaged down to four times the target size, a $3 \times 3$ minimum filter widens the dark lines by about half a target pixel, then it is averaged down to the target size and thresholded at 150 out of 255. Its frames are about $2\,\%$ longer than bartS's (\cref{tab:cohmaps}); the $4\times$ image lasts $3.02$\,s with 256QAM and $22.3$\,s with FSK at 6400 bit/s.
 \item \emph{Room sounding}: no message bits; a waveform follows the control part (\cref{sec:sounding}).
 \end{itemize}
 The $\nz$ message bits are encoded by the code announced in the header (\cref{sec:codes}), giving $\nc$ coded bits, and then scrambled.
@@ -670,7 +670,7 @@ The number of data symbols is the smallest $n_s$ with $m \sum_{i=1}^{n_s} (K - P
 
 \begin{table}[ht]
 \centering
-\caption{OFDM mappings of version~4: bit rates before the code, $m K' \fsT/(N + C)$ with $K' = K$ for DQPSK and $K' = \tfrac{11}{12}K$ with pilots, and the duration of the demo image (normal, large and $4\times$, turbo $1/2$, preamble 127, without the silences).}
+\caption{OFDM mappings of version~4: bit rates before the code, $m K' \fsT/(N + C)$ with $K' = K$ for DQPSK and $K' = \tfrac{11}{12}K$ with pilots, and the duration of the demo image, the Great Wave (normal, large and $4\times$, turbo $1/2$, preamble 127, without the silences).}
 \label{tab:cohmaps}
 \small
 \begin{tabular}{lcccccc}
@@ -678,12 +678,12 @@ The number of data symbols is the smallest $n_s$ with $m \sum_{i=1}^{n_s} (K - P
 & bits per & & & \multicolumn{3}{c}{demo image, long guard}\\
 Mapping & data subcarrier & long guard & short guard & normal & large & $4\times$\\
 \midrule
-DQPSK (v3) & 2 & 17.1\,kbit/s & 20.5\,kbit/s & 1.29\,s & 2.76\,s & 8.71\,s\\
-QPSK & 2 & 15.6\,kbit/s & 18.8\,kbit/s & 1.35\,s & 2.95\,s & 9.42\,s\\
-8PSK & 3 & 23.5\,kbit/s & 28.2\,kbit/s & 1.16\,s & 2.25\,s & 6.54\,s\\
-16QAM & 4 & 31.3\,kbit/s & 37.5\,kbit/s & 1.10\,s & 1.86\,s & 5.13\,s\\
-64QAM & 6 & 46.9\,kbit/s & 56.3\,kbit/s & 0.97\,s & 1.54\,s & 3.66\,s\\
-256QAM & 8 & 62.6\,kbit/s & 75.1\,kbit/s & 0.97\,s & 1.35\,s & 2.95\,s\\
+DQPSK (v3) & 2 & 17.1\,kbit/s & 20.5\,kbit/s & 1.29\,s & 2.82\,s & 8.90\,s\\
+QPSK & 2 & 15.6\,kbit/s & 18.8\,kbit/s & 1.35\,s & 3.02\,s & 9.67\,s\\
+8PSK & 3 & 23.5\,kbit/s & 28.2\,kbit/s & 1.16\,s & 2.31\,s & 6.73\,s\\
+16QAM & 4 & 31.3\,kbit/s & 37.5\,kbit/s & 1.10\,s & 1.93\,s & 5.26\,s\\
+64QAM & 6 & 46.9\,kbit/s & 56.3\,kbit/s & 0.97\,s & 1.54\,s & 3.78\,s\\
+256QAM & 8 & 62.6\,kbit/s & 75.1\,kbit/s & 0.97\,s & 1.35\,s & 3.02\,s\\
 \bottomrule
 \end{tabular}
 \end{table}

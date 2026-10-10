@@ -66,8 +66,9 @@ decoded by the other. The receiver needs no settings: they travel in the header.
 
 Usage
   python audiocomm_v4.py tx --text "Hello" -o hello.wav     # write a WAV (add --play to play it)
-  python audiocomm_v4.py tx --image bartS.png --step 2 -o img.wav   # the page's demo image (57x74); without --step, the large one (114x148)
-  python audiocomm_v4.py tx --image bartS.png --up 2 --mod ofdm --map 256qam --code turbo -o big.wav   # the 4x one (228x296)
+  python audiocomm_v4.py tx --image greatwave_80x54.png -o img.wav   # the page's demo image (Hokusai's Great Wave); greatwave_160x108.png: the large one
+  python audiocomm_v4.py tx --image greatwave_320x216.png --mod ofdm --map 256qam --code turbo -o big.wav   # the 4x one
+  (the earlier demo image: --image ../../Lab/bartS.png --step 2, without --step, or with --up 2 for the large and 4x ones)
   python audiocomm_v4.py tx --text "Hello" --code conv -o coded.wav   # codes: none hamming conv turbo turbo3 turbo4
   python audiocomm_v4.py rx recording.wav                    # decode a recording
   python audiocomm_v4.py rx recording.wav --soft ratio       # soft output ln(E1/E0) instead of the calibrated LLR
@@ -77,10 +78,10 @@ Usage
   python audiocomm_v4.py tx --text "Hello" --tones hop --code turbo -o turbo.wav   # turbo code (turbo3, turbo4: rates 1/3, 1/4)
   python audiocomm_v4.py tx --text "Hello" --mod 4 --tones hop --rate 3200 --code turbo -o fast4.wav   # 4 tones, 2 bits per symbol
   python audiocomm_v4.py tx --text "Hello" --mod 4 --tones hop --rate 6400 --code turbo -o fast6.wav   # the whole band, no hopping
-  python audiocomm_v4.py tx --image bartS.png --mod ofdm --code turbo -o ofdm.wav   # OFDM, 17 kbit/s before the code
+  python audiocomm_v4.py tx --image greatwave_160x108.png --mod ofdm --code turbo -o ofdm.wav   # OFDM, 17 kbit/s before the code
   python audiocomm_v4.py tx --text "Hello" --mod ofdm --guard short --code turbo -o ofdm5.wav   # OFDM, 5 ms guard
-  python audiocomm_v4.py tx --image bartS.png --mod ofdm --map 16qam --code turbo -o qam.wav   # 16QAM with pilots, 31 kbit/s
-  python audiocomm_v4.py tx --image bartS.png --mod ofdm --map 256qam --code turbo -o qam256.wav   # 256QAM, 63 kbit/s
+  python audiocomm_v4.py tx --image greatwave_160x108.png --mod ofdm --map 16qam --code turbo -o qam.wav   # 16QAM with pilots, 31 kbit/s
+  python audiocomm_v4.py tx --image greatwave_160x108.png --mod ofdm --map 256qam --code turbo -o qam256.wav   # 256QAM, 63 kbit/s
   python audiocomm_v4.py rx --listen 20                      # record 20 s from the mic, then decode
   python audiocomm_v4.py tx --sound -o sound.wav             # room sounding: MLS of 0.68 s, 4 periods averaged
   python audiocomm_v4.py tx --sound --order 16 --periods 8 --pre 511 -o sound.wav   # large or reverberant room
@@ -813,7 +814,8 @@ def modulate(segs, fs=FS_TX):
 def load_image(path, step=1, up=1):
     """Black (False) or white (True) pixels around half the brightest grey: every step-th pixel, or up = 2 for twice
     the width and height (the grey levels interpolated between pixels, then the threshold: smooth edges). The
-    page's demo images are bartS.png with step 2 (normal), step 1 (large, 2x) and up 2 (4x)."""
+    page's demo images are greatwave_80x54.png, greatwave_160x108.png and greatwave_320x216.png (Hokusai's Great Wave,
+    public domain); before 2026-10-10 they were bartS.png with step 2, step 1 and up 2."""
     from PIL import Image
     I = np.asarray(Image.open(path).convert("RGB"), dtype=float).mean(axis=2)[::step, ::step]
     while up > 1:
@@ -1343,7 +1345,7 @@ def parse_header(hb):
     h = None
     if typ == 0 and a >= 1 and b == 0:
         h = dict(type="text", n0=8 * a, len=a)
-    if typ == 1 and 1 <= a <= 512 and 1 <= b <= 512 and a * b <= 70000:   # v4: up to the 4x demo image, 228 x 296 (before: 20000 pixels)
+    if typ == 1 and 1 <= a <= 512 and 1 <= b <= 512 and a * b <= 70000:   # v4: up to 4x images (the demo: 216 x 320, 69120 pixels; before: 20000 pixels)
         h = dict(type="image", n0=a * b, h=a, w=b)
     if typ == 2 and not four and a in SOUND_TAPS and 1 <= b <= 8:
         h = dict(type="sound", n0=0, order=a, periods=b)
