@@ -48,9 +48,9 @@
 \captionsetup{font=small,labelfont=bf}
 
 \title{\color{icemagenta}\textbf{An acoustic modem for the classroom}\\[4pt]
-\large Algorithms, equations and parameter choices of the demo, version~4}
+\large Algorithms, equations and parameter choices of the demo, version~4.1}
 \author{Communication Theory (2A), CentraleSup\'elec\,---\,Mention ICE}
-\date{9 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v4.html} (also served as \code{acoustic\_modem.html}) and \code{audiocomm\_v4.py}; version~3, \code{acoustic\_modem\_v3.html} and \code{audiocomm\_v3.py};\\ version~2, \code{acoustic\_modem\_v2.html} and \code{audiocomm\_v2.py}; and version~1, \code{acoustic\_modem\_v1.html} and \code{audiocomm\_v1.py}}
+\date{11 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v4.html} (also served as \code{acoustic\_modem.html}) and \code{audiocomm\_v4.py}; version~3, \code{acoustic\_modem\_v3.html} and \code{audiocomm\_v3.py};\\ version~2, \code{acoustic\_modem\_v2.html} and \code{audiocomm\_v2.py}; and version~1, \code{acoustic\_modem\_v1.html} and \code{audiocomm\_v1.py}}
 
 \begin{document}
 \maketitle
@@ -73,6 +73,7 @@ Numbers quoted as results come from the simulations and the one real recording d
 Version~2 differs from version~1 by the four-tone mode (\cref{sec:mfsk}) and a narrower search for the postamble (\cref{sec:clock}); the text says where.
 Version~3 adds OFDM (\cref{sec:ofdm}), received by differential detection after a timing and a time-scale estimate on two reference symbols.
 Version~4 adds coherent detection for OFDM (\cref{sec:coh}): a channel estimate from pilots, smoothed across the band, with a gain, a phase and a delay per symbol for a moving phone.
+Version~4.1 changes only the OFDM receiver: it finds samples that the microphone loses or repeats in the middle of a frame, reads the symbols after the gap again, and erases the symbol that holds it (\cref{sec:gaps}).
 \end{abstract}
 
 \tableofcontents
@@ -84,7 +85,7 @@ Version~4 adds coherent detection for OFDM (\cref{sec:coh}): a channel estimate 
 
 \subsection{Files and scope}
 \begin{itemize}
-\item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK, 16QAM, 64QAM or 256QAM, DQPSK that follows a moving phone (\cref{sec:coh}), and images at four times the size. Since 9 October 2026 \code{acoustic\_modem.html} is a copy of \code{acoustic\_modem\_v4.html}. They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
+\item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK, 16QAM, 64QAM or 256QAM, DQPSK that follows a moving phone (\cref{sec:coh}), and images at four times the size. Since 9 October 2026 \code{acoustic\_modem.html} is a copy of \code{acoustic\_modem\_v4.html}. Since 11 October 2026 (version~4.1) their OFDM receiver also survives samples lost by the microphone (\cref{sec:gaps}); the frames did not change. They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
 \item \code{acoustic\_modem\_v3.html} and \code{audiocomm\_v3.py} are version~3: version~2 plus OFDM as a third modulation (\cref{sec:ofdm}). They send the same FSK frames and room soundings as version~2, bit for bit, and read all of version~2's frames; earlier pages and scripts ignore OFDM frames.
 \item \code{acoustic\_modem\_v2.html} is the web page of version~2: transmitter and receiver in one self-contained file, with no network access needed once loaded. The modem core is plain JavaScript, independent of the page's user interface. \code{acoustic\_modem\_v1.html} is version~1, and \code{acoustic\_modem.html} is a copy of the version that the GitHub Pages address serves, now version~3.
 \item \code{audiocomm\_v2.py} (numpy only) implements the same transmitter bit for bit and the same receiver in vectorised form, together with the room simulator of \cref{sec:roomsim}; \code{audiocomm\_v1.py} is its version~1. Their few differences from the page's receiver are listed in \cref{sec:pydiff}.
@@ -741,6 +742,40 @@ A delay change $d_i$ between symbols $i - 1$ and $i$ turns subcarrier $f$ of $z_
 \label{eq:dqpsktrack}
 \end{equation}
 $d$ on a grid of $0.01$ sample, before the LLRs of \cref{sec:ofdmrx}. The weight $1/|z|^2$ makes each term count like $|z|^2$, the power of its subcarrier. The page plots $z$ divided by each subcarrier's power.
+
+\subsection{Samples lost by the microphone (version~4.1)}
+\label{sec:gaps}
+The audio path of a phone can drop a block of samples in the middle of a frame. In a recording Sheng made with a phone held close to the laptop (256QAM, long guard, the fourth of four identical frames), 128 samples ($2.7\ms$, one block of the browser's audio processing) are missing inside data symbol 13 of 26. Every later symbol then arrives 128 samples early: far more than the $\pm 8$ samples per symbol that the coherent receiver follows, and the time scale of \cref{eq:ofdmeps} reads the jump as $-118$\,ppm, which turns every symbol. Version~4 got 25\,271 of the 100\,876 channel bits wrong and lost the image; with 128 zeros put back it decodes it perfectly. Headless Chromium's fake microphone does the same. Version~4.1 adds a step between steps 2 and~3 of \cref{sec:ofdmrx} (\code{ofdmGaps} in the page, \code{gaps} in the script).
+
+\paragraph{Reading each symbol on its own.} Symbol $i$ (references included) is read as $r_i[n]$, $n = -N/2, \dots, N + C + N/2$, from its nominal start $i(N + C)$ plus its own shift $S_i$, first $S_i = 0$.
+
+\paragraph{Coarse timing per symbol.} The guard is a copy of the end of the symbol, so
+\begin{equation}
+\rho_i(k) = \frac{\sum_{n=k}^{k+C-1} r_i[n]\, r_i[n+N]}{\sqrt{\sum_{n=k}^{k+C-1} r_i[n]^2 \sum_{n=k}^{k+C-1} r_i[n+N]^2}}, \qquad k_i = \arg\max_{|k| \le N/4} \rho_i(k), \quad q_i = \rho_i(k_i),
+\end{equation}
+computed with running sums. A symbol with $q_i < 0.6\,\operatorname{median}(q)$ is skipped (it holds the gap, or noise swamps it); one with $q_i < 0.9\,\operatorname{median}(q)$ is not clean.
+
+\paragraph{Gaps.} Walking through the symbols, a symbol whose $k_i$ differs by more than $C/16$ (64 samples with the long guard, 16 with the short one) from the median $\bar k$ of those since the last gap, and with which the next symbol $a$ agrees, starts a new segment. Its coarse size is $k_a - \bar k$, taken from $a$, which is sure to be past the gap.
+
+\paragraph{Exact size.} With $b$ the last clean symbol before the gap, the size is refined by $\hat\delta = \hat d_a - \hat d_b$ for the coherent mappings, where
+\begin{equation}
+\hat d_i = \arg\max_{|d| \le 0.4 N/12} \Bigl|\sum_{j \in \mathcal P_i} Y_{i,j}\, \bigl(e^{j\theta_j} \hat H^{(0)}_j\bigr)^{*} e^{j 2\pi f_j d/\fsT}\Bigr|,
+\end{equation}
+$\mathcal P_i$ the pilots of symbol $i$ (all subcarriers for a reference symbol), $\hat H^{(0)}$ the smoothed response of the first reference symbol, $d$ on a grid of $0.05$ sample within the ambiguity of pilots 12 subcarriers apart ($N/12$ samples). For DQPSK, with $z_j = Y_{a,j} Y_{b,j}^*$,
+\begin{equation}
+\hat\delta = \arg\max_{|\delta| \le 0.4 N/12} \operatorname{Re} \sum_j (-1)^{a-b}\, \frac{z_j^4}{|z_j|^2}\, e^{j 8\pi f_j \delta/\fsT},
+\end{equation}
+as in \cref{eq:dqpsktrack}: $a - b$ steps of DQPSK leave $(-1)^{a-b}|z|^4$ in $z^4$. The windows are taken in the middle of the guards, at $C/2$.
+
+\paragraph{Erasures.} The symbols after the gap get $S_i$ increased by its size and are read again. The symbols skipped between $b$ and the first shifted symbol (they hold the gap), and that one too if it is not clean, are erased: their LLRs are 0, they count neither in the channel estimate (no pilots) nor in $N_0$, and the code fills them in. Steps 3 to~5 then run as before, the time scale now measured on the realigned references. The receiver waits $N/4$ samples longer for the end of the frame, in case samples are repeated rather than lost.
+
+\paragraph{The references vote.} When echo spreads the sound, $\rho_i(k)$ has a broad top, and in a faint frame the maximum of a few symbols wanders by a hundred samples or more. A gap is therefore kept only if the two reference symbols agree better with it. For each subset $\mathcal G$ of the gaps found (at most 4; with more, none is kept), the last reference is read with the sum of their sizes, and
+\begin{equation}
+\Gamma(\mathcal G) = \max_{|\varepsilon| \le 500\,\mathrm{ppm}} \frac{\bigl|\sum_j z_j\, e^{\,j 2\pi f_j (n_s + 1)(N + C)\varepsilon/\fsT}\bigr|}{\sum_j |z_j|}, \qquad z_j = Y_{n_s+1,j}\, Y_{0,j}^{*},
+\end{equation}
+is 1 when the last reference matches the first one exactly, as in \cref{eq:ofdmeps}. The receiver keeps the subset with the fewest gaps among those within $10\,\%$ of the largest $\Gamma$. Sheng's first recording gives $0.04$ without its gap and $1.00$ with it; the second one below, $0.99$ without a false gap and $0.25$ with it.
+
+\paragraph{Results.} On Sheng's recording, page and script alike find 128 samples lost before symbol 14, erase symbol 13, measure $-3$\,ppm and correct 12\,863 channel bits, giving the image obtained with the samples put back. A second recording of the same image failed for another reason: no samples were lost, but the frame arrived $6\dB$ weaker and every symbol had $17\,\%$ of its channel bits wrong (against $11\,\%$), more than turbo $1/2$ corrects on 256QAM. With the first recording's image as known data, the SNR per subcarrier was $14\dB$ ($16\dB$ with a perfect channel estimate) against $17.5\dB$ ($19\dB$), while the background noise alone allowed 25 to $31\dB$: the link is limited by noise that grows with the signal (distortion, clipping, echo). Even the perfect estimate does not decode it, so 256QAM needs a median SNR of about $17\dB$ on such a link; 64QAM needs about $5\dB$ less. In simulation (RT60 $0.4$\,s, DRR $+10\dB$ ($+20$ for 256QAM), SNR 12, 12, 20 and $34\dB$ for DQPSK, QPSK, 16QAM and 256QAM, turbo $1/2$, a random $96 \times 128$ image, the gap at a random place), version~4.1 decoded 72 of 72 frames with the long guard (480 or 128 samples lost, 128 repeated; version~4: 11), 60 of 60 with the short guard (256 or 128 lost, 128 repeated; version~4: 12), and 24 of 24 with a $44.1\kHz$ microphone (version~4: 5). Two gaps of 128 samples: 24 of 24 for DQPSK, QPSK and 16QAM, but 1 of 8 for 256QAM, whose frames of 7 or 13 symbols lose too large a share to two erasures. Without a gap (56 frames), it found no false gap and gave exactly version~4's LLRs. The vote changed none of these results. A gap below $C/16$ but beyond the $\pm 8$ samples of the delay tracking would still break a frame; the gaps seen so far were blocks of 128 samples, or 3 to $10\ms$ in Chromium.
 
 \subsection{Results}
 \label{sec:cohres}

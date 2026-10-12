@@ -1158,6 +1158,8 @@ const OFDM_MAPS = ['dqpsk', 'qpsk', '8psk', '16qam', '64qam', '256qam'], OFDM_MA
 const OFDM_BITS = { dqpsk: 2, qpsk: 2, '8psk': 3, '16qam': 4, '64qam': 6, '256qam': 8 }, OFDM_NAMES = { dqpsk: 'DQPSK', qpsk: 'QPSK', '8psk': '8PSK', '16qam': '16QAM', '64qam': '64QAM', '256qam': '256QAM' };
 const OFDM_PSTEP = 12, OFDM_PSHIFT = 3;
 const OFDM_DMAX = 8;       // delay change of a symbol (moving phone) searched within +-8 samples
+const OFDM_SLIP = 16;      // v4.1: a symbol whose timing jumps by more than CP / 16 from the symbols before it: samples lost or repeated
+const OFDM_GAPS = 4;       // v4.1: at most 4 candidate gaps per frame are weighed against the references (more: none kept)
 const OFDM_ITERS = 3;      // rounds of channel estimate <-> per-symbol gain, phase and delay
 const OFDM_ALPHA = 0.01;   // channel smoothing A (A + alpha)^-1, see ofdmSmooth
 function ofdmPoints(map) {   // a coherent mapping's points (mean energy 1): [re, im, bits of each point (MSB first, Gray)]
@@ -1277,13 +1279,19 @@ function fracRead(y, off, len, t0, step, m0, n, A = 16) {
 // changes its delay d from one symbol to the next, which turns subcarrier f by 2 pi f d / 48000 (90 degrees at 16 kHz
 // for 0.75 sample, a 2 cm swing); z^4 has no data left (every step is pi/4 + m pi/2), so d is the delay that best lines
 // up -z^4 across the band, and z is turned back by it before the decisions. 4'. Coherent mappings: see ofdmCoherent.
+// 2'. Samples lost or repeated (v4.1): the audio path of a phone may drop a block of samples (128, one block of the
+// browser's audio) in the middle of a frame; every symbol after the gap then arrives that much early, its subcarriers
+// turn far beyond what the delay tracking follows, and the reference symbols no longer give the time scale. See ofdmGaps.
+// A faint frame can make the guards of a few symbols look shifted, so of the gaps found, the set kept is the one with
+// which the two reference symbols agree best at their best time scale (the fewest gaps when several agree as well).
 function ofdmReceive(y, off, len, fs, t0, m, ns, nc, map = 'dqpsk') {
-  const { N, CP } = m, kk = ofdmCarriers(N), K = kk.length, L = N + CP, th = ofdmReference(K), sc = fs / FS_TX, pad = N / 2, nr = (ns + 2) * L + 2 * pad;
+  const { N, CP } = m, kk = ofdmCarriers(N), K = kk.length, L = N + CP, th = ofdmReference(K), sc = fs / FS_TX, pad = N / 2, nb = L + 2 * pad;
   const cr = th.map(Math.cos), ci = th.map(Math.sin), re = new Float64Array(N), im = new Float64Array(N);
-  const read = eps => fracRead(y, off, len, t0, sc * (1 + eps * 1e-6), -pad, nr);
+  // each symbol read on its own (grid position i L + n is r[i][n + pad]), shifted by S[i]: the samples lost (< 0) or repeated before it
+  const read = (eps, S) => Array.from({ length: ns + 2 }, (_, i) => fracRead(y, off, len, t0 + sc * (S ? S[i] : 0), sc * (1 + eps * 1e-6), i * L - pad, nb));
   const spec = (r, i, start) => {   // the subcarriers of symbol i, window from i L + start: [re[], im[]]
-    const o = pad + i * L + start;
-    for (let n = 0; n < N; n++) { re[n] = r[o + n] || 0; im[n] = 0; }
+    const o = pad + start, x = r[i];
+    for (let n = 0; n < N; n++) { re[n] = x[o + n] || 0; im[n] = 0; }
     fft(re, im);
     return [Float64Array.from(kk, k => re[k]), Float64Array.from(kk, k => im[k])];
   };
@@ -1310,6 +1318,35 @@ function ofdmReceive(y, off, len, fs, t0, m, ns, nc, map = 'dqpsk') {
   };
   let r = read(0);
   let tau = timing(response(r, [0], CP - b0));
+  const cand = ofdmGaps(r, m, map, ns, pad, spec, read, cr, ci);   // v4.1: samples lost or repeated, candidates
+  const S = new Float64Array(ns + 2), slips = [];
+  let erased = [];
+  if (cand.length && cand.length <= OFDM_GAPS) {   // keep the gaps with which the two references agree best
+    const [y0r, y0i] = spec(r, 0, CP / 2 + tau), c2 = 2 * Math.PI * (ns + 1) * L / FS_TX * 1e-6;
+    const agree = tot => {   // 1 if the last reference matches the first one exactly
+      const [a1, b1] = spec([fracRead(y, off, len, t0 + sc * tot, sc, (ns + 1) * L - pad, nb)], 0, CP / 2 + tau);
+      const zr = Float64Array.from(a1, (v, j) => v * y0r[j] + b1[j] * y0i[j]), zi = Float64Array.from(a1, (v, j) => b1[j] * y0r[j] - v * y0i[j]);
+      let zs = 0, best = 0;
+      for (let j = 0; j < K; j++) zs += Math.hypot(zr[j], zi[j]);
+      for (let e = -OFDM_MAX_PPM; e <= OFDM_MAX_PPM; e++) {
+        let sr = 0, si = 0;
+        for (let j = 0; j < K; j++) { const p = c2 * e * (kk[j] * FS_TX / N), c = Math.cos(p), s = Math.sin(p); sr += zr[j] * c - zi[j] * s; si += zr[j] * s + zi[j] * c; }
+        best = Math.max(best, Math.hypot(sr, si));
+      }
+      return best / Math.max(zs, 1e-30);
+    };
+    const tries = [];
+    for (let mk = 0; mk < 1 << cand.length; mk++) {
+      const sub = cand.filter((_, k) => mk >> k & 1);
+      tries.push([agree(sub.reduce((t, c) => t + c[1], 0)), sub]);
+    }
+    const top = Math.max(...tries.map(t => t[0]));
+    const [, sub] = tries.filter(t => t[0] >= 0.9 * top).sort((p, q) => p[1].length - q[1].length || q[0] - p[0])[0];
+    const es = new Set();
+    for (const [i, d, e] of sub) { for (let k = i; k < ns + 2; k++) S[k] += d; slips.push([i, d]); e.forEach(k => es.add(k)); }
+    erased = [...es].sort((u, v) => u - v);
+  }
+  if (slips.length) r = read(0, S);
   // time scale, from the two reference symbols (windows in the middle of the guard: a drift of up to CP/2 fits)
   const [a1, b1] = spec(r, ns + 1, CP / 2 + tau), [a0, b0_] = spec(r, 0, CP / 2 + tau);
   const zr = Float64Array.from(a1, (v, j) => v * a0[j] + b1[j] * b0_[j]), zi = Float64Array.from(a1, (v, j) => b1[j] * a0[j] - v * b0_[j]);
@@ -1322,7 +1359,7 @@ function ofdmReceive(y, off, len, fs, t0, m, ns, nc, map = 'dqpsk') {
   let i = 0; score.forEach((v, k) => { if (v > score[i]) i = k; });
   let eps = i - OFDM_MAX_PPM;
   if (i > 0 && i < score.length - 1) { const [s0, s1, s2] = [score[i - 1], score[i], score[i + 1]]; eps += 0.5 * (s0 - s2) / (s0 - 2 * s1 + s2 - 1e-30); }   // parabola through the peak
-  if (Math.abs(eps) > 0.05) r = read(eps);
+  if (Math.abs(eps) > 0.05 || slips.length) r = read(eps, S);
   tau = timing(response(r, [0, ns + 1], CP - b0));   // both references, now aligned
   const w = CP + tau - OFDM_BACK;   // start of the FFT windows
   // the response as these windows see it: what arrives within the guard (index 0 .. CP) only scales each subcarrier,
@@ -1330,7 +1367,8 @@ function ofdmReceive(y, off, len, fs, t0, m, ns, nc, map = 'dqpsk') {
   const h = response(r, [0, ns + 1], w);
   let hin = 0, hall = 0; h.forEach((v, n) => { hall += v; if (n <= CP) hin += v; });
   const Y = Array.from({ length: ns + 2 }, (_, i) => spec(r, i, w));   // the two references and the data
-  if (map !== 'dqpsk') return Object.assign(ofdmCoherent(Y, ns, nc, m, map), { eps, tau, inside: hin / Math.max(hall, 1e-30), K, h, N, CP, map });
+  const gap = { slips: slips.map(([i, d]) => [i, d * sc]), erased };   // the gaps in samples of the recording
+  if (map !== 'dqpsk') return Object.assign(ofdmCoherent(Y, ns, nc, m, map, erased), { eps, tau, inside: hin / Math.max(hall, 1e-30), K, h, N, CP, map }, gap);
   const Zr = [], Zi = [];   // z = Y_i conj(Y_i-1), turned back by the delay change between the two symbols
   for (let i = 1; i <= ns; i++) {
     const [ar, ai] = Y[i], [br, bi] = Y[i - 1], xr = new Float64Array(K), xi = new Float64Array(K), wr = new Float64Array(K), wi = new Float64Array(K);
@@ -1351,24 +1389,111 @@ function ofdmReceive(y, off, len, fs, t0, m, ns, nc, map = 'dqpsk') {
   }
   const llr = new Float64Array(nc), snr = [], pr = new Float32Array(ns * K), pi = new Float32Array(ns * K), Pj = new Float64Array(K);   // pr, pi: z / Pj, for the plot
   for (let i = 1; i <= ns; i++) for (let j = 0; j < K; j++) Pj[j] += 0.5 * (Y[i][0][j] ** 2 + Y[i][1][j] ** 2 + Y[i - 1][0][j] ** 2 + Y[i - 1][1][j] ** 2) / ns;   // each subcarrier's power
+  let ok = Array.from({ length: ns + 1 }, (_, i) => !erased.includes(i) && !erased.includes(i - 1));   // v4.1: z of an erased symbol is 0
+  if (!ok.slice(1).some(v => v)) ok = ok.map(() => true);
+  const nok = ok.slice(1).filter(v => v).length;
   for (let g = 0; g < K; g += OFDM_GROUP) {
     const g1 = Math.min(K, g + OFDM_GROUP);
     let q = 0, pw = 0;
-    for (let i = 1; i <= ns; i++) for (let j = g; j < g1; j++) {
+    for (let i = 1; i <= ns; i++) if (ok[i]) for (let j = g; j < g1; j++) {
       const [ar, ai] = Y[i], [br, bi] = Y[i - 1], x = Zr[i - 1][j], v = Zi[i - 1][j];
       const dr = Math.sign(x), di = Math.sign(v);   // decision (times sqrt 2); noise across it: Im(z conj(d)) / sqrt 2
       q += ((v * dr - x * di) / Math.SQRT2) ** 2; pw += 0.5 * (ar[j] ** 2 + ai[j] ** 2 + br[j] ** 2 + bi[j] ** 2);
     }
-    const n = ns * (g1 - g), P = Math.max(pw / n, 1e-30), N0 = Math.max(1e-30, (q / n) / P);
+    const n = nok * (g1 - g), P = Math.max(pw / n, 1e-30), N0 = Math.max(1e-30, (q / n) / P);
     snr.push(10 * Math.log10(Math.max(1e-3, P / N0 - 1)));
     for (let i = 1; i <= ns; i++) for (let j = g; j < g1; j++) {
       const q0 = 2 * (K * (i - 1) + j);
-      if (q0 < nc) llr[q0] = -Math.SQRT2 * Zr[i - 1][j] / N0;
-      if (q0 + 1 < nc) llr[q0 + 1] = -Math.SQRT2 * Zi[i - 1][j] / N0;
+      if (q0 < nc) llr[q0] = ok[i] ? -Math.SQRT2 * Zr[i - 1][j] / N0 : 0;
+      if (q0 + 1 < nc) llr[q0 + 1] = ok[i] ? -Math.SQRT2 * Zi[i - 1][j] / N0 : 0;
       pr[K * (i - 1) + j] = Zr[i - 1][j] / Math.max(Pj[j], 1e-30); pi[K * (i - 1) + j] = Zi[i - 1][j] / Math.max(Pj[j], 1e-30);
     }
   }
-  return { llr, eps, tau, inside: hin / Math.max(hall, 1e-30), snr, K, h, N, CP, map, zr: pr, zi: pi };
+  return { llr, eps, tau, inside: hin / Math.max(hall, 1e-30), snr, K, h, N, CP, map, zr: pr, zi: pi, ...gap };
+}
+// 2'. Samples lost or repeated (v4.1). r: the symbols read on the nominal grid. Each symbol's coarse timing is the shift
+// (within +-N/4) that best lines its guard up with its end; a jump of more than CP / OFDM_SLIP that the next symbol
+// confirms is a gap. Its size is refined on a symbol before it and one after it (pilots or the reference: their delay
+// against the first reference; DQPSK: -z^4 across the gap), and the symbol that holds the gap (its guard no longer
+// matches its end) is erased: its LLRs are 0, the code fills them in. Returns the candidate gaps [[first symbol after
+// it, size in samples on the 48 kHz grid, symbols to erase]]; ofdmReceive keeps those with which the references agree best.
+function ofdmGaps(r, m, map, ns, pad, spec, read, cr, ci) {
+  const { N, CP } = m, kk = ofdmCarriers(N), K = kk.length, R = N / 4, T = CP / OFDM_SLIP, o = [], q = [];
+  const median = a => { const s = [...a].sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : 0.5 * (s[n / 2 - 1] + s[n / 2]); };
+  for (const x of r) {   // coarse timing: the shift that best lines the guard up with the end (normalized correlation)
+    const n = x.length - N, c0 = new Float64Array(n + 1), c1 = new Float64Array(n + 1), c2 = new Float64Array(n + 1);
+    for (let k = 0; k < n; k++) { c0[k + 1] = c0[k] + x[k] * x[k + N]; c1[k + 1] = c1[k] + x[k] * x[k]; c2[k + 1] = c2[k] + x[k + N] * x[k + N]; }
+    let bk = 0, bv = -Infinity;
+    for (let k = -R; k <= R; k++) {
+      const a = pad + k, b = a + CP, v = (c0[b] - c0[a]) / Math.sqrt(Math.max((c1[b] - c1[a]) * (c2[b] - c2[a]), 1e-30));
+      if (v > bv) { bv = v; bk = k; }
+    }
+    o.push(bk); q.push(bv);
+  }
+  const med = median(q), good = q.map(v => v >= 0.6 * med), clean = q.map(v => v >= 0.9 * med);   // a symbol that holds a gap: its guard no longer matches its end
+  const jumps = [];
+  let seg = [o[0]], last = 0;   // last: the last clean symbol that agrees with the ones before it
+  for (let i = 1; i < ns + 2; i++) {
+    if (!good[i]) continue;
+    let nxt = null;
+    for (let j = i + 1; j < ns + 2; j++) if (good[j]) { nxt = j; break; }
+    const md = median(seg), off = Math.abs(o[i] - md) > T;
+    if (off && (nxt === null || Math.abs(o[nxt] - o[i]) <= T)) {   // a jump that the next symbol confirms
+      const a = nxt === null ? i : nxt;   // sure to be after the gap: i may still hold its end
+      jumps.push([i, o[a] - md, last, a]); seg = [o[i]]; last = clean[i] ? i : a;
+    } else if (!off) { seg.push(o[i]); if (clean[i]) last = i; }
+  }
+  const S = new Float64Array(ns + 2);
+  if (!jumps.length) return [];
+  // erased: the (at most two) symbols between the last clean one before the gap and the first one after it (one of
+  // them holds the gap, the guard of the next one may reach back across it), and the first one after it unless its guard is clean
+  const ers = jumps.map(([i, , b]) => { const e = []; for (let k = Math.max(b + 1, i - 2); k <= i; k++) if (k > 0 && k <= ns && (k < i || !clean[k])) e.push(k); return e; });
+  for (const [i, d] of jumps) for (let k = i; k < ns + 2; k++) S[k] += d;
+  const rr = read(0, S), st = CP / 2, W = 0.4 * N / OFDM_PSTEP, nd = Math.floor((2 * W + 0.001) / 0.05);   // windows in the middle of the guard
+  let H0r, H0i;
+  if (map !== 'dqpsk') {
+    const [a0, b0] = spec(rr, 0, st);
+    [H0r, H0i] = ofdmSmooth(m, Float64Array.from(a0, (v, j) => v * cr[j] + b0[j] * ci[j]), Float64Array.from(a0, (v, j) => b0[j] * cr[j] - v * ci[j]));
+  }
+  const delay = k => {   // of symbol k against the first reference: its pilots, or all of a reference
+    const [yr, yi] = spec(rr, k, st), p = [], qr = [], qi = [];
+    for (let j = 0; j < K; j++) if (k === 0 || k === ns + 1 || ofdmPilot(j, k)) p.push(j);
+    for (const j of p) {   // q = Y conj(ref H0)
+      const er_ = cr[j] * H0r[j] - ci[j] * H0i[j], ei = cr[j] * H0i[j] + ci[j] * H0r[j];
+      qr.push(yr[j] * er_ + yi[j] * ei); qi.push(yi[j] * er_ - yr[j] * ei);
+    }
+    let best = -1, dl = 0;
+    for (let s = 0; s <= nd; s++) {
+      const d = -W + 0.05 * s;
+      let ar = 0, ai = 0;
+      p.forEach((j, t) => { const ph = 2 * Math.PI * kk[j] * d / N, c = Math.cos(ph), sn = Math.sin(ph); ar += qr[t] * c - qi[t] * sn; ai += qr[t] * sn + qi[t] * c; });
+      const v = ar * ar + ai * ai; if (v > best) { best = v; dl = d; }
+    }
+    return dl;
+  };
+  const out = [];
+  for (const [g, [i, d, b, a]] of jumps.entries()) {   // refined on b, before the gap, and a, after it
+    let fine = 0;
+    if (map !== 'dqpsk') fine = delay(a) - delay(b);
+    else if (a <= ns) {   // DQPSK: z^4 of the two symbols has no data left (sign (-1)^(a - b))
+      const [ar, ai] = spec(rr, a, st), [br, bi] = spec(rr, b, st), sg = (a - b) % 2 ? -1 : 1, wr = new Float64Array(K), wi = new Float64Array(K);
+      for (let j = 0; j < K; j++) {
+        const xr = ar[j] * br[j] + ai[j] * bi[j], xi = ai[j] * br[j] - ar[j] * bi[j];   // z = Y_a conj(Y_b)
+        const a2 = xr * xr - xi * xi, b2 = 2 * xr * xi, m2 = Math.max(xr * xr + xi * xi, 1e-30);
+        wr[j] = sg * (a2 * a2 - b2 * b2) / m2; wi[j] = sg * 2 * a2 * b2 / m2;
+      }
+      let best = -Infinity;
+      for (let s = 0; s <= nd; s++) {
+        const dd = -W + 0.05 * s, s4 = 8 * Math.PI * dd / N;
+        let v = 0;
+        for (let j = 0; j < K; j++) { const ph = s4 * kk[j]; v += wr[j] * Math.cos(ph) - wi[j] * Math.sin(ph); }
+        if (v > best) { best = v; fine = dd; }
+      }
+    }   // DQPSK, a gap just before the last reference: the coarse size
+    for (let k = i; k < ns + 2; k++) S[k] += fine;
+    out.push([i, d + fine, ers[g]]);
+  }
+  return out;
 }
 // 4'. Coherent detection (v4). Y: [re, im] of the reference, the ns data symbols and the reference. The channel of
 // symbol i is H(f) c_i exp(-j 2 pi f d_i / 48000): the room's response H times a gain and phase c_i and a delay change
@@ -1377,14 +1502,15 @@ function ofdmReceive(y, off, len, fs, t0, m, ns, nc, map = 'dqpsk') {
 // the band (ofdmSmooth). Three rounds. N0 per group of 32 subcarriers from what the references and pilots leave
 // (x 1.25: the estimate absorbs some of the noise). LLR of each bit: ln sum over the points s with that bit 1 of
 // exp(-|Y - H_i s|^2 / N0), minus the same over the points with that bit 0.
-function ofdmCoherent(Y, ns, nc, m, map) {
+function ofdmCoherent(Y, ns, nc, m, map, erased = []) {   // erased (v4.1): data symbols that hold a gap, left out, LLRs 0
   const { N } = m, kk = ofdmCarriers(N), K = kk.length, th = ofdmReference(K), rr = th.map(Math.cos), ri = th.map(Math.sin);
   const [pr, pim, lab] = ofdmPoints(map), nb = OFDM_BITS[map], M = pr.length, all = [...Array(K).keys()];
-  const pil = Array.from({ length: ns + 2 }, (_, i) => i === 0 || i === ns + 1 ? all : all.filter(j => ofdmPilot(j, i)));
+  const pil = Array.from({ length: ns + 2 }, (_, i) => i === 0 || i === ns + 1 ? all : erased.includes(i) ? [] : all.filter(j => ofdmPilot(j, i)));
   const Cr = Array.from({ length: ns + 2 }, () => new Float64Array(K).fill(1)), Ci = Array.from({ length: ns + 2 }, () => new Float64Array(K));
   let Hr = new Float64Array(K), Hi = new Float64Array(K);
   const fit = i => {   // c_i exp(-j 2 pi f d_i / 48000) on the pilots of symbol i
     const p = pil[i], [yr, yi] = Y[i], qr = [], qi = [];
+    if (!p.length) return;   // an erased symbol: c_i stays 1
     let ee = 0;
     for (const j of p) {   // q = Y conj(e), e = ref H: what the pilot became, against what it would be without the change
       const er = rr[j] * Hr[j] - ri[j] * Hi[j], ei = rr[j] * Hi[j] + ri[j] * Hr[j];
@@ -1435,8 +1561,11 @@ function ofdmCoherent(Y, ns, nc, m, map) {
   for (let i = 1; i <= ns; i++) for (let j = 0; j < K; j++) {
     if (ofdmPilot(j, i)) continue;
     const [hr, hi] = HC(i, j), yr = Y[i][0][j], yi = Y[i][1][j], h2 = Math.max(hr * hr + hi * hi, 1e-30);
-    for (let p = 0; p < M; p++) { const er = yr - (hr * pr[p] - hi * pim[p]), ei = yi - (hr * pim[p] + hi * pr[p]); d2[p] = -(er * er + ei * ei) / N0[j]; }
-    for (let k = 0; k < nb; k++, q++) if (q < nc) llr[q] = lse(k, 1) - lse(k, 0);
+    if (erased.includes(i)) q += nb;   // its LLRs stay 0
+    else {
+      for (let p = 0; p < M; p++) { const er = yr - (hr * pr[p] - hi * pim[p]), ei = yi - (hr * pim[p] + hi * pr[p]); d2[p] = -(er * er + ei * ei) / N0[j]; }
+      for (let k = 0; k < nb; k++, q++) if (q < nc) llr[q] = lse(k, 1) - lse(k, 0);
+    }
     zr.push((yr * hr + yi * hi) / h2); zi.push((yi * hr - yr * hi) / h2);   // Y / (H C): the point as received
   }
   return { llr, snr, zr: Float32Array.from(zr), zi: Float32Array.from(zi) };
@@ -1574,7 +1703,7 @@ class Receiver {
       return;
     }
     if (hdr.ofdm) {   // OFDM: the first reference symbol follows the control part; decoded once the whole part is in
-      const m = ofdmMode(hdr.ofdm), t0 = this.p1 + (this.NP + this.NH) * this.Lr, Ls = (m.N + m.CP) * this.fs / FS_TX, end = t0 + (hdr.ns + 2) * Ls * (1 + 1e-3);
+      const m = ofdmMode(hdr.ofdm), t0 = this.p1 + (this.NP + this.NH) * this.Lr, Ls = (m.N + m.CP) * this.fs / FS_TX, end = t0 + (hdr.ns + 2) * Ls * (1 + 1e-3) + m.N / 4 * this.fs / FS_TX;
       if (Math.ceil(end) - this.base >= this.cap) return fail('message too long');
       Object.assign(this, { hdr, state: 'ofdm', om: m, t0o: t0, Lso: Ls, endo: end, key: prbs(hdr.nc), frac: 0 });
       this.cb.onState && this.cb.onState('header', hdr);
@@ -1994,6 +2123,7 @@ function showStats(res) {
     st.push([`${(100 * (1 - o.inside)).toFixed(0)} %`, 'of the received energy arrives after the guard interval and acts as noise (from the reference symbols)']);
     st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'time scale Rx vs Tx (clock offset, or a moving phone), from the two reference symbols']);
     st.push([`${o.tau >= 0 ? '+' : ''}${o.tau}`, 'samples (at 48 kHz) from the timing given by the preamble to the start of the guard chosen on the reference symbols']);
+    if (o.slips && o.slips.length) st.push([o.slips.map(([, d]) => Math.abs(d).toFixed(0)).join(' + '), `samples ${o.slips.every(([, d]) => d < 0) ? 'lost' : 'lost or repeated'} by the microphone in the middle of the frame (before symbol ${o.slips.map(([i]) => i).join(', ')} of ${res.hdr.ns}); the symbols after the gap were read again${o.erased.length ? `, symbol ${o.erased.join(', ')} (which holds the gap) erased and left to the code` : ''} (v4.1)`]);
   } else {
   const T = res.cal.t, M = res.hdr.M, snr = `${T.map(t => t.snrDb.toFixed(0)).join(' / ')} dB`, from = `from the ${res.found ? 'postamble' : 'message: postamble not found'}`;
   if (res.hdr.tones === 'hop') {

@@ -1017,6 +1017,8 @@ OFDM_PSTEP, OFDM_PSHIFT = 12, 3
 OFDM_DMAX = 8            # delay change of a symbol (moving phone) searched within +-8 samples
 OFDM_ITERS = 3           # rounds of channel estimate <-> per-symbol gain, phase and delay
 OFDM_ALPHA = 0.01        # channel smoothing A (A + alpha)^-1, see ofdm_smoother
+OFDM_SLIP = 16           # v4.1: a symbol whose timing jumps by more than CP / 16 from the symbols before it: samples lost or repeated
+OFDM_GAPS = 4            # v4.1: at most 4 candidate gaps per frame are weighed against the references (more: none kept)
 _SMOOTH = {}
 
 
@@ -1156,20 +1158,31 @@ def ofdm_receive(y, fs, t0, mode, ns, nc, omap="dqpsk"):
        pilots once their c_i and d_i are removed, smoothed across the band (ofdm_smoother: keep what an echo within
        the guard can make). Three rounds. N0 per group of 32 subcarriers from what the
        references and pilots leave (x 1.25: the estimate absorbs some of the noise). LLR of each bit:
-       ln sum over the points s with that bit 1 of exp(-|Y - H_i s|^2 / N0), minus the same over bit 0."""
+       ln sum over the points s with that bit 1 of exp(-|Y - H_i s|^2 / N0), minus the same over bit 0.
+    2'. Samples lost or repeated (v4.1): the audio path of a phone may drop a block of samples (128, one block of the
+       browser's audio) in the middle of a frame. Every symbol after the gap then arrives that much early: its
+       subcarriers turn by 2 pi f 128 / 48000, far beyond what the delay tracking follows, and the reference symbols
+       no longer give the time scale. Each symbol's coarse timing is the shift (within +-N/4) that best lines its guard
+       up with its end; a jump of more than CP / OFDM_SLIP that the next symbol confirms is a gap. Its size is refined
+       on the symbols on either side of it (pilots or the reference: their delay against the first reference; DQPSK:
+       -z^4 across the gap), every symbol after it is read that much later (or earlier), and the symbol that holds
+       the gap (its guard no longer matches its end) is erased: its LLRs are 0, the code fills them in. A faint frame
+       can make the guards of a few symbols look shifted, so of the gaps found, ofdm_receive keeps the set with which
+       the two reference symbols agree best at their best time scale (the fewest gaps when several sets agree as well)."""
     N, CP = mode["N"], mode["CP"]
     kk = ofdm_carriers(N)
     K, L = len(kk), N + CP
     ref = np.exp(1j * ofdm_reference(K))
     sc = fs / FS_TX
     pad = N // 2
-    n = np.arange(-pad, (ns + 2) * L + pad)                   # grid position m is r[m + pad]
+    n = np.arange(-pad, L + pad)                              # each symbol read on its own: grid position i L + m is r[i, m + pad]
 
-    def read(eps):
-        return frac_read(y, t0 + n * sc * (1 + eps * 1e-6))
+    def read(eps, S=None):                                    # S: each symbol's shift, the samples lost (< 0) or repeated before it
+        S = np.zeros(ns + 2) if S is None else S
+        return np.array([frac_read(y, t0 + sc * (S[i] + (i * L + n) * (1 + eps * 1e-6))) for i in range(ns + 2)])
 
     def spec(r, i, start):                                    # the subcarriers of symbol i, window from i L + start
-        return np.fft.rfft(r[pad + i * L + start:pad + i * L + start + N])[kk]
+        return np.fft.rfft(r[i, pad + start:pad + start + N])[kk]
 
     b0 = CP // 2                                              # a reference window in the middle of its guard
     taper = np.hanning(K + 2)[1:-1]                           # across the band: lower side lobes in time
@@ -1191,9 +1204,32 @@ def ofdm_receive(y, fs, t0, mode, ns, nc, omap="dqpsk"):
 
     r = read(0.0)
     tau, _ = timing(response(r, [0], CP - b0))
+    f = kk * FS_TX / N
+    cand = gaps(r, tau, f, ref, mode, omap, ns, N, CP, pad, spec, read)   # v4.1: samples lost or repeated, candidates
+    S, slips, erased = np.zeros(ns + 2), [], set()
+    if 0 < len(cand) <= OFDM_GAPS:                            # keep the gaps with which the two references agree best
+        R = np.exp(1j * 2 * np.pi * (ns + 1) * L / FS_TX * 1e-6 * np.outer(np.arange(-OFDM_MAX_PPM, OFDM_MAX_PPM + 1, 1.0), f))
+        Y0 = spec(r, 0, CP // 2 + tau)
+
+        def agree(tot):                                       # 1 if the last reference matches the first one exactly
+            x = frac_read(y, t0 + sc * (tot + (ns + 1) * L + n))
+            z = spec(x[None], 0, CP // 2 + tau) * np.conj(Y0)
+            return float(np.abs(R @ z).max() / max(np.abs(z).sum(), 1e-30))
+        tries = []
+        for mk in range(1 << len(cand)):
+            sub = [c for k, c in enumerate(cand) if mk >> k & 1]
+            tries.append((agree(sum(c[1] for c in sub)), len(sub), sub))
+        top = max(t[0] for t in tries)
+        _, _, sub = min((t for t in tries if t[0] >= 0.9 * top), key=lambda t: (t[1], -t[0]))
+        for i, d, e in sub:
+            S[i:] += d
+            slips.append((i, d))
+            erased |= set(e)
+    erased = sorted(erased)
+    if slips:
+        r = read(0.0, S)
     # time scale, from the two reference symbols (windows in the middle of the guard: a drift of up to CP/2 fits)
     z = spec(r, ns + 1, CP // 2 + tau) * np.conj(spec(r, 0, CP // 2 + tau))
-    f = kk * FS_TX / N
     grid = np.arange(-OFDM_MAX_PPM, OFDM_MAX_PPM + 1, 1.0)
     score = np.abs(np.exp(1j * 2 * np.pi * (ns + 1) * L / FS_TX * 1e-6 * np.outer(grid, f)) @ z)
     i = int(np.argmax(score))
@@ -1201,8 +1237,8 @@ def ofdm_receive(y, fs, t0, mode, ns, nc, omap="dqpsk"):
     if 0 < i < len(grid) - 1:                                 # parabola through the peak and its neighbours
         a0, a1, a2 = score[i - 1], score[i], score[i + 1]
         eps += 0.5 * (a0 - a2) / (a0 - 2 * a1 + a2 - 1e-30)
-    if abs(eps) > 0.05:
-        r = read(eps)
+    if abs(eps) > 0.05 or slips:
+        r = read(eps, S)
     tau, _ = timing(response(r, [0, ns + 1], CP - b0))        # both references, now aligned
     w = CP + tau - OFDM_BACK                                  # start of the FFT windows
     # the response as these windows see it: what arrives within the guard (index 0 .. CP) only scales each
@@ -1210,8 +1246,9 @@ def ofdm_receive(y, fs, t0, mode, ns, nc, omap="dqpsk"):
     h = response(r, [0, ns + 1], w)
     inside = float(h[:CP + 1].sum() / max(h.sum(), 1e-30))
     Y = np.array([spec(r, i, w) for i in range(ns + 2)])     # the two references and the data
+    gap = dict(slips=[(i, d * sc) for i, d in slips], erased=erased)   # the gaps in samples of the recording
     if omap != "dqpsk":
-        return dict(ofdm_coherent(Y, ns, nc, mode, omap), eps=eps, tau=tau, inside=inside, K=K, h=h)
+        return dict(ofdm_coherent(Y, ns, nc, mode, omap, erased), eps=eps, tau=tau, inside=inside, K=K, h=h, **gap)
     z = Y[1:ns + 1] * np.conj(Y[:ns])
     dgrid = np.arange(-4, 4.001, 0.01)                        # delay change between two symbols (moving phone)
     E = np.exp(8j * np.pi * np.outer(dgrid, f) / FS_TX)
@@ -1221,21 +1258,92 @@ def ofdm_receive(y, fs, t0, mode, ns, nc, omap="dqpsk"):
     d = (np.sign(z.real) + 1j * np.sign(z.imag)) / math.sqrt(2)
     q = np.imag(z * np.conj(d)) ** 2                          # noise across the decision
     pw = 0.5 * (np.abs(Y[1:ns + 1]) ** 2 + np.abs(Y[:ns]) ** 2)
+    ok = np.array([i not in erased and i - 1 not in erased for i in range(1, ns + 1)])   # v4.1: z of an erased symbol is 0
+    if not ok.any():
+        ok[:] = True
     N0, P, snr = np.empty(K), np.empty(K), []
     for g in range(0, K, OFDM_GROUP):
         sl = slice(g, g + OFDM_GROUP)
-        P[sl] = max(pw[:, sl].mean(), 1e-30)
-        N0[sl] = max(1e-30, q[:, sl].mean() / P[g])
+        P[sl] = max(pw[ok, sl].mean(), 1e-30)
+        N0[sl] = max(1e-30, q[ok, sl].mean() / P[g])
         snr.append(10 * math.log10(max(1e-3, P[g] / N0[g] - 1)))
     llr = np.empty((ns, 2 * K))
     llr[:, 0::2] = -math.sqrt(2) * z.real / N0
     llr[:, 1::2] = -math.sqrt(2) * z.imag / N0
+    llr[~ok] = 0.0
     return dict(llr=llr.ravel()[:nc], eps=eps, tau=tau, inside=inside, snr=np.array(snr), K=K, h=h,
-                z=(z / np.maximum(pw.mean(axis=0), 1e-30)).ravel())   # z over each subcarrier's power, to plot
+                z=(z / np.maximum(pw.mean(axis=0), 1e-30)).ravel(),   # z over each subcarrier's power, to plot
+                slips=[(i, d * sc) for i, d in slips], erased=erased)
 
 
-def ofdm_coherent(Y, ns, nc, mode, omap):
-    """Step 4' of ofdm_receive: Y holds the subcarriers of the reference, the ns data symbols and the reference."""
+def gaps(r, tau, f, ref, mode, omap, ns, N, CP, pad, spec, read):
+    """Step 2' of ofdm_receive (v4.1): samples lost or repeated in the recording. r holds the symbols read on the
+    nominal grid. Returns the candidate gaps [(first symbol after it, size in samples on the 48 kHz grid, symbols
+    to erase)]; ofdm_receive keeps those with which the two references agree best."""
+    ks = np.arange(-N // 4, N // 4 + 1)                       # gaps of up to N / 4 samples (512 with the long guard, 256 with the short one)
+    a, o, q = pad + ks, [], []
+    for x in r:                                               # coarse timing: the shift that best lines the guard up with the end
+        c = [np.concatenate([[0.0], np.cumsum(u)]) for u in (x[:-N] * x[N:], x[:-N] ** 2, x[N:] ** 2)]
+        v = (c[0][a + CP] - c[0][a]) / np.sqrt(np.maximum((c[1][a + CP] - c[1][a]) * (c[2][a + CP] - c[2][a]), 1e-30))
+        o.append(float(ks[np.argmax(v)]))
+        q.append(float(v.max()))
+    o, q = np.array(o), np.array(q)
+    med = float(np.median(q))
+    good = q >= 0.6 * med                                     # a symbol that holds a gap: its guard no longer matches its end
+    clean = q >= 0.9 * med                                    # its guard matches its end as well as most symbols' do
+    jumps, seg, last = [], [o[0]], 0                          # last: the last clean symbol that agrees with the ones before it
+    for i in range(1, ns + 2):
+        if not good[i]:
+            continue
+        nxt = next((j for j in range(i + 1, ns + 2) if good[j]), None)
+        m = float(np.median(seg))
+        off = abs(o[i] - m) > CP / OFDM_SLIP
+        if off and (nxt is None or abs(o[nxt] - o[i]) <= CP / OFDM_SLIP):   # a jump that the next symbol confirms
+            a = i if nxt is None else nxt                     # sure to be after the gap: i may still hold its end
+            jumps.append((i, o[a] - m, last, a))
+            seg, last = [o[i]], i if clean[i] else a
+        elif not off:
+            seg.append(o[i])
+            if clean[i]:
+                last = i
+    S = np.zeros(ns + 2)
+    if not jumps:
+        return []
+    # erased: the (at most two) symbols between the last clean one before the gap and the first one after it (one
+    # of them holds the gap, the guard of the next one may reach back across it), and the first one after it unless
+    # its guard is clean
+    ers = [[k for k in range(max(b + 1, i - 2), i + 1) if 0 < k <= ns and (k < i or not clean[k])] for i, _, b, a in jumps]
+    for i, d, _, _ in jumps:
+        S[i:] += d
+    rr, st = read(0.0, S), CP // 2                            # windows in the middle of the guard (tau from one reference may be off)
+    W = 0.4 * N / OFDM_PSTEP                                  # within half the pilots' period in time (N / 12 samples)
+    dgrid = np.arange(-W, W + 0.001, 0.05)
+    E = np.exp(2j * np.pi * np.outer(dgrid, f) / FS_TX)
+    K = len(f)
+    if omap != "dqpsk":
+        H0 = ofdm_smoother(mode) @ (spec(rr, 0, st) / ref)
+
+        def delay(k):                                         # of symbol k against the first reference: its pilots, or all of a reference
+            p = np.arange(K) if k in (0, ns + 1) else np.nonzero(ofdm_pilots(K, k))[0]
+            return dgrid[int(np.argmax(np.abs(E[:, p] @ (spec(rr, k, st)[p] * np.conj(ref[p] * H0[p])))))]
+    out = []
+    for (i, d, b, a), e in zip(jumps, ers):                   # refined on b, before the gap, and a, after it
+        if omap != "dqpsk":
+            fine = delay(a) - delay(b)
+        elif a <= ns:                                         # DQPSK: z^4 of the two symbols has no data left (sign (-1)^(a - b))
+            z = spec(rr, a, st) * np.conj(spec(rr, b, st))
+            w4 = (-1) ** (a - b) * z ** 4 / np.maximum(np.abs(z) ** 2, 1e-30)
+            fine = dgrid[int(np.argmax((E ** 4 @ w4).real))]
+        else:                                                 # DQPSK, a gap just before the last reference: the coarse size
+            fine = 0.0
+        S[i:] += fine
+        out.append((i, d + fine, e))
+    return out
+
+
+def ofdm_coherent(Y, ns, nc, mode, omap, erased=()):
+    """Step 4' of ofdm_receive: Y holds the subcarriers of the reference, the ns data symbols and the reference.
+    erased (v4.1): data symbols that hold a gap; they are left out and their LLRs are 0."""
     N, CP = mode["N"], mode["CP"]
     kk = ofdm_carriers(N)
     K, f = len(kk), kk * FS_TX / N
@@ -1245,10 +1353,14 @@ def ofdm_coherent(Y, ns, nc, mode, omap):
     W = ofdm_smoother(mode)
     smooth = lambda G: W @ G
     pil = [np.arange(K)] + [np.nonzero(ofdm_pilots(K, i))[0] for i in range(1, ns + 1)] + [np.arange(K)]
+    for i in erased:
+        pil[i] = np.zeros(0, dtype=int)
     dgrid = np.arange(-OFDM_DMAX, OFDM_DMAX + 0.001, 0.02)
 
     def fit(i, H):                                            # c_i exp(-j 2 pi f d_i / 48000) on the pilots of symbol i
         p = pil[i]
+        if len(p) == 0:
+            return np.ones(K, dtype=complex)
         e = ref[p] * H[p]
         q = Y[i, p] * np.conj(e)
         dl = dgrid[int(np.argmax(np.abs(np.exp(2j * np.pi * np.outer(dgrid, f[p]) / FS_TX) @ q)))]
@@ -1263,7 +1375,7 @@ def ofdm_coherent(Y, ns, nc, mode, omap):
             p = pil[i]
             acc[p] += Y[i, p] / (ref[p] * C[i][p])
             cnt[p] += 1
-        H = smooth(acc / cnt)
+        H = smooth(acc / np.maximum(cnt, 1))
     num, den = np.zeros(K), np.zeros(K)
     for i in range(ns + 2):
         p = pil[i]
@@ -1283,6 +1395,8 @@ def ofdm_coherent(Y, ns, nc, mode, omap):
         for k in range(m):
             bit = (lab >> (m - 1 - k)) & 1
             out[:, k] = np.logaddexp.reduce(d2[:, bit == 1], axis=1) - np.logaddexp.reduce(d2[:, bit == 0], axis=1)
+        if i in erased:
+            out[:] = 0.0
         llr.append(out.ravel())
         zs.append(Y[i, dsc] / Hd)
     return dict(llr=np.concatenate(llr)[:nc], snr=np.array(snr), z=np.concatenate(zs))
@@ -1447,6 +1561,9 @@ def decode(y, fs, verbose=True, soft="cal"):
                 print(f"  SNR per subcarrier {np.min(o['snr']):.0f} to {np.max(o['snr']):.0f} dB (median {np.median(o['snr']):.0f}, "
                       f"groups of {OFDM_GROUP}), {100 * (1 - o['inside']):.0f}% of the received energy after the guard, "
                       f"windows {o['tau']:+d} samples from the preamble's timing")
+                for i, d in o["slips"]:
+                    print(f"  {abs(d):.0f} samples {'lost' if d < 0 else 'repeated'} by the microphone before symbol {i} of {hdr['ns']}"
+                          f"{', symbol ' + ', '.join(map(str, o['erased'])) + ' erased' if o['erased'] else ''} (v4.1: read again after the gap)")
             start = round(t0 + (hdr["ns"] + 2) * Ls)
             continue
         n0, nc, rate, tones, M, ns = hdr["n0"], hdr["nc"], hdr["rate"], hdr["tones"], hdr["M"], hdr["ns"]
