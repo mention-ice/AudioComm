@@ -2224,6 +2224,25 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
         change.append(float(10 * np.log10(np.vdot(ck - cp, ck - cp).real / np.vdot(cp, cp).real)))
         chs.append(ck)
         tk.append(b0 + (L - 1 + nt + (L - 1 if last else 0)) / 2)
+    # the noise of each training block: its room fitted on its own (least squares on its rows that see training only),
+    # the first block's as above; each data segment's detector takes the mean of its two blocks', and the SNR shown is
+    # the median over the blocks, so a disturbed block (a hand moving) sets only its neighbours
+    n0k, snrs = [N0], [float(10 * np.log10(np.vdot(c0, c0).real / N0))]
+    for k, (b0, b1) in enumerate(blocks[1:], 1):
+        last = k == len(blocks) - 1
+        mk_ = np.zeros(nt + L - 1)
+        mk_[L - 1:nt + (L - 1 if last else 0)] = 1
+        mk_ *= good[b0:b0 + nt + L - 1]
+        nk = float(mk_.sum())
+        if nk < L + 100:                                   # too few rows left (a gap): the block before's
+            n0k.append(n0k[-1])
+            continue
+        yk = yy[b0:b0 + nt + L - 1]
+        ck = sc_fit(tc, yk, mk_, L, np.zeros(L, dtype=complex), 0.0, it=100 if L <= 512 else 200)
+        r = mk_ * (yk - SCConv([tc], [1.0], L).fwd(ck))
+        n0k.append(float(np.vdot(r, r).real / (nk - L) * (1 + L / nfit)))   # plus the taps' error, as the first block's
+        snrs.append(float(10 * np.log10(np.vdot(ck, ck).real / n0k[-1])))
+    N0s = [(n0k[j] + n0k[j + 1]) / 2 for j in range(len(segs))]
     # 5. each segment: rows S .. E + L - 2, the training's part removed; its two anchors blended
     obs, ops = [], []
     for j, (S, E) in enumerate(segs):
@@ -2245,11 +2264,11 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
         for j, (S, E) in enumerate(segs):
             lp = lprior[q * m:(q + E - S) * m]
             if det == "lmmse":
-                ext.append(sc_sic(obs[j], ops[j], N0, omap, lp))
+                ext.append(sc_sic(obs[j], ops[j], N0s[j], omap, lp))
             else:
                 if xs[j] is None:
-                    xs[j] = sc_lmmse(obs[j], ops[j], N0)[0]
-                le, xs[j] = sc_smap(obs[j], ops[j], N0, omap, lp, xs[j], steps[0] if it == 0 else steps[1])
+                    xs[j] = sc_lmmse(obs[j], ops[j], N0s[j])[0]
+                le, xs[j] = sc_smap(obs[j], ops[j], N0s[j], omap, lp, xs[j], steps[0] if it == 0 else steps[1])
                 ext.append(le)
             q += E - S
         le_ = np.concatenate(ext)
@@ -2266,7 +2285,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
         e = np.clip(app - lin_, -20, 20)
         lprior = flip * np.r_[e, np.zeros(ns * m - nc)]
     out = dict(bits=bits, passes=passes, codeword=bool(np.array_equal((app > 0).astype(int), cw)),
-               chan_errors=int(np.sum(first != (cw > 0))), snr=float(10 * np.log10(np.vdot(c0, c0).real / N0)),
+               chan_errors=int(np.sum(first != (cw > 0))), snr=float(np.median(snrs)), snrs=snrs,
                ppm=ppm, bend=bend, phase=phase, change=change, taps=L, train=nt, effort=effort, est=est, nseg=len(segs), T0=T0,
                gaps=[(ng / FS_TX, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist)
     if gaps and not out["codeword"] and swap is None:     # v5.1: the other size, or the runner-up place, of the least sure gap
@@ -2578,7 +2597,7 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                       f"code {hdr['code']} corrected {o['chan_errors']} of {hdr['nc']} channel bits")
                 print(f"  from the header: {sc_desc(hdr['map'], hdr['train'])}, {hdr['ns']} data symbols in {o['nseg']} segment{'s' if o['nseg'] > 1 else ''}, {ctl}")
                 ch = ", ".join(f"{c:.0f}" for c in o["change"])
-                print(f"  SNR {o['snr']:.1f} dB on the first training block (the room's {o['taps']} taps against what they leave"
+                print(f"  SNR {o['snr']:.1f} dB, the median of the training blocks ({' / '.join(f'{v:.1f}' for v in o['snrs'])} dB: each block's room, {o['taps']} taps, against what it leaves"
                       f"{', MMSE' if est == 'mmse' else ''}), "
                       f"room change at each later block {ch} dB, sampling phase {o['phase']}")
                 print(f"  {'SMAP' if det == 'smap' else 'linear MMSE'} ({effort}) and the turbo decoder: {o['passes']} pass{'es' if o['passes'] > 1 else ''}, "

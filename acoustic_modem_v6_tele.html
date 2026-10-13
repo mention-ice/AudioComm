@@ -2452,6 +2452,22 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
     change.push(10 * Math.log10(en(csub(ck, cp)) / en(cp)));
     chs.push(ck); tk.push(b0 + (L - 1 + nt + (last ? L - 1 : 0)) / 2);
   }
+  // the noise of each training block: its room fitted on its own (least squares on its rows that see training only),
+  // the first block's as above; each data segment's detector takes the mean of its two blocks', and the SNR shown is
+  // the median over the blocks, so a disturbed block (a hand moving) sets only its neighbours
+  const n0k = [N0], snrs = [10 * Math.log10(en(c0) / N0)];
+  for (let k = 1; k < blocks.length; k++) {
+    const b0 = blocks[k][0], last = k === blocks.length - 1, mk_ = new Float64Array(nt + L - 1).fill(1, L - 1, nt + (last ? L - 1 : 0));
+    for (let j = 0; j < mk_.length; j++) mk_[j] *= good[b0 + j];
+    const nk = mk_.reduce((a, b) => a + b, 0);
+    if (nk < L + 100) { n0k.push(n0k[k - 1]); continue; }   // too few rows left (a gap): the block before's
+    const yk = cslice(yy, b0, b0 + nt + L - 1), ck = scFit(tc, yk, mk_, L, cvec(L), 0, L <= 512 ? 100 : 200), f = new SCConv([tc], null, L).fwd(ck);
+    let e = 0; for (let j = 0; j < mk_.length; j++) e += mk_[j] * ((yk.r[j] - f.r[j]) ** 2 + (yk.i[j] - f.i[j]) ** 2);
+    n0k.push(e / (nk - L) * (1 + L / nfit));   // plus the taps' error, as the first block's
+    snrs.push(10 * Math.log10(en(ck) / n0k[k]));
+  }
+  const N0s = segs.map((_, j) => (n0k[j] + n0k[j + 1]) / 2);
+  const srt = [...snrs].sort((a, b) => a - b), nb = srt.length, snrMed = nb % 2 ? srt[(nb - 1) / 2] : (srt[nb / 2 - 1] + srt[nb / 2]) / 2;
   // 5. each segment: rows S .. E + L - 2, the training's part removed; its two anchors blended
   const obs = [], ops = [];
   segs.forEach(([S, E], j) => {
@@ -2470,10 +2486,10 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
     segs.forEach(([S, E], j) => {
       const lp = lprior.subarray(q * m, (q + E - S) * m);
       let le;
-      if (det === 'lmmse') { const o = scSic(obs[j], ops[j], N0, ax, lp); le = o.llr; if (it === 0 && j === 0) zc = o.z; }
+      if (det === 'lmmse') { const o = scSic(obs[j], ops[j], N0s[j], ax, lp); le = o.llr; if (it === 0 && j === 0) zc = o.z; }
       else {
-        if (!xs[j]) { const o = scLmmse(obs[j], ops[j], N0); xs[j] = o.x; if (j === 0) zc = { r: o.x.r.map(v => v / o.beta), i: o.x.i.map(v => v / o.beta) }; }
-        const o = scSmap(obs[j], ops[j], N0, ax, lp, xs[j], it === 0 ? steps[0] : steps[1]); le = o.llr; xs[j] = o.x;
+        if (!xs[j]) { const o = scLmmse(obs[j], ops[j], N0s[j]); xs[j] = o.x; if (j === 0) zc = { r: o.x.r.map(v => v / o.beta), i: o.x.i.map(v => v / o.beta) }; }
+        const o = scSmap(obs[j], ops[j], N0s[j], ax, lp, xs[j], it === 0 ? steps[0] : steps[1]); le = o.llr; xs[j] = o.x;
       }
       ext.set(le, q * m); q += E - S;
     });
@@ -2492,7 +2508,7 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
   const cw = encodeFEC(code, bits); let chErr = 0;
   for (let i = 0; i < nc; i++) chErr += (first[i] > 0 ? 1 : 0) !== (cw[i] ^ key[i]);
   const h = Float32Array.from(c0.r, (v, k) => v * v + c0.i[k] * c0.i[k]), step = Math.max(1, Math.floor(zc.r.length / 5000));
-  const out = { bits: Uint8Array.from(bits), passes, codeword: hist[hist.length - 1] === 0, chErr, snr: 10 * Math.log10(en(c0) / N0), ppm, bend, phase, change, nseg: segs.length, taps: L, train: nt, effort, npass, est,
+  const out = { bits: Uint8Array.from(bits), passes, codeword: hist[hist.length - 1] === 0, chErr, snr: snrMed, snrs, ppm, bend, phase, change, nseg: segs.length, taps: L, train: nt, effort, npass, est,
            T0, sec: (now() - tStart) / 1000, det, hist, llr: Float32Array.from(first), h, map, gaps: gaps.map(([g, sz]) => [g / FS_TX, sz]), erased: nErased, swap,
            zr: Float32Array.from({ length: Math.ceil(zc.r.length / step) }, (_, k) => zc.r[k * step]), zi: Float32Array.from({ length: Math.ceil(zc.r.length / step) }, (_, k) => zc.i[k * step]) };
   if (gaps.length && !out.codeword && swap === null) {   // v5.1: the other size, or the runner-up place, of the least sure gap
@@ -3400,7 +3416,7 @@ function showStats(res) {
   }
   if (h.sc) {   // v5, single carrier
     const o = res.sc, dn = detName(o.det);
-    st.push([`${o.snr.toFixed(1)} dB`, 'SNR of the symbols', `from the first training block: the noise, plus the echo beyond the ${o.taps} taps (${Math.round((o.taps - SC_PRE) / SC_RS * 1000)} ms after the first strong arrival) and the room's drift`]);
+    st.push([`${o.snr.toFixed(1)} dB`, 'SNR of the symbols', `the median over the training blocks (${o.snrs.map(v => v.toFixed(1)).join(' / ')} dB), each with its own room: the noise, plus the echo beyond the ${o.taps} taps (${Math.round((o.taps - SC_PRE) / SC_RS * 1000)} ms after the first strong arrival) and the room's drift`]);
     st.push([o.taps, 'taps of the room', o.est === 'mmse' ? `by MMSE, the most the ${scTrainName(o.train)} training allows: each tap weighed by the room's power at its delay` : SC_TAPS[o.train].length > 1 ? `the ${scTrainName(o.train)} training allows ${SC_TAPS[o.train].join(' or ')}: the receiver keeps the one that fits better` : `what the ${scTrainName(o.train)} training allows`]);
     st.push([o.passes, `pass${o.passes > 1 ? 'es' : ''}, ${dn} ↔ turbo`, `turbo equalization, at most ${o.npass} passes (${o.effort} effort); it stops once the decisions form a codeword. Coded bits in doubt after each pass: ${o.hist.join(' → ')}`]);
     st.push([`${o.sec.toFixed(1)} s`, 'to decode', `${dn}, ${o.effort} effort, in the background: listening went on`]);
