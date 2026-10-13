@@ -998,13 +998,15 @@ SMAP~\cite{smap} replaces the discrete prior of each coordinate by a mixture of 
 f(u) = \frac{\|y - C s\|^2}{N_0} - \sum_{i=1}^{2n} \ln \sum_a \pi_{i,a}\, e^{-(u_i - A_a)^2/2\tau^2}, \qquad \tau^2 = \kappa_m\, d^2,
 \label{eq:smap}
 \end{equation}
-$d$ the spacing of the levels and $\kappa_m = 0.25$ (QPSK, 16QAM), $0.3$ (64QAM) or $0.4$ (256QAM). Its gradient,
+$d$ the spacing of the levels and $\kappa_m = 0.25$ (QPSK, 16QAM), $0.4$ (64QAM) or $1$ (256QAM). Its gradient,
 \begin{equation}
 \nabla f(u) = \frac{2}{N_0} \begin{bmatrix} \operatorname{Re} \\ \operatorname{Im} \end{bmatrix} C^H (C s - y) + \frac{u - \mu(u)}{\tau^2},
 \end{equation}
 with $\mu_i(u) = \sum_a \omega_{i,a} A_a$ the mean of the levels under the weights $\omega_{i,a} \propto \pi_{i,a}\, e^{-(u_i - A_a)^2/2\tau^2}$, costs a few FFTs. $f$ is minimized by L-BFGS~\cite{lbfgs} (memory 10, a backtracking line search with Armijo's condition), from the linear MMSE estimate $(C^H C + N_0 I)^{-1} C^H y$ on the first pass and from the previous pass's minimum afterwards, for at most 30 steps (20 on later passes) with the fast effort and 150 (100) with the full one, or until $\|\nabla f\| < 10^{-5}\sqrt{2n}$. The mixture pulls each coordinate towards the levels the decoder believes in, each with its own weight: the reliability per symbol that the linear detector lacks.
 
-The paper anneals $\tau^2$ down to about $0.08\,d^2$ for hard decisions. Here one wider $\tau^2$ serves both the search and the soft output, because at the code's threshold many coordinates sit in the wrong well of a sharp mixture, where the local Gaussian claims near-certainty. With $\tau^2 = 0.08\,d^2$, on the room response of one of Sheng's recordings (3000 symbols, 16QAM and 256QAM near their thresholds), SMAP's LLRs claimed $1.1$ to $1.9\,\%$ of wrong bits where $10.6$ to $16.4\,\%$ were wrong, and carried $0.10$ to $0.45$ bit of mutual information per bit against $0.49$ to $0.63$ for the linear MMSE's. With the values above, the LLRs are calibrated (claimed $14.7\,\%$, real $15.8\,\%$) and carry more than the linear MMSE's ($0.50$ to $0.66$ bit).
+The paper anneals $\tau^2$ down to about $0.08\,d^2$ for hard decisions. Here one wider $\tau^2$ serves both the search and the soft output, because at the code's threshold many coordinates sit in the wrong well of a sharp mixture, where the local Gaussian claims near-certainty. With $\tau^2 = 0.08\,d^2$, on the room response of one of Sheng's recordings (3000 symbols, 16QAM and 256QAM near their thresholds), SMAP's LLRs claimed $1.1$ to $1.9\,\%$ of wrong bits where $10.6$ to $16.4\,\%$ were wrong, and carried $0.10$ to $0.45$ bit of mutual information per bit against $0.49$ to $0.63$ for the linear MMSE's. With $\kappa_m$ between $0.25$ and $0.4$, the LLRs are calibrated (claimed $14.7\,\%$, real $15.8\,\%$) and carry more than the linear MMSE's ($0.50$ to $0.66$ bit).
+
+The best width follows the noise at the detector at the code's threshold. With the page's receiver on the image frames of two recordings, $13$ noise draws each at the frame's borderline SNR, 64QAM at turbo rate $1/2$ decoded $10$ of $26$ times with $0.4\,d^2$ against $6$ with $0.3\,d^2$, and 256QAM $25$ against $22$ at rate $1/2$ ($18.5\dB$) and $19$ against $5$ at rate $1/3$ ($13.5\dB$) with $1\,d^2$ against $0.4\,d^2$. 16QAM gained nothing from a wider mixture, and $1.5\,d^2$ was too wide for 256QAM. The best $\tau$ comes out at $0.75$ to $1$ times the standard deviation of the noise per coordinate at the threshold: narrower wells lock coordinates into wrong levels, shallower ones leave interference the decoder's beliefs could remove. The clean frames of five recordings end as before; QPSK, rate $1/4$ and the full effort were not checked.
 
 \paragraph{Soft output.}
 At the minimum $x$, the Hessian of $f$ is $\tfrac{2}{N_0}\bigl[C^H C\bigr]_{\mathbb R} + \operatorname{diag}(D)$, with the mixture's own curvature $D_i = 1/\tau^2 - \operatorname{Var}_i/\tau^4$, $\operatorname{Var}_i$ the variance of the levels under $\omega_{i,\cdot}$. The circulant approximation gives the data part the eigenvalues $\lambda(f) = 2|C(f)|^2/N_0$, and each coordinate's local variance, corrected for its own curvature, is
@@ -1783,7 +1785,7 @@ Timing & earliest peak $\ge 0.5$ of the strongest, $\le 15\ms$ before it & The t
 Room & 256, 512 or 1024 taps, 64 before $T_0$ & $1.5$ rows per tap on each later training block (\cref{sec:scframe}).\\
 Pull between blocks & $\rho_{\mathrm{rel}} = 1$ & A tight pull ($-20\dB$) kept an outdated room when people moved (\cref{sec:scrx}).\\
 Sampling phase & 1 of 5, by Gaussian rate & The fits' residuals hardly differ; the folded room does, by 1 to $1.5\dB$.\\
-SMAP width & $\tau^2 = 0.25, 0.25, 0.3, 0.4\,d^2$ & Calibrated LLRs at the code's threshold; sharper mixtures are overconfident (\cref{sec:scdet}).\\
+SMAP width & $\tau^2 = 0.25, 0.25, 0.4, 1\,d^2$ & Best decode rate near the code's threshold, $2$ recordings $\times$ $13$ noise draws; sharper mixtures are overconfident (\cref{sec:scdet}).\\
 Effort & fast: 30 (20) steps, $\le 4$ passes; full: 150 (100), $\le 8$ & Fast costs at most $1\dB$ at the threshold, for a third to two thirds of the time.\\
 \bottomrule
 \end{tabularx}

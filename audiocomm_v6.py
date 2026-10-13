@@ -1489,7 +1489,7 @@ SC_GAP = 0.1             # silence after the control part: its echoes fade befor
 SC_L, SC_PRE = 512, 64   # channel taps, of which SC_PRE before the first strong arrival
 SC_FIELD = 2             # header: tone set 3, rate field 2 (OFDM uses 0 and 1, 6400 bit/s 3)
 SC_MAPS = ["qpsk", "16qam", "64qam", "256qam"]
-SC_WIDTH = {"qpsk": 0.25, "16qam": 0.25, "64qam": 0.3, "256qam": 0.4}   # SMAP: prior width tau^2 / d^2 (d: spacing of the levels)
+SC_WIDTH = {"qpsk": 0.25, "16qam": 0.25, "64qam": 0.4, "256qam": 1.0}   # SMAP: prior width tau^2 / d^2 (d: spacing of the levels)
 SC_PASSES = 8            # turbo equalization: at most this many detector <-> decoder passes (full effort)
 SC_EFFORT = {"fast": ((30, 20), 4), "full": ((150, 100), SC_PASSES)}   # the receiver's choice: SMAP's steps (first pass,
                          # later ones) and the passes; fast costs at most 1 dB at the threshold on our recordings, and
