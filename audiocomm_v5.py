@@ -97,6 +97,7 @@ Usage
   python audiocomm_v5.py tx --image greatwave_160x108.png --mod ofdm --map 256qam --code turbo -o qam256.wav   # 256QAM, 63 kbit/s
   python audiocomm_v5.py tx --image greatwave_160x108.png --mod sc --map 256qam --code turbo -o sc256.wav   # single carrier (v5)
   python audiocomm_v5.py rx sc256.wav --det lmmse            # the same with the linear MMSE detector instead of SMAP
+  python audiocomm_v5.py rx sc256.wav --est mmse             # the room estimated by MMSE instead of least squares
   python audiocomm_v5.py rx --listen 20                      # record 20 s from the mic, then decode
   python audiocomm_v5.py tx --sound -o sound.wav             # room sounding: MLS of 0.68 s, 4 periods averaged
   python audiocomm_v5.py tx --sound --order 16 --periods 8 --pre 511 -o sound.wav   # large or reverberant room
@@ -1481,6 +1482,19 @@ SC_EFFORT = {"fast": ((30, 20), 4), "full": ((150, 100), SC_PASSES)}   # the rec
 SC_REL = 1.0             # ridge prior of a training block's room: the one before, give or take its own size (a weak
                          # pull; a tight one, -20 dB, cost 2 to 7 dB on our recordings when people moved)
 SC_MAX_PPM = 500         # clock offset plus a moving phone
+SC_EST = ("ls", "mmse")  # the receiver's estimate of the room on the first block: least squares (default) or MMSE with
+                         # a prior power per tap learned from a least-squares pilot; on Sheng's recordings with noise
+                         # added, MMSE decoded at the same SNR as least squares or 1 dB lower (v5/taps/tap_estimation.md)
+SC_SMOOTH = 33           # MMSE: taps over which the pilot's power is averaged into the prior
+SC_GAP_MAX = 1024        # v5.1: the time map also looks this many samples farther, for samples the microphone lost or
+SC_GAP_COH = 1.5         # repeated between two training blocks; such a jump is a gap if the blocks agree this much
+                         # better there than in the usual window (coherence of their cross-spectrum)
+SC_GAP_AR = 32           # order of the linear predictor that finds where the samples went missing (sc_click)
+SC_GAP_W = 16            # sc_click: samples on each side of the join over which the prediction errors are summed
+SC_GAP_SPAN = SC_SPAN * SC_SPS + 8   # samples on each side of a jump that the matched filter and the interpolation smear it over
+SC_GAP_EDGE = 600        # a jump inside the first block is looked for only this far from its end (closer, the next block
+                         # sees it) and past its first L symbols (before, the timing takes the part after it)
+SC_GAP_MIN = 4           # inside the first block: a jump of more samples than this
 
 
 def sc_rrc(beta=SC_BETA, sps=SC_SPS, span=SC_SPAN):
@@ -1612,6 +1626,21 @@ class SCConv:
     def spectrum(self, n=4096):
         """|C(f)|^2 averaged over the anchors (the circulant approximation)."""
         return np.mean([np.abs(np.fft.fft(c, max(n, nfft(self.L)))) ** 2 for c in self.chs], axis=0)
+
+
+class SCMask:
+    """An SCConv seen through a row mask w (0 or 1): v5.1, rows lost with the samples the microphone dropped."""
+    def __init__(self, op, w):
+        self.op, self.w, self.n, self.L, self.nr = op, w, op.n, op.L, op.nr
+
+    def fwd(self, s):
+        return self.w * self.op.fwd(s)
+
+    def adj(self, r):
+        return self.op.adj(self.w * r)
+
+    def spectrum(self, n=4096):
+        return self.op.spectrum(n)
 
 
 def cg(op, b, x0=None, it=200, tol=1e-6):
@@ -1855,6 +1884,82 @@ def _peak(v, i):
     return float(i)
 
 
+def sc_click(y, lo, hi, order=SC_GAP_AR, W=SC_GAP_W):
+    """v5.1: the recording sample in [lo, hi) where y jumps. Samples lost or repeated by the microphone join two
+    stretches of sound that do not follow each other; the sound itself fills only 3.2 to 16 kHz of the 24 kHz band,
+    so a linear predictor fitted on the stretch follows it closely everywhere but there (the click detector of audio
+    restoration). Predicted from the past, the W samples after the join go wrong; predicted from the future, the W
+    before it: their squared errors summed. Returns the first sample after the join, the runner-up place (more than
+    2 SC_GAP_SPAN away) and its score over the best's (near 1: unsure)."""
+    lo, hi = max(int(lo), order), min(int(math.ceil(hi)), len(y) - order)
+    seg = y[lo - order:hi + order]
+    N = nfft(2 * len(seg))
+    R = np.fft.irfft(np.abs(np.fft.rfft(seg, N)) ** 2, N)[:order + 1]
+    T = R[np.abs(np.arange(order)[:, None] - np.arange(order)[None, :])] + 1e-9 * R[0] * np.eye(order)
+    h = np.r_[1.0, -np.linalg.solve(T, R[1:order + 1])]
+    m = hi - lo
+    ef = np.convolve(seg, h)[order:order + m] ** 2               # sample lo + i from the order samples before it
+    eb = np.convolve(seg[::-1], h)[order:order + m][::-1] ** 2   # from the order samples after it
+    sc = np.convolve(ef, np.ones(W))[W - 1:W - 1 + m]            # lo + i .. lo + i + W - 1
+    sc[1:] += np.convolve(eb, np.ones(W))[:m - 1]                # lo + i - W .. lo + i - 1
+    i = int(np.argmax(sc))
+    far = np.abs(np.arange(m) - i) > 2 * SC_GAP_SPAN
+    j = int(np.argmax(np.where(far, sc, -1.0))) if far.any() else i
+    return lo + i, lo + j, float(sc[j] / sc[i]) if j != i and sc[i] > 0 else 0.0
+
+
+def sc_clock0(y, fs, T0, nt, L):
+    """v5.1: the clock (delay gained per transmitted sample) from the first training block alone, for a jump in the
+    only interval. The room fitted on each half of the block (rows that see TA and TC only), on all 5 sampling
+    phases, predicts the other half; the delay between that prediction and the recording (cross-spectrum phase, as
+    the time map) is the clock's drift between the halves, the room cancels. Its error on Sheng's recordings: 0.5 to
+    5 ppm, up to 20 ppm when the phone or the speaker moved (sc_receive then tries the other size)."""
+    rho, P5 = fs / FS_TX, SC_SPS
+    x0 = np.concatenate(sc_training(nt))
+    nA = len(x0)
+    nrows = nA + L - 1
+    n = -P5 * SC_PRE + np.arange(P5 * (nrows + 2 * SC_SPAN + 2))
+    v = math.sqrt(2) * sc_read(y, T0 + rho * n) * np.exp(-2j * np.pi * SC_FC / FS_TX * n)
+    mf = np.convolve(v, SC_G)
+    mid = (L + nA) // 2
+    hal = [(L, mid), (mid, nA)]
+    Y, M = np.zeros((nrows, P5), complex), [np.zeros((nrows, P5), complex) for _ in hal]
+    for p in range(P5):
+        Y[:, p] = mf[2 * SC_DLY + p::P5][:nrows]
+        for h, (a, b) in enumerate(hal):
+            w = np.zeros(nrows)
+            w[a:b] = 1
+            M[h][:, p] = SCConv([x0], [1.0], L).fwd(sc_fit(x0, Y[:, p], w, L, np.zeros(L, dtype=complex), 0.0))
+    nf = nfft(P5 * (mid - L))
+    f = np.fft.fftfreq(nf, 1 / FS_TX)
+    band = np.abs(f) < 6000
+
+    def delay(ys, ms):                                     # ys late on ms by this many samples
+        X = (np.fft.fft(ys, nf) * np.conj(np.fft.fft(ms, nf)))[band]
+        ph = lambda d: abs(np.sum(X * np.exp(2j * np.pi * f[band] * d / FS_TX)))
+        grid = np.linspace(-1.5, 1.5, 301)
+        best = grid[int(np.argmax([ph(d) for d in grid]))]
+        grid = np.linspace(best - 0.01, best + 0.01, 41)
+        return grid[int(np.argmax([ph(d) for d in grid]))]
+    (a0, b0), (a1, b1) = hal
+    d10 = delay(Y[a1:b1].ravel(), M[0][a1:b1].ravel())
+    d01 = delay(Y[a0:b0].ravel(), M[1][a0:b0].ravel())
+    return (d10 - d01) / 2 / (P5 * (mid - L))
+
+
+def sc_split(y, rho, t, p, u):
+    """v5.1: a jump at sample u of the waveform p sent, which arrives near sample t of the recording y. The envelope of
+    the correlation of the recording with p's part before u, against that of its part after (cross-correlated, so
+    the room cancels): the jump in samples of the recording; and the first strong arrival of the part before."""
+    G = SC_GAP_MAX
+    lo, n = t - rho * (round(SC_T0_BACK * FS_TX) + G), round(2 * SC_T0_BACK * FS_TX) + 2 * G
+    pb, pq = p[:u - SC_GAP_SPAN], p[u + SC_GAP_SPAN:]
+    cb = _env_xcorr(sc_read(y, lo + rho * np.arange(n + len(pb))), pb)
+    cq = _env_xcorr(sc_read(y, lo + rho * (u + SC_GAP_SPAN + np.arange(n + len(pq)))), pq)
+    xc = np.correlate(np.r_[np.zeros(G), cq, np.zeros(G)], cb, "valid")   # lags -G .. G
+    return (_peak(xc, int(np.argmax(xc))) - G) * rho, lo + rho * _peak(cb, sc_first_arrival(cb))
+
+
 SC_T0_FRAC, SC_T0_BACK = 0.5, 0.015   # timing: the earliest arrival with half the strongest's correlation, up to 15 ms before it
 
 
@@ -1869,13 +1974,43 @@ def sc_first_arrival(env):
     return i
 
 
-def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_NC, effort="fast"):
+def sc_mmse_first(xA, y1, nA, L):
+    """MMSE room on the first block, on the rows that see the training only (as least squares; the rows before it
+    would add the control part's late echoes). Pilot: least squares on L taps; its residual gives N0 (echoes beyond
+    L taps count as noise). Prior power of tap l: the pilot's |c_l|^2 averaged over SC_SMOOTH taps, minus the pilot's
+    estimation floor f = N0 / (nA - L) (at least f / 10). Then a ridge with the weight N0 / p_l on tap l. Returns the
+    taps, N0 of the fit, and N0 for detection: plus the taps' remaining error, sum p_l f / (p_l + f) (white training)."""
+    mask = np.zeros(nA + L - 1)
+    mask[L:nA] = 1
+    c1 = sc_fit(xA, y1, mask, L, np.zeros(L, dtype=complex), 0.0, it=200)
+    r = mask * (y1 - SCConv([xA], [1.0], L).fwd(c1))
+    N0b = np.vdot(r, r).real / (nA - 2 * L)
+    f = N0b / (nA - L)
+    p = np.maximum(np.convolve(np.abs(c1) ** 2, np.ones(SC_SMOOTH) / SC_SMOOTH, mode="same") - f, f / 10)
+    c0 = sc_fit(xA, y1, mask, L, np.zeros(L, dtype=complex), N0b / p, it=200)
+    return c0, N0b, N0b + float(np.sum(p * f / (p + f)))
+
+
+def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_NC, effort="fast", est="ls", swap=None):
     """The single-carrier part of a frame whose control part ends near sample t0 of the recording y.
     1. Timing: the first strong arrival of the first training block (its correlation with the waveform sent): the
        earliest peak with at least half the strongest's, up to 15 ms before it (a later echo can be the strongest).
     2. Time scale: the clean stretch of each block's TC (rows that see no data) is the same waveform each time; the
        delay of each against the first (the peak of their band-limited cross-correlation, to 1/1000 of a sample)
        gives the time map, linear between blocks: clock offset, a moving phone. The part is read on that map.
+       v5.1: the delay is also searched SC_GAP_MAX samples farther; a block that agrees clearly better there marks
+       samples lost or repeated by the microphone since the block before. Their number is the jump less the clock's
+       share (the clock from the nearest interval without a jump, else from the first block alone, sc_clock0),
+       rounded to whole samples of the recording. Where they went missing: where the prediction errors forward and
+       backward peak (sc_click), from the middle of the block before to the middle of the block after; if the frame
+       then fails, it is tried again with the other whole number or the runner-up place, whichever was less
+       certain. The map then jumps there, and the rows the jump
+       smears are masked: the room is fitted without them, and the detector neither uses them nor trusts the
+       symbols they carry (their LLRs are 0, the code fills them in).
+       A jump inside the first block, whose TC is the reference: the arrival of the block's part before the
+       prediction error's peak against that of the part after (step 1, the envelopes of their correlations
+       cross-correlated); the timing is then that of the part before. The same in the last block, which no later
+       block checks.
     3. Down-conversion, matched filter, symbol-rate samples for each of the 5 sampling phases; the phase whose room
        (fitted on the first block) would carry the most, mean of log2(1 + |C(f)|^2 / N0), is kept: the 5 fits leave
        the same error to 0.1 dB, but the room folded at the symbol rate differs from phase to phase by 1 to 1.5 dB
@@ -1883,7 +2018,8 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     4. The room: 256, 512 or 1024 taps (SC_TAPS, as the TC of nt symbols allows) by least squares on the first
        block (rows that see no data), the noise from what they leave; with the long TC, 1024 taps if they leave
        less, their own error counted; each later block by ridge regression from the one before (rows that see TC
-       only); over the data between two blocks, the two blended linearly row by row.
+       only); over the data between two blocks, the two blended linearly row by row. With est 'mmse', the first
+       block's room is instead the most taps the TC allows, by MMSE (sc_mmse_first).
     5. Each data segment's rows, the training's echoes removed; detector (soft SMAP or linear MMSE) on each segment,
        turbo decoder over the whole message, its beliefs back to the detector; stops once the decisions form a
        codeword or after the passes of the effort chosen (SC_EFFORT)."""
@@ -1906,6 +2042,22 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     nz = len(pa) + round(0.09 * FS_TX)
     env = _env_xcorr(sc_read(y, lo + np.arange(nz) * rho), pa)
     T0 = lo + _peak(env, sc_first_arrival(env)) * rho
+    # v5.1: a jump inside the first block (its TC is every later block's reference): the arrival of the block's part
+    # before the prediction error's peak against that of the part after (the envelopes of their correlations with
+    # what was sent, cross-correlated; the room cancels)
+    gaps0, unsure = [], []                                 # unsure: (how unsure, (gap, "size" or "place")) for the second try
+    ub = SC_SPS * (SC_NA + nt) + 2 * SC_DLY - SC_GAP_EDGE
+    if ub > SC_SPS * L:
+        tg = sc_click(y, T0 + rho * SC_SPS * L, T0 + rho * ub)[0]
+        raw, Tb = sc_split(y, rho, T0, pa, int((tg - T0) / rho))
+        if abs(raw) > SC_GAP_MIN:
+            T0 = Tb                                            # the arrival of the part before it
+            sz = round(raw)
+            if swap == (0, "size"):                            # the second try: the other whole number
+                sz += 1 if raw > sz else -1
+            unsure.append((2 * abs(raw - round(raw)), (0, "size")))
+            gaps0.append(((tg - T0) / rho, sz / rho))
+    J0 = lambda n: sum(sz * (np.asarray(n, dtype=float) >= ng) for ng, sz in gaps0)
     # 2. the time map T(n) = T0 + rho (n + D(n)), D through the blocks' delays
     starts = [SC_NA] + [b for b, _ in blocks[1:]]           # where each TC starts (symbols)
     w0 = SC_DLY * 2 + P5 * (L - SC_PRE)                    # clean stretch of a TC, in samples after its start
@@ -1913,36 +2065,96 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     win = lambda k: P5 * starts[k] + np.arange(w0, w1)
     f = np.fft.rfftfreq(nfft(w1 - w0), 1 / FS_TX)
     band = (f > 3400) & (f < 15800)
-    W0 = sc_read(y, T0 + rho * win(0))
+    W0 = sc_read(y, T0 + rho * (win(0) + J0(win(0))))
     F0 = np.conj(np.fft.rfft(W0, nfft(w1 - w0))[band])
-    mk, dk = [float(win(0).mean())], [0.0]
-    for k in range(1, len(starts)):
-        c = float(win(k).mean())
-        pred = dk[-1] + ((dk[-1] - dk[-2]) / (mk[-1] - mk[-2]) * (c - mk[-1]) if len(dk) > 1 else 0.0)
-        S = round(SC_MAX_PPM * 1e-6 * (c - mk[-1]) * (1 if len(dk) > 1 else 2)) + 8   # the lags searched
-        zl = sc_read(y, T0 + rho * (P5 * starts[k] + np.arange(w0 - S, w1 + S) + pred))
-        e = _env_xcorr(zl, W0)
-        lag = _peak(e, int(np.argmax(e))) - S
-        Wk = sc_read(y, T0 + rho * (win(k) + pred + lag))
+    def fine(k, at):                                       # sub-sample delay of block k near at, and the coherence
+        Wk = sc_read(y, T0 + rho * (win(k) + at))
         X = np.fft.rfft(Wk, nfft(w1 - w0))[band] * F0
         ph = lambda d: abs(np.sum(X * np.exp(2j * np.pi * f[band] * d / FS_TX)))
         grid = np.linspace(-1, 1, 201)
         best = grid[int(np.argmax([ph(d) for d in grid]))]
         grid = np.linspace(best - 0.01, best + 0.01, 41)
-        best = grid[int(np.argmax([ph(d) for d in grid]))]
+        v = [ph(d) for d in grid]
+        i = int(np.argmax(v))
+        return grid[i], v[i] / max(float(np.sum(np.abs(X))), 1e-30)
+
+    mk, dk, cand = [float(win(0).mean())], [float(J0(win(0).mean()))], []   # cand (v5.1): (block after a jump, its sample in the recording, runner-up, unsure)
+    dc = lambda i: dk[i] - J0(mk[i])                       # the clock alone, but for the jumps found after it
+    for k in range(1, len(starts)):
+        c = float(win(k).mean())
+        free = [i for i in range(1, len(dk)) if i not in [g[0] for g in cand]]   # intervals without a jump: the clock
+        slope = (dc(free[-1]) - dc(free[-1] - 1)) / (mk[free[-1]] - mk[free[-1] - 1]) if free else 0.0
+        pred = dk[-1] + slope * (c - mk[-1]) + J0(c) - J0(mk[-1])
+        S = round(SC_MAX_PPM * 1e-6 * (c - mk[-1]) * (1 if len(dk) > 1 else 2)) + 8   # the lags searched
+        zl = sc_read(y, T0 + rho * (P5 * starts[k] + np.arange(w0 - S, w1 + S) + pred))
+        e = _env_xcorr(zl, W0)
+        lag = _peak(e, int(np.argmax(e))) - S
+        best, coh = fine(k, pred + lag)
+        Sw = S + SC_GAP_MAX                                # v5.1: do the blocks agree best farther away? a gap?
+        e = _env_xcorr(sc_read(y, T0 + rho * (P5 * starts[k] + np.arange(w0 - Sw, w1 + Sw) + pred)), W0)
+        j = int(np.argmax(e))
+        if abs(j - Sw) > S:
+            lag2 = _peak(e, j) - Sw
+            best2, coh2 = fine(k, pred + lag2)
+            if coh2 > SC_GAP_COH * coh:
+                mid, ex = (w0 + w1) / 2, (w1 - w0) / 5         # a jump early in a block moves the block, a late one the next
+                lo = T0 + rho * (P5 * starts[k - 1] + mid - ex + dk[-1])
+                hi = T0 + rho * (P5 * starts[k] + mid + ex + pred + lag2 + best2)
+                cand.append((k,) + sc_click(y, lo, hi))
+                lag, best = lag2, best2
         mk.append(c)
         dk.append(pred + lag + best)
     mk, dk = np.array(mk), np.array(dk)
+    # v5.1: a jump's size is the delay it adds over its interval, less the clock's share, in whole samples of the
+    # recording; the clock from the nearest interval without a jump, else from the first block alone (sc_clock0)
+    gaps, ks, clk0 = list(gaps0), [g[0] for g in cand], None
+    for k, tg, alt, un in cand:
+        near = sorted((i for i in range(1, len(mk)) if i not in ks), key=lambda i: abs(i - k))
+        if near:
+            slope = (dc(near[0]) - dc(near[0] - 1)) / (mk[near[0]] - mk[near[0] - 1])
+        else:
+            clk0 = sc_clock0(y, fs, T0, nt, L) if clk0 is None else clk0
+            slope = clk0
+        raw = (dc(k) - dc(k - 1) - slope * (mk[k] - mk[k - 1])) * rho
+        sz = round(raw)
+        if swap == (len(gaps), "size"):                    # the second try: the other whole number
+            sz += 1 if raw > sz else -1
+        if swap == (len(gaps), "place"):                   # or the runner-up place
+            tg = alt
+        unsure += [(2 * abs(raw - round(raw)), (len(gaps), "size")), (un, (len(gaps), "place"))]
+        u = (tg - T0) / rho                                # the jump's transmitted sample, on the map before it
+        ng = u - (dk[k - 1] + slope * (u - mk[k - 1]))
+        ng = u - (dk[k - 1] + slope * (ng - mk[k - 1]))
+        gaps.append((float(ng), sz / rho))
+    # v5.1: a jump inside the last block's clean stretch, which no later block sees
+    tb = T0 + rho * (P5 * blocks[-1][0] + dk[-1])          # where the last block arrives
+    lo, hi = tb + rho * w0, tb + rho * (P5 * nt + 2 * SC_DLY - SC_GAP_EDGE)
+    if len(mk) > 1 and hi > lo and len(mk) - 1 not in ks:
+        tg = sc_click(y, lo, hi)[0]
+        raw, _ = sc_split(y, rho, tb, sc_passband(tc), int((tg - tb) / rho))
+        if abs(raw) > SC_GAP_MIN:
+            sz = round(raw)
+            if swap == (len(gaps), "size"):
+                sz += 1 if raw > sz else -1
+            unsure.append((2 * abs(raw - round(raw)), (len(gaps), "size")))
+            gaps.append(((tg - T0) / rho - dk[-1], sz / rho))
+    # the clock alone: less the jumps each block's delay holds (those of the blocks that saw them, wherever they fell)
+    dcl = dk - np.array([J0(mm) + sum(g[1] for g, b in zip(gaps[len(gaps0):], ks) if b <= i) for i, mm in enumerate(mk)])
 
     def D(n):
+        n = np.asarray(n, dtype=float)
         if len(mk) == 1:
-            return np.zeros_like(n, dtype=float)
-        out = np.interp(n, mk, dk)
-        s0, s1 = (dk[1] - dk[0]) / (mk[1] - mk[0]), (dk[-1] - dk[-2]) / (mk[-1] - mk[-2])
-        return np.where(n < mk[0], dk[0] + s0 * (n - mk[0]), np.where(n > mk[-1], dk[-1] + s1 * (n - mk[-1]), out))
-    ppm = float((dk[-1] - dk[0]) / (mk[-1] - mk[0]) * 1e6) if len(mk) > 1 else 0.0
-    lin = np.polyval(np.polyfit(mk, dk, 1), mk) if len(mk) > 2 else dk
-    bend = float(np.max(np.abs(dk - lin)))                  # departure from a steady clock (samples)
+            out = np.zeros_like(n)
+        else:
+            out = np.interp(n, mk, dcl)
+            s0, s1 = (dcl[1] - dcl[0]) / (mk[1] - mk[0]), (dcl[-1] - dcl[-2]) / (mk[-1] - mk[-2])
+            out = np.where(n < mk[0], dcl[0] + s0 * (n - mk[0]), np.where(n > mk[-1], dcl[-1] + s1 * (n - mk[-1]), out))
+        for ng, sz in gaps:
+            out = out + sz * (n >= ng)
+        return out
+    ppm = float((dcl[-1] - dcl[0]) / (mk[-1] - mk[0]) * 1e6) if len(mk) > 1 else 0.0
+    lin = np.polyval(np.polyfit(mk, dcl, 1), mk) if len(mk) > 2 else dcl
+    bend = float(np.max(np.abs(dcl - lin)))                 # departure from a steady clock (samples)
     # 3. symbol-rate samples, row i <-> symbol i - SC_PRE at its first strong arrival
     nrows = ntot + max(SC_TAPS[nt]) - 1
     n = -P5 * SC_PRE + np.arange(P5 * (nrows + 2 * SC_SPAN + 2))
@@ -1950,9 +2162,14 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     v = math.sqrt(2) * z * np.exp(-2j * np.pi * SC_FC / FS_TX * n)
     mf = np.convolve(v, SC_G)
     phases = [mf[2 * SC_DLY + p::P5][:nrows] for p in range(P5)]
+    good = np.ones(nrows)                                  # v5.1: 0 on the rows a gap smears (row r: sample 5 (r - 64) + 60)
+    nr_ = P5 * (np.arange(nrows) - SC_PRE) + SC_DLY
+    for ng, sz in gaps:
+        good[(nr_ > ng - SC_GAP_SPAN - P5) & (nr_ < ng + max(0.0, -sz) + SC_GAP_SPAN + P5)] = 0
     nA = SC_NA + nt
     mask0 = np.zeros(nA + L - 1)
     mask0[L:nA] = 1
+    mask0 *= good[:nA + L - 1]
     best = None
     for p, yy in enumerate(phases):
         c0 = sc_fit(x[:nA], yy[:nA + L - 1], mask0, L, np.zeros(L, dtype=complex), 0.0)
@@ -1969,6 +2186,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     for L2 in SC_TAPS[nt][1:]:                             # a longer room, if it leaves less (its own error counted)
         m2 = np.zeros(nA + L2 - 1)
         m2[L2:nA] = 1
+        m2 *= good[:nA + L2 - 1]
         c2 = sc_fit(x[:nA], yy[:nA + L2 - 1], m2, L2, np.zeros(L2, dtype=complex), 0.0, it=200)
         r2 = m2 * (yy[:nA + L2 - 1] - SCConv([x[:nA]], [1.0], L2).fwd(c2))
         e2, nf2 = np.vdot(r2, r2).real, nA - L2
@@ -1976,12 +2194,16 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
             L, c0, e, nfit = L2, c2, e2, nf2
             N0b = e / (nfit - L)
             N0 = N0b * (1 + L / nfit)
+    if est == "mmse":
+        L = max(SC_TAPS[nt])
+        c0, N0b, N0 = sc_mmse_first(x[:nA], yy[:nA + L - 1], nA, L)
     # 4. the room at each block
     chs, tk, change = [c0], [(L + nA) / 2], []
     for k, (b0, b1) in enumerate(blocks[1:], 1):
         last = k == len(blocks) - 1
         mk_ = np.zeros(nt + L - 1)
         mk_[L - 1:nt + (L - 1 if last else 0)] = 1         # the last block: the rows after it see silence
+        mk_ *= good[b0:b0 + nt + L - 1]
         cp = chs[-1]
         ck = sc_fit(tc, yy[b0:b0 + nt + L - 1], mk_, L, cp, N0b / (SC_REL * np.vdot(cp, cp).real / L), it=100 if L <= 512 else 200)
         change.append(float(10 * np.log10(np.vdot(ck - cp, ck - cp).real / np.vdot(cp, cp).real)))
@@ -1995,8 +2217,10 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
         w = [1 - wb, wb]
         xk = x[S - L + 1:E + L - 1]
         yk = sum(wi * SCConv([xk], [1.0], L).fwd(c)[L - 1:L - 1 + len(rows)] for wi, c in zip(w, chs[j:j + 2]))
-        obs.append(yy[S:E + L - 1] - yk)
-        ops.append(SCConv(chs[j:j + 2], w, E - S))
+        gw = good[S:E + L - 1]
+        obs.append(gw * (yy[S:E + L - 1] - yk))
+        ops.append(SCConv(chs[j:j + 2], w, E - S) if gw.all() else SCMask(SCConv(chs[j:j + 2], w, E - S), gw))
+    erased = np.repeat(good[SC_PRE:SC_PRE + ntot] == 0, m)   # symbols whose first arrival is on a masked row
     key = prbs(ns * m)
     flip, r = np.where(key == 1, -1.0, 1.0), TURBO_R[code]
     lprior, xs, first, passes, hist = np.zeros(ns * m), [None] * len(segs), None, 0, []
@@ -2013,7 +2237,9 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
                 le, xs[j] = sc_smap(obs[j], ops[j], N0, omap, lp, xs[j], steps[0] if it == 0 else steps[1])
                 ext.append(le)
             q += E - S
-        lin_ = (flip * np.concatenate(ext))[:nc]
+        le_ = np.concatenate(ext)
+        le_[erased[np.concatenate([np.arange(S * m, E * m) for S, E in segs])]] = 0.0
+        lin_ = (flip * le_)[:nc]
         if first is None:
             first = lin_ > 0
         bits, app = turbo_siso(lin_, n0, r)
@@ -2026,7 +2252,12 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
         lprior = flip * np.r_[e, np.zeros(ns * m - nc)]
     out = dict(bits=bits, passes=passes, codeword=bool(np.array_equal((app > 0).astype(int), cw)),
                chan_errors=int(np.sum(first != (cw > 0))), snr=float(10 * np.log10(np.vdot(c0, c0).real / N0)),
-               ppm=ppm, bend=bend, phase=phase, change=change, taps=L, train=nt, effort=effort, nseg=len(segs), T0=T0, sec=_time.time() - t_start, det=det, hist=hist)
+               ppm=ppm, bend=bend, phase=phase, change=change, taps=L, train=nt, effort=effort, est=est, nseg=len(segs), T0=T0,
+               gaps=[(ng / FS_TX, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist)
+    if gaps and not out["codeword"] and swap is None:     # v5.1: the other size, or the runner-up place, of the least sure gap
+        o2 = sc_receive(y, fs, t0, omap, code, n0, nc, det, False, nt, effort, est, swap=max(unsure)[1])
+        if o2["codeword"]:
+            out = dict(o2, sec=_time.time() - t_start)
     if verbose:
         print(out)
     return out
@@ -2116,10 +2347,11 @@ def parse_header(hb):
     return h
 
 
-def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast"):
+def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls"):
     """Find and decode every frame in the recording y; no settings needed. Returns a list of dicts.
     soft: 'cal' (LLR calibrated on the postamble) or 'ratio' (ln(E1/E0)). det: the single carrier's detector,
-    'smap' or 'lmmse'; effort: its steps and passes, 'fast' or 'full' (SC_EFFORT)."""
+    'smap' or 'lmmse'; effort: its steps and passes, 'fast' or 'full' (SC_EFFORT); est: its estimate of the room,
+    'ls' or 'mmse' (SC_EST)."""
     y = np.asarray(y, dtype=float)
     y = y - y.mean()
     Lr = fs / CTRL["rate"]
@@ -2184,7 +2416,7 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast"):
             t0, dur = p1 + (n_p + NH) * Lr, sc_seconds(hdr["ns"], hdr["train"]) * fs
             if t0 + dur * (1 + 1e-3) + 0.05 * fs > len(y):
                 break
-            o = sc_receive(y, fs, t0, hdr["map"], hdr["code"], hdr["n0"], hdr["nc"], det, nt=hdr["train"], effort=effort)
+            o = sc_receive(y, fs, t0, hdr["map"], hdr["code"], hdr["n0"], hdr["nc"], det, nt=hdr["train"], effort=effort, est=est)
             bits = o["bits"]
             res = dict(hdr, pre=n_p, hop=hop, bits=bits, chan_errors=o["chan_errors"], rs_fails=None, t=p1 / fs,
                        ppm=o["ppm"], sc_rx=o, corr=score, p1=p1)
@@ -2199,11 +2431,15 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast"):
                       f"code {hdr['code']} corrected {o['chan_errors']} of {hdr['nc']} channel bits")
                 print(f"  from the header: {sc_desc(hdr['map'], hdr['train'])}, {hdr['ns']} data symbols in {o['nseg']} segment{'s' if o['nseg'] > 1 else ''}, preamble {n_p} bits")
                 ch = ", ".join(f"{c:.0f}" for c in o["change"])
-                print(f"  SNR {o['snr']:.1f} dB on the first training block (the room's {o['taps']} taps against what they leave), "
+                print(f"  SNR {o['snr']:.1f} dB on the first training block (the room's {o['taps']} taps against what they leave"
+                      f"{', MMSE' if est == 'mmse' else ''}), "
                       f"room change at each later block {ch} dB, sampling phase {o['phase']}")
                 print(f"  {'SMAP' if det == 'smap' else 'linear MMSE'} ({effort}) and the turbo decoder: {o['passes']} pass{'es' if o['passes'] > 1 else ''}, "
                       f"{'a codeword' if o['codeword'] else 'not a codeword (some bits are wrong)'}, {o['sec']:.1f} s"
                       + (f"; the clock wanders by {o['bend']:.1f} samples (samples lost or repeated?)" if o["bend"] > 1 else ""))
+                for tg, sz in o["gaps"]:
+                    print(f"  {abs(sz):.0f} samples {'lost' if sz < 0 else 'repeated'} by the microphone {tg:.2f} s into the part, "
+                          f"{o['erased']} symbols erased (v5.1: read again after the gap)")
             start = round(t0 + dur)
             continue
         if hdr.get("ofdm"):                                   # OFDM: the reference symbol follows the control part
@@ -2623,6 +2859,8 @@ def main():
             p.add_argument("--det", choices=("smap", "lmmse"), default="smap", help="single carrier: soft SMAP or linear MMSE detector")
             p.add_argument("--effort", choices=list(SC_EFFORT), default="fast",
                            help="single carrier: fast (SMAP 30 steps, at most 4 passes) or full (150 steps, 8 passes)")
+            p.add_argument("--est", choices=SC_EST, default="ls",
+                           help="single carrier: the room estimate, least squares or MMSE (prior power per tap from a pilot)")
             p.add_argument("--ir", default="room_ir.wav", help="where to save the impulse response of a room sounding")
             p.add_argument("--plot", action="store_true", help="plot the room sounding (needs matplotlib)")
     a = ap.parse_args()
@@ -2663,7 +2901,7 @@ def main():
             write_wav("recording.wav", y, fs)
         else:
             y, fs = read_wav(a.wav)
-        frames = decode(y, fs, soft=a.soft, det=a.det, effort=a.effort)
+        frames = decode(y, fs, soft=a.soft, det=a.det, effort=a.effort, est=a.est)
         if not frames:
             print("no frame found")
         for f in frames:

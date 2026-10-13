@@ -1,5 +1,5 @@
 % acoustic_modem_algorithms.tex
-% Algorithms of the acoustic modem demo, version 4 (acoustic_modem_v4.html, audiocomm_v4.py), version 3 (acoustic_modem_v3.html = acoustic_modem.html, audiocomm_v3.py), version 2 (acoustic_modem_v2.html, audiocomm_v2.py) and version 1 (acoustic_modem_v1.html, audiocomm_v1.py).
+% Algorithms of the acoustic modem demo, version 6 (acoustic_modem_v6.html, audiocomm_v6.py), version 5 (acoustic_modem_v5.html = acoustic_modem.html, audiocomm_v5.py), version 4 (acoustic_modem_v4.html, audiocomm_v4.py), version 3 (acoustic_modem_v3.html, audiocomm_v3.py), version 2 (acoustic_modem_v2.html, audiocomm_v2.py) and version 1 (acoustic_modem_v1.html, audiocomm_v1.py).
 % Compile with: pdflatex acoustic_modem_algorithms.tex (twice, for the references and the table of contents).
 \documentclass[11pt,a4paper]{article}
 \usepackage[T1]{fontenc}
@@ -48,9 +48,9 @@
 \captionsetup{font=small,labelfont=bf}
 
 \title{\color{icemagenta}\textbf{An acoustic modem for the classroom}\\[4pt]
-\large Algorithms, equations and parameter choices of the demo, version~4.1}
+\large Algorithms, equations and parameter choices of the demo, version~6}
 \author{Communication Theory (2A), CentraleSup\'elec\,---\,Mention ICE}
-\date{11 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v4.html} (also served as \code{acoustic\_modem.html}) and \code{audiocomm\_v4.py}; version~3, \code{acoustic\_modem\_v3.html} and \code{audiocomm\_v3.py};\\ version~2, \code{acoustic\_modem\_v2.html} and \code{audiocomm\_v2.py}; and version~1, \code{acoustic\_modem\_v1.html} and \code{audiocomm\_v1.py}}
+\date{13 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py},\\ and versions $N = 1$ to 5, \code{acoustic\_modem\_v}$N$\code{.html} and \code{audiocomm\_v}$N$\code{.py} (version~5 is also served as \code{acoustic\_modem.html})}
 
 \begin{document}
 \maketitle
@@ -62,6 +62,8 @@ This document describes every algorithm the modem implements, with the equations
 The transmitter uses frequency-shift keying (FSK) with two tones per symbol or, since version~2, four tones carrying two bits, either on fixed tones or hopping over up to 32 tone pairs or 16 groups of four tones; at 6400 bit/s, one group of four tones covers the whole band.
 Version~3 adds orthogonal frequency-division multiplexing (OFDM): 546 or 273 subcarriers carrying differential QPSK, with a guard interval of 21 or $5\ms$, at 17 or 20\,kbit/s before the code.
 Version~4 adds pilots and an estimate of the room's response, so that OFDM can also use coherent QPSK, 8PSK, 16QAM, 64QAM or 256QAM, up to 63 or 75\,kbit/s before the code, and images at four times the size.
+Version~5 adds a single carrier: 9600 QPSK to 256QAM symbols per second over the same band, with training blocks instead of a guard, up to 68\,kbit/s before the code; its receiver learns the room on the training and undoes its echo by turbo equalization with a smoothed maximum a posteriori (SMAP) detector.
+Version~6 gives OFDM and single-carrier frames a control part 3.4 times shorter, $0.19$\,s instead of $0.65$\,s, sent over the whole band at once: three periods of a flat multitone, then one OFDM symbol that carries the header in BPSK.
 Each frame is self-describing: a control part that every receiver knows in advance carries a maximum-length-sequence preamble and a protected header, so receivers need no settings.
 Four error-correcting codes can be sent: none, Hamming $(7,4)$, the $K=7$ convolutional code, and a turbo code of rate $1/2$, $1/3$ or $1/4$.
 Reed--Solomon $(255,223)$ is received but no longer sent.
@@ -69,11 +71,13 @@ The FSK receiver is non-coherent.
 It detects the frame by correlating a level-free tone contrast with the preamble, tracks the symbol timing with an early--late gate, and estimates the clock offset between the two devices from a postamble.
 It turns the tone energies into log-likelihood ratios (LLRs) with a Rician model calibrated on known bits, then decodes with soft-decision Viterbi or iterative log-MAP decoding.
 A room-sounding frame measures the impulse response of the speaker, room and microphone with a periodic maximum-length sequence, and derives the reverberation time, the direct-to-reverberant ratio, $C_{50}$, the delay spread, the frequency response and the signal-to-noise ratio per frequency.
-Numbers quoted as results come from the simulations and the one real recording documented in \code{audioComm\_two\_devices.md}.
+Numbers quoted as results come from simulations and from real recordings, documented in \code{audioComm\_two\_devices.md} and in the study notes named in the text.
 Version~2 differs from version~1 by the four-tone mode (\cref{sec:mfsk}) and a narrower search for the postamble (\cref{sec:clock}); the text says where.
 Version~3 adds OFDM (\cref{sec:ofdm}), received by differential detection after a timing and a time-scale estimate on two reference symbols.
 Version~4 adds coherent detection for OFDM (\cref{sec:coh}): a channel estimate from pilots, smoothed across the band, with a gain, a phase and a delay per symbol for a moving phone.
 Version~4.1 changes only the OFDM receiver: it finds samples that the microphone loses or repeats in the middle of a frame, reads the symbols after the gap again, and erases the symbol that holds it (\cref{sec:gaps}).
+Version~5 adds the single carrier (\cref{sec:sc}): a time map from its training blocks, a room of up to 1024 taps learnt by least squares, and turbo equalization with soft SMAP or a linear MMSE detector. Its page no longer offers the plain ratio $\ln(E_1/E_0)$ as soft output (\cref{sec:soft}), and tells for every turbo frame whether the decoding succeeded (\cref{sec:decode}).
+Version~6 adds the short control part (\cref{sec:c6}): the receiver finds it with a matched filter normalized to the share of the energy that the room's strongest path carries, learns the room, the clock and the noise from its last two periods, and reads the header against them.
 \end{abstract}
 
 \tableofcontents
@@ -85,9 +89,11 @@ Version~4.1 changes only the OFDM receiver: it finds samples that the microphone
 
 \subsection{Files and scope}
 \begin{itemize}
-\item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK, 16QAM, 64QAM or 256QAM, DQPSK that follows a moving phone (\cref{sec:coh}), and images at four times the size. Since 9 October 2026 \code{acoustic\_modem.html} is a copy of \code{acoustic\_modem\_v4.html}. Since 11 October 2026 (version~4.1) their OFDM receiver also survives samples lost by the microphone (\cref{sec:gaps}); the frames did not change. They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
+\item \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py} are version~6: version~5.1 plus a short control part for OFDM and single-carrier frames, their default (\cref{sec:c6}). They read every frame of version~5 with the same bits. Version~5 and earlier pages and scripts do not find frames with the short control part, so the sender can still choose the 400 bit/s one for them. \code{acoustic\_modem.html} is still a copy of \code{acoustic\_modem\_v5.html}.
+\item \code{acoustic\_modem\_v5.html} and \code{audiocomm\_v5.py} are version~5: version~4.1 plus a single carrier with QPSK, 16QAM, 64QAM or 256QAM, received by turbo equalization with soft SMAP (\cref{sec:sc}). Since 13 October 2026 \code{acoustic\_modem.html} is a copy of \code{acoustic\_modem\_v5.html}, whose receiver no longer offers the plain ratio $\ln(E_1/E_0)$ (\cref{sec:soft}) and checks every turbo frame for a codeword (\cref{sec:decode}). They send and read every frame of version~4; earlier pages and scripts ignore the single-carrier frames. Since 13 October 2026 (version~5.1) their single-carrier receiver also survives samples lost or repeated by the microphone, and offers an MMSE estimate of the room (\cref{sec:scrx}); the frames did not change.
+\item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK, 16QAM, 64QAM or 256QAM, DQPSK that follows a moving phone (\cref{sec:coh}), and images at four times the size. From 9 to 13 October 2026 \code{acoustic\_modem.html} was a copy of \code{acoustic\_modem\_v4.html}. Since 11 October 2026 (version~4.1) their OFDM receiver also survives samples lost by the microphone (\cref{sec:gaps}); the frames did not change. They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
 \item \code{acoustic\_modem\_v3.html} and \code{audiocomm\_v3.py} are version~3: version~2 plus OFDM as a third modulation (\cref{sec:ofdm}). They send the same FSK frames and room soundings as version~2, bit for bit, and read all of version~2's frames; earlier pages and scripts ignore OFDM frames.
-\item \code{acoustic\_modem\_v2.html} is the web page of version~2: transmitter and receiver in one self-contained file, with no network access needed once loaded. The modem core is plain JavaScript, independent of the page's user interface. \code{acoustic\_modem\_v1.html} is version~1, and \code{acoustic\_modem.html} is a copy of the version that the GitHub Pages address serves, now version~3.
+\item \code{acoustic\_modem\_v2.html} is the web page of version~2: transmitter and receiver in one self-contained file, with no network access needed once loaded. The modem core is plain JavaScript, independent of the page's user interface. \code{acoustic\_modem\_v1.html} is version~1, and \code{acoustic\_modem.html} is a copy of the version that the GitHub Pages address serves, now version~5.
 \item \code{audiocomm\_v2.py} (numpy only) implements the same transmitter bit for bit and the same receiver in vectorised form, together with the room simulator of \cref{sec:roomsim}; \code{audiocomm\_v1.py} is its version~1. Their few differences from the page's receiver are listed in \cref{sec:pydiff}.
 \item The page and the script of a version produce byte-identical WAV files and decode each other's recordings. Version~1 also reads every version~0 frame. Version~2 is version~1 plus four-tone FSK (\cref{sec:mfsk}) and a narrower search for the postamble (\cref{sec:clock}): it sends the same binary frames as version~1 and reads all of version~1's frames, while versions~0 and~1 ignore its four-tone frames. Version~0 (\code{acoustic\_modem\_v0.html}, \code{audiocomm.py}) is frozen and is the subset of version~1 without tone hopping, the turbo code and room sounding. The MATLAB scripts use an older frame and are not described here.
 \end{itemize}
@@ -106,7 +112,7 @@ The receiver records at its own rate $\fs$ (usually $44.1$ or $48\kHz$), with ec
 \node[blk, right=of src] (fec) {channel code\\+ interleaver};
 \node[blk, right=of fec] (scr) {scrambler\\$x^{15}{+}x^{14}{+}1$};
 \node[blk, right=of scr] (frm) {frame:\\control + message\\+ postamble};
-\node[blk, right=of frm] (mod) {FSK, 2 or 4 tones,\\fixed or hopping;\\or OFDM (v3, v4)};
+\node[blk, right=of frm] (mod) {FSK, 2 or 4 tones,\\fixed or hopping;\\OFDM (v3, v4);\\single carrier (v5)};
 \node[blk, below=10mm of mod, fill=white, draw=icemagenta, text=icemagenta] (air) {speaker $\to$ room $\to$ microphone};
 \node[blk, left=of air] (en) {sliding tone\\energies $E_m$};
 \node[blk, left=of en] (det) {preamble\\correlation};
@@ -118,7 +124,7 @@ The receiver records at its own rate $\fs$ (usually $44.1$ or $48\kHz$), with ec
 \draw[arr] (mod) -- (air); \draw[arr] (air) -- (en); \draw[arr] (en) -- (det); \draw[arr] (det) -- (trk); \draw[arr] (trk) -- (llr);
 \draw[arr] (llr) -- (dec); \draw[arr] (dec) -- (out);
 \end{tikzpicture}
-\caption{Transmitter (top row) and receiver (bottom rows). After the header, OFDM frames (version~3) go to the receiver of \cref{sec:ofdmrx}.}
+\caption{Transmitter (top row) and receiver (bottom rows). After the header, OFDM frames (version~3) go to the receiver of \cref{sec:ofdmrx}, single-carrier frames (version~5) to that of \cref{sec:scrx}.}
 \label{fig:chain}
 \end{figure}
 
@@ -140,6 +146,7 @@ The receiver records at its own rate $\fs$ (usually $44.1$ or $48\kHz$), with ec
 A frame has two parts (\cref{fig:frame}), in the spirit of the SIGNAL field of IEEE~802.11~\cite{ieee80211}.
 The \emph{control part} is sent in a mode every receiver knows in advance: $400$ bit/s on the tones $4/8\kHz$, or tone hopping at $400$ bit/s over 16 pairs when the message hops (\cref{sec:hop}).
 The \emph{message part} uses the tones and the rate that the header announces.
+Since version~6, OFDM and single-carrier frames have, by default, a shorter control part sent over the whole band (\cref{sec:c6}); this section describes the 400 bit/s one, which all other frames keep.
 The transmitted signal starts and ends with $0.2$\,s of silence.
 The postamble is the same sequence as the preamble, sent at the message's tones and rate.
 It serves two purposes: its position measures the clock offset between the two devices (\cref{sec:clock}), and its known bits calibrate the soft output (\cref{sec:llr}).
@@ -234,10 +241,10 @@ The header carries 32 bits of information (\cref{tab:header}), most significant 
 Field & Bits & Meaning\\
 \midrule
 type & 2 & 0 text, 1 image, 2 room sounding\\
-$a$ & 11 & text: number of characters; image: height $h$; sounding: MLS order\\
+$a$ & 11 & text: number of characters; image: height $h$; sounding: MLS order; single carrier: the top bit, with that of $b$, gives the training\\
 $b$ & 11 & text: 0; image: width $w$; sounding: number of periods\\
 code & 2 & 0 none, 1 Hamming, 2 convolutional, 3 Reed--Solomon (turbo codes: see below)\\
-rate & 2 & index into $\{200, 400, 800, 1600\}$ bit/s; with four tones, into $\{400, 800, 1600, 3200\}$; with tone set 3: 3 for 6400 bit/s, 0 and 1 for OFDM with the long and the short guard (version~3)\\
+rate & 2 & index into $\{200, 400, 800, 1600\}$ bit/s; with four tones, into $\{400, 800, 1600, 3200\}$; with tone set 3: 3 for 6400 bit/s, 0 and 1 for OFDM with the long and the short guard (version~3), 2 for the single carrier (version~5)\\
 tones & 2 & 0 low ($4/8\kHz$), 1 high ($8/16\kHz$), 2 tone hopping, 3 four tones (version~2)\\
 tone set & 2 & $0\,0$ (reserved before version~2); with four tones, 0 low, 1 high, 2 tone hopping, 3 the whole band (6400 bit/s, or OFDM)\\
 CRC & 8 & generator $x^8 + x^2 + x + 1$, inverted for the turbo codes\\
@@ -259,10 +266,13 @@ The code field has only four values, all in use when the turbo code was added. T
 Four-tone frames set the tones field to 3, a value no earlier receiver accepts, and put their tone set in the two bits that were reserved; their rate field indexes $\{400, 800, 1600, 3200\}$ bit/s (\cref{sec:mfsk}). Versions~0 and~1 find no tone set~3 and ignore these frames. A version~2 receiver rejects a binary header whose last two bits are not $0\,0$, and a room sounding with tones field~3. Binary frames are unchanged. Tone set~3 with rate field~3 is 6400 bit/s (\cref{sec:wide}); receivers made before 6400 bit/s know no tone set~3 and ignore these frames.
 
 \paragraph{Signalling OFDM (version~3).}
-Tone set~3 with rate field~0 or~1 is OFDM with the long or the short guard (\cref{sec:ofdm}); rate field~2 is rejected. Receivers made before version~3 accept tone set~3 only with rate field~3 and ignore OFDM frames. The control part of an OFDM frame always hops.
+Tone set~3 with rate field~0 or~1 is OFDM with the long or the short guard (\cref{sec:ofdm}); rate field~2 was rejected until version~5. Receivers made before version~3 accept tone set~3 only with rate field~3 and ignore OFDM frames. The control part of an OFDM frame always hops.
 
 \paragraph{Signalling the OFDM mapping (version~4).}
 The header has no free field left for the mapping, so version~4 marks it the way the turbo codes are marked: the eight CRC bits are xored with a mask, 0x33 for QPSK, 0x55 for 8PSK, 0x66 for 16QAM, 0x3C for 64QAM and 0x0F for 256QAM (0x00 for DQPSK), on top of the 0xFF of codes 4 to 6. The twelve masks $\{0, \mathrm{FF}\} \oplus \{00, 33, 55, 66, 3\mathrm{C}, 0\mathrm{F}\}$ are codewords of the $(8, 4)$ Reed--Muller code, so any two differ in at least 4 bits. A version~4 receiver accepts a header whose CRC matches after one of them, and rejects a mapping mask on anything but an OFDM frame; a random word now passes with probability $12 \cdot 2^{-8}$ before the field checks, which only matter once a preamble has been found. Receivers made before version~4 see a wrong CRC and ignore the coherent frames; DQPSK frames are unchanged.
+
+\paragraph{Signalling the single carrier (version~5).}
+Tone set~3 with rate field~2 is the single carrier (\cref{sec:sc}), which receivers made before version~5 reject. Its mapping (QPSK, 16QAM, 64QAM or 256QAM) is in the CRC mask, as for coherent OFDM, and a version~5 receiver rejects a single-carrier header with another mapping or with a code other than the turbo codes. The training length goes in the top bits of $a$ and $b$, which are free because a text has at most 1023 characters and an image at most $512 \times 512$ pixels: $(a_{10}, b_{10}) = 0\,0$ medium, $0\,1$ short, $1\,0$ long, $1\,1$ rejected. Medium frames are bit for bit those of the first version~5 page (12 October 2026), which reads no other.
 
 \paragraph{Coding and repetition.}
 The 40 bits go through the convolutional code of \cref{sec:conv}, with 6 tail bits: $2(40+6) = 92$ coded bits, sent $r$ times. The receiver adds the $r$ soft values of each coded bit before Viterbi decoding, which gains $10\log_{10} r$\,dB on the header (\cref{sec:hdrdec}).
@@ -573,7 +583,7 @@ With the 127-bit preamble, the 57-character text with the convolutional code ($n
 
 \subsection{Receiver}
 \label{sec:ofdmrx}
-Once the header is read, the receiver waits until the whole OFDM part should be in, with $0.1\,\%$ to spare, and processes it in one go (\code{ofdmReceive} in the page, \code{ofdm\_receive} in the script, which give the same results). The preamble's position $p_1$ predicts the start of the first guard, $t_0 = p_1 + (\NP + 92\,r)\,\fs/\Rc$ in the recording's samples.
+Once the header is read, the receiver waits until the whole OFDM part should be in, with $0.1\,\%$ to spare, and processes it in one go (\code{ofdmReceive} in the page, \code{ofdm\_receive} in the script, which give the same results). The preamble's position $p_1$ predicts the start of the first guard, $t_0 = p_1 + (\NP + 92\,r)\,\fs/\Rc$ in the recording's samples (after the short control part of version~6, \cref{eq:c6t0}).
 
 \paragraph{1. Reading on the transmitter's grid.}
 Whatever the microphone's rate, the OFDM part is read at the instants $t_0 + m\,(\fs/\fsT)(1 + \varepsilon)$, $m = -N/2, \dots, (n_s + 2)(N + C) + N/2$, by windowed-sinc interpolation,
@@ -812,6 +822,455 @@ D8PSK (not offered) & 12.8\,k & $13.7$ & $+0.5$ & $+4.5$\\
 \end{itemize}
 
 %======================================================================
+\section{Single carrier with SMAP (version~5)}
+\label{sec:sc}
+OFDM turns the room into one complex gain per subcarrier, and pays three prices for it: the guard (a third of the airtime with the long guard, and echo beyond its $21\ms$ still acts as noise), the pilots ($8.3\,\%$ of the subcarriers), and high peaks, whose clipping is the largest noise of 256QAM (\cref{sec:cohres}). Version~5 adds a \emph{single carrier}: one symbol at a time, 9600 per second, over the whole band, with no guard. The room then smears each symbol over hundreds of later ones ($47\ms$ is 450 symbols), and the receiver must undo it. It learns the room on known training blocks, then decodes by \emph{turbo equalization}~\cite{douillard,tuchlertcom}: a detector and the turbo decoder exchange beliefs, pass after pass. The detector is soft SMAP, the smoothed maximum a posteriori detector of Tucci Ramos, Senecal and Yang~\cite{smap}, developed for large MIMO systems; the classical linear MMSE equalizer with soft interference cancellation~\cite{tuchlertsp} is there for comparison. Every product with the room is computed by FFTs, so the cost does not grow with the length of the echo, as in single-carrier frequency-domain equalization~\cite{falconer}, but without the cyclic prefix that such systems insert. On the page: ``Single carrier'' in the modulation row, a mapping (QPSK, 16QAM, 64QAM or 256QAM), a training length, and a turbo code, the other codes being greyed out; in the script, \code{-{}-mod sc -{}-map 256qam -{}-train long -{}-code turbo}.
+
+\subsection{Signal}
+\label{sec:scsig}
+The symbols $x_n$, at $R_s = 9600$ per second ($T = 1/R_s$, $P = 5$ samples of $48\kHz$ per symbol), are shaped by a root-raised-cosine pulse $g$ of roll-off $\beta = 1/3$, truncated to $\pm 12$ symbols (121 samples) and of unit energy, and put on the carrier $f_c = 9.6\kHz$:
+\begin{equation}
+s[k] = 0.45\sqrt{2P}\;\operatorname{Re}\Bigl\{\sum_n x_n\, g[k - nP]\; e^{j2\pi f_c k/\fsT}\Bigr\}, \quad \text{clipped at } \pm 0.9 .
+\label{eq:scsig}
+\end{equation}
+The spectrum occupies $f_c \pm (1+\beta)R_s/2$, from $3.2$ to $16\kHz$, the band of OFDM and tone hopping. With symbols of mean energy 1 the rms is $0.45$, as for OFDM. A single carrier has lower peaks: at 256QAM about $1\,\%$ of the samples exceed $0.9$ and the clipping distortion is about $35\dB$ below the symbols, against $4.5\,\%$ and 19 to $21\dB$ for OFDM. (The first single-carrier frames, on 12 October 2026, were sent at rms $0.33$; the comparison of \cref{tab:scres} was recorded at that level.) Since $g * g$ is a raised-cosine pulse, a Nyquist pulse, the matched filter sampled once per symbol gives the symbols back without interference over a flat channel, with white noise; the echoes of the room add interference between symbols, which the receiver models as a filter of $L$ taps at the symbol rate (\cref{sec:scrx}).
+
+\subsection{Frame}
+\label{sec:scframe}
+After the hopping control part, the single-carrier part is (\cref{fig:scframe})
+\[
+0.1\text{\,s of silence} \;\big|\; T_A\, T_C \;\big|\; \text{data} \;\big|\; T_C \;\big|\; \text{data} \;\big|\; \dots \;\big|\; T_C .
+\]
+The silence lets the control part's echo fade before the training. $T_A$ (1280 symbols) and $T_C$ ($N_T$ = 640, 1280 or 2560 symbols: short, medium or long training) are QPSK symbols $e^{j\pi(q + 1/2)/2}$, $q$ the top two bits of successive outputs of the xorshift generator of \cref{sec:turbo}, seeded with 0x5C0A for $T_A$ and 0x5C0C for $T_C$; a shorter $T_C$ is the start of a longer one. The $n_s$ data symbols are split into $\lceil n_s/4800 \rceil$ segments of equal length (within one symbol), at most 4800 symbols ($0.5$\,s) each, every one followed by $T_C$: each training block lets the receiver learn the room again and measure the clock. There is no postamble.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[x=1.0cm,y=1cm, every node/.style={font=\scriptsize}]
+\def\h{0.8}
+\fill[icemagenta!40] (0,0) rectangle (1.7,\h); \node at (0.85,\h/2) {control part};
+\fill[iceground] (1.7,0) rectangle (2.3,\h); \node at (2.0,\h/2) {sil.};
+\fill[icemagenta!70] (2.3,0) rectangle (3.5,\h); \node[white] at (2.9,\h/2) {$T_A$};
+\fill[icemagenta!70] (3.5,0) rectangle (4.7,\h); \node[white] at (4.1,\h/2) {$T_C$};
+\fill[icegrey!20] (4.7,0) rectangle (8.7,\h); \node at (6.7,\h/2) {data, $\le 4800$ symbols};
+\fill[icemagenta!70] (8.7,0) rectangle (9.9,\h); \node[white] at (9.3,\h/2) {$T_C$};
+\fill[icegrey!20] (9.9,0) rectangle (12.9,\h); \node at (11.4,\h/2) {data};
+\fill[icemagenta!70] (12.9,0) rectangle (14.1,\h); \node[white] at (13.5,\h/2) {$T_C$};
+\draw[icegrey] (0,0) rectangle (14.1,\h);
+\foreach \x in {1.7,2.3,3.5,4.7,8.7,9.9,12.9} \draw[icegrey] (\x,0) -- (\x,\h);
+\draw[decorate,decoration={brace,amplitude=5pt},icemagenta] (0,\h+0.1) -- (1.7,\h+0.1) node[midway,above=5pt,align=center] {hopping, 400 bit/s};
+\draw[decorate,decoration={brace,amplitude=5pt},icemagenta] (2.3,\h+0.1) -- (4.7,\h+0.1) node[midway,above=5pt] {first block};
+\draw[decorate,decoration={brace,amplitude=5pt},icemagenta] (4.7,\h+0.1) -- (14.1,\h+0.1) node[midway,above=5pt] {9600 symbols/s, a training block after every segment};
+\draw[decorate,decoration={brace,mirror,amplitude=4pt},icegrey] (1.7,-0.1) -- (2.3,-0.1) node[midway,below=4pt] {$0.1$\,s};
+\draw[decorate,decoration={brace,mirror,amplitude=4pt},icegrey] (2.3,-0.1) -- (4.7,-0.1) node[midway,below=4pt] {$1280 + N_T$};
+\draw[decorate,decoration={brace,mirror,amplitude=4pt},icegrey] (4.7,-0.1) -- (8.7,-0.1) node[midway,below=4pt] {at most $0.5$\,s};
+\draw[decorate,decoration={brace,mirror,amplitude=4pt},icegrey] (8.7,-0.1) -- (9.9,-0.1) node[midway,below=4pt,align=center] {$N_T$ = 640, 1280\\or 2560 symbols};
+\end{tikzpicture}
+\caption{The single-carrier part of a frame (version~5), not to scale. The frame starts and ends with $0.2$\,s of silence, as in \cref{fig:frame}.}
+\label{fig:scframe}
+\end{figure}
+
+\paragraph{Data symbols.}
+The code's output (a turbo code with its rectangular interleaver, \cref{sec:turbo,sec:ilv}) is padded with zeros to a whole number of symbols, scrambled (\cref{sec:scrambler}), and mapped $m$ bits at a time onto the Gray-labelled points of coherent OFDM (\cref{sec:coh}): QPSK, 16QAM, 64QAM or 256QAM, $m = 2, 4, 6, 8$. These are products of two axes, which SMAP needs; 8PSK and DQPSK are not offered. Only the turbo codes are, because turbo equalization needs the decoder's beliefs on every coded bit. There is no other interleaver: a random bit interleaver on top, which gains $0.5$ to $2\dB$ for OFDM's 256QAM decoded in one pass, made turbo equalization worse here (in simulation, 0 of 4 frames decoded where 4 of 4 decode without it, 256QAM, turbo $1/2$).
+
+\paragraph{Training length.}
+The receiver fits a room of $L$ taps at the symbol rate, 64 of them before the first strong arrival (\cref{sec:scrx}): $L = 256$ for short training, 512 for medium, and 512 or 1024 for long, which holds echoes up to $(L - 64)/R_s$ = 20, 47 or $100\ms$ after the first strong arrival. Like OFDM's guard, the training sets the longest room the link can use, at some cost in rate. A later block of $N_T$ symbols gives $N_T - L + 1$ rows that see the training alone (the rows before it still see the end of the data), 385, 769 and 1537 rows: $1.5$ rows per tap in each case, the design's minimum for a least-squares fit (\cref{eq:scls}). Long training is 2560 symbols rather than 2048 because 2048 failed for 1024 taps in simulation. The bit rate before the code, over the data and the training blocks between them, is
+\begin{equation}
+R = m\, R_s\, \frac{4800}{4800 + N_T},
+\end{equation}
+given in \cref{tab:scrates}. With short training the single carrier carries $8\,\%$ more than OFDM with the long guard and holds about the same echo ($20$ against $21\ms$); with medium training, $3\,\%$ less for more than twice the echo. Short messages pay more: the first block ($0.27$\,s with medium training) and the silence come on top of the data.
+
+\begin{table}[ht]
+\centering
+\caption{Single carrier (version~5): bit rates before the code, and the duration of the Great Wave (large, $108 \times 160$, and $4\times$, $216 \times 320$; turbo $1/2$, preamble 127, without the silences), against coherent OFDM with the long guard (\cref{tab:cohmaps}).}
+\label{tab:scrates}
+\small
+\begin{tabular}{llcccc}
+\toprule
+& & \multicolumn{3}{c}{single carrier, training} & OFDM\\
+\cmidrule(lr){3-5}
+& Mapping & short (640) & medium (1280) & long (2560) & long guard\\
+\midrule
+bit rate (kbit/s) & QPSK & 16.9 & 15.2 & 12.5 & 15.6\\
+ & 16QAM & 33.9 & 30.3 & 25.0 & 31.3\\
+ & 64QAM & 50.8 & 45.5 & 37.6 & 46.9\\
+ & 256QAM & 67.8 & 60.6 & 50.1 & 62.6\\
+\midrule
+large image (s) & QPSK & 3.02 & 3.35 & 4.02 & 3.02\\
+ & 16QAM & 1.98 & 2.18 & 2.58 & 1.93\\
+ & 64QAM & 1.68 & 1.88 & 2.28 & 1.54\\
+ & 256QAM & 1.47 & 1.60 & 1.87 & 1.35\\
+\midrule
+$4\times$ image (s) & QPSK & 9.15 & 10.22 & 12.35 & 9.67\\
+ & 16QAM & 5.08 & 5.68 & 6.88 & 5.26\\
+ & 64QAM & 3.68 & 4.08 & 4.88 & 3.78\\
+ & 256QAM & 3.02 & 3.35 & 4.02 & 3.02\\
+\midrule
+\multicolumn{2}{l}{longest echo learnt} & $20\ms$ & $47\ms$ & $100\ms$ & $21\ms$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Header.}
+Tone set~3 with rate field~2, the mapping in the CRC mask and the training in the top bits of $a$ and $b$ (\cref{sec:header}).
+
+\subsection{Receiver}
+\label{sec:scrx}
+The receiver (\code{scReceive} in the page, \code{sc\_receive} in the script) starts once the whole part has arrived, from the time $t_0$ at which the header says the control part ends. The page runs it in a background worker, so that the page stays responsive, and shows each pass as it ends.
+
+\paragraph{1. Timing.}
+The recording is read at $48\kHz$ by Lanczos interpolation ($a = 8$~\cite{duchon}) on the nominal ratio $\rho = \fs/\fsT$. The envelope of the analytic cross-correlation with the passband waveform of $T_A T_C$, over the lags from $30\ms$ before to $60\ms$ after the expected start, shows the arrivals of the training. The start $T_0$ is the earliest local peak with at least half the strongest's height, within $15\ms$ before the strongest, refined by a parabola. The room's taps start 64 symbols ($6.7\ms$) before $T_0$, so $T_0$ must be the first strong arrival, not merely the strongest. In one of Sheng's recordings (``Impasse Carnot~9'', \cref{sec:scres}) an echo $9.6\ms$ after the direct sound reached $0.90$ to $0.93$ of its height and won in one frame: the early paths fell before the fitted taps, and the SNR on the training was $2.3\dB$, against $21.2\dB$ with the rule. In every other recording no peak of half the strongest precedes it, and the rule changes nothing.
+
+\paragraph{2. Time map.}
+The clean stretch of each $T_C$, the samples from $120 + 5(L - 64)$ to $5(N_T - 64)$ after its start, whose rows see this training block alone, is the same waveform every time. For block $k$, its delay $\delta_k$ against the first block is found by an integer search of the envelope correlation, within $\pm(500$\,ppm of the distance $+\,8)$ samples around the extrapolation from the blocks before, then refined by
+\begin{equation}
+\hat\delta_k = \arg\max_{d} \Bigl| \sum_{f \in \mathcal F} W_k(f)\, W_0^*(f)\, e^{j2\pi f d/\fsT} \Bigr|,
+\end{equation}
+$W_k$ the DFT of block $k$'s stretch, $\mathcal F$ its bins from $3.4$ to $15.8\kHz$, on a grid of $0.01$ sample over $\pm 1$, then of $0.0005$ sample over $\pm 0.01$. The map $D(n)$, linear between the blocks' centres and continued with the first and last slopes, puts transmitted sample $n$ of the part at the recording time $T_0 + \rho\,(n + D(n))$, where the part is read. It follows the clock offset and a phone that moves (500\,ppm is $0.17$\,m/s). The receiver reports the clock offset, the slope from the first block to the last (the jumps of step~2a left out), and how far $D$ departs from a straight line.
+
+\paragraph{2a. Samples lost or repeated (version~5.1).}
+As with OFDM (\cref{sec:gaps}), the audio path can drop or repeat a block of samples inside the part. Everything after it then arrives that many samples early or late, far outside what the map follows. Version~5 lost such frames: with 128 samples cut out of Sheng's recordings, it got 5\,900 to 32\,000 channel bits wrong. Version~5.1 looks for a jump in three places.
+\begin{itemize}
+\item \emph{Between two blocks.} The search of step~2 is repeated over 1024 more samples on each side. If its best lag lies outside the usual window, and the two blocks agree there more than $1.5$ times better by the coherence $\bigl|\sum_f W_k W_0^* e^{j2\pi f d/\fsT}\bigr| / \sum_f |W_k W_0^*|$, block $k$ follows a jump.
+\item \emph{Inside the first block}, whose $T_C$ is every later block's reference. The passband waveform of $T_A T_C$ is split at the place found below, and the envelopes of the recording's correlations with the two parts are cross-correlated over $\pm 1024$ lags. The room shapes both envelopes alike, so it cancels. Without a jump the peak was within $0.5$ sample of 0 on all of Sheng's recordings, the echoes of Impasse Carnot included; with 128 samples cut, within $0.5$ of $-128$. A peak more than 4 samples from 0 is a jump, and $T_0$ becomes the first strong arrival of the part before it. The block's first $L$ symbols are not searched: a jump there leaves $T_0$ on the part after it, and the rows before it are not fitted. Its last 600 samples are not searched either, since the next block sees a jump there.
+\item \emph{Inside the last block}, which no later block checks: the same test on $T_C$, from its clean stretch on.
+\end{itemize}
+\emph{Where.} The jump joins two stretches of sound that do not follow each other, while the sound fills only $3.2$ to $16\kHz$ of the $24\kHz$ band. A linear predictor of order 32, fitted on the span searched (Yule--Walker equations, solved by Levinson--Durbin), follows the sound closely everywhere but there. Predicting from the past, it goes wrong on the 16 samples after the join; run backwards, predicting from the future, on the 16 before it. The place where the sum of these squared errors peaks marks the join, as in the click detectors of audio restoration~\cite{godsill}. Between blocks $k-1$ and $k$, it is searched from the middle of block $k-1$'s clean stretch to the middle of block $k$'s, widened by a fifth of the stretch on each side, because a jump early in a block moves that block's delay and a late one moves the next block's. On 1\,000 random cuts in Sheng's two test recordings of version~5 (quiet and loud) it found every place within 16 samples; on 400 in Impasse Carnot~9, 385. Most of the misses had a loud click of the room itself in the span searched. On 700 other cuts, the peak of a single sample's error, tried first, missed 18 times, this sum 14.
+
+\emph{How many samples.} The jump is a whole number of recording samples. Between blocks, it is the delay gained over the interval less the clock's share. The clock comes from the nearest interval without a jump. A frame with a single interval has none, so the clock then comes from the first block alone: the room fitted on each half of the block (all five phases) predicts the other half, and the delay between that prediction and the recording, measured as in step~2, is the drift between the halves, the room cancelling. It was $0.5$ to 5\,ppm off on Sheng's recordings, and 21\,ppm off in one frame where the phone or the speaker seems to have moved. Over $0.6$\,s, 20\,ppm is $0.6$ sample, enough to round to the wrong number. So the jump is rounded, and the second try below may take the other whole number.
+
+\emph{Second try.} If the frame fails with a jump, the receiver decodes it once more, changing the least certain of two things: a jump's size, to the other whole number (uncertainty: twice its rounding error, 0 to 1); or the place of a jump between blocks, to the runner-up more than 136 samples away (uncertainty: the runner-up's score over the best's).
+
+\emph{The repair.} The map $D$ jumps by that number at that place. Between blocks, $D$ follows the clock alone: each block's delay less the jumps that delay holds, those found at that block or before, wherever in the block they fell. The rows within $68 + 5$ samples of the jump (the pulse's 60 samples on each side, the interpolation's 8, and a symbol) are masked. The fits of the room skip them, the detectors see the segment through a row mask, and the data symbols that arrive on them get LLR 0 and are left to the code: about 55 symbols for 128 samples, 125 for 480.
+
+\emph{Tests.} Ten frames of Sheng's recordings that version~5 decodes (16, 64 and 256QAM; medium and long training; one to four segments; the quiet and loud test recordings of version~5 and Impasse Carnot~9) each had 128 samples cut at five random places, 128 repeated once, 480 cut once, and, with two segments or more, 128 cut in each of the first two segments: 78 cases. Version~5.1 decoded 77 of them without an error, the script and the page alike, with the same jumps; 5 needed the second try, all on the frame of a single segment. The one it lost had its samples cut 70\,ms after a loud click of the room itself, which the detector took for the join. On whole recordings without gaps, version~5.1 finds no jump and gives version~5's bits.
+
+\paragraph{3. Matched filter and sampling phase.}
+The part is brought to baseband, $v[k] = \sqrt2\, z[k]\, e^{-j2\pi f_c k/\fsT}$, filtered by $g$, and sampled once per symbol at each of the 5 phases, $y_p[i] = (v * g)[120 + p + 5i]$, $p = 0, \dots, 4$, row $i$ belonging to symbol $i - 64$ at the first strong arrival. Each phase sees its own room $c_p$, the composite of pulse, speaker, room, microphone and matched filter sampled at $iT + pT/5$. The receiver fits the room of each phase on the first block (step~4) and keeps the phase whose room would carry the most,
+\begin{equation}
+\hat p = \arg\max_p\ \frac{1}{F}\sum_{f} \log_2\Bigl(1 + \frac{|C_p(f)|^2}{N_{0,p}}\Bigr),
+\end{equation}
+the Gaussian rate over a DFT of $F = 4096$ points of the taps. The five fits leave the same error to $0.1\dB$, so choosing by the residual let the noise choose; but the room folded at the symbol rate (the roll-off third of the band aliases) differs from phase to phase by 1 to $1.5\dB$ of MMSE SNR, and the rate criterion gained 1 to $3\dB$ at the threshold on Sheng's recordings. Combining the five phases (a filter matched to $g$ convolved with the room, the noise correlation between phases taken into account) would be optimal. On the room responses of Sheng's first two recordings, with the room known, it gains only $0.15$ to $0.3\dB$ over the best phase, about what its extra unknowns would cost in estimation (\code{phase\_combining.md}).
+
+\paragraph{4. The room.}
+With $x$ every symbol of the part (the training known, the data unknown) and the chosen phase,
+\begin{equation}
+y_i = \sum_{l=0}^{L-1} c_l\, x_{i-l} + w_i, \qquad \E|w_i|^2 = N_0,
+\end{equation}
+$w$ white because $g * g$ is a Nyquist pulse. The first block is fitted by least squares on its rows that see $T_A T_C$ alone, $\mathcal M_0 = \{L, \dots, N_A - 1\}$ with $N_A = 1280 + N_T$:
+\begin{equation}
+\begin{aligned}
+\hat c_0 &= \arg\min_c \sum_{i \in \mathcal M_0} \bigl|y_i - (x * c)_i\bigr|^2,\\
+N_0 &= N_{0,\mathrm{b}} \Bigl(1 + \frac{L}{N_{\mathrm{fit}}}\Bigr), \qquad N_{0,\mathrm{b}} = \frac{1}{N_{\mathrm{fit}} - L} \sum_{i \in \mathcal M_0} \bigl|y_i - (x * \hat c_0)_i\bigr|^2, \qquad N_{\mathrm{fit}} = N_A - L,
+\end{aligned}
+\label{eq:scls}
+\end{equation}
+solved by conjugate gradients~\cite{hestenes} on the normal equations, the products computed by FFTs ($x * c = c * x$, with the taps as unknowns). $N_{0,\mathrm{b}}$ is the noise left by the fit, and the factor the error of the taps: a least-squares fit of $L$ unknowns on $N$ rows predicts new rows with about $L/N$ of the noise added~\cite{kay}. With long training, 1024 taps replace 512 when their $N_0$, their own error counted, is smaller. The page shows $\|\hat c_0\|^2/N_0$ as the SNR on the training. Each later block $k$ is fitted by ridge regression towards the room before,
+\begin{equation}
+\hat c_k = \arg\min_c \sum_{i \in \mathcal M_k} \bigl|y_i - (x * c)_i\bigr|^2 + \mu_k \|c - \hat c_{k-1}\|^2, \qquad \mu_k = \frac{N_{0,\mathrm{b}}}{\rho_{\mathrm{rel}}\, \|\hat c_{k-1}\|^2/L}, \quad \rho_{\mathrm{rel}} = 1,
+\end{equation}
+over the $N_T - L + 1$ rows that see $T_C$ alone (for the last block also the $L - 1$ rows after it, which see silence), with $N_{0,\mathrm{b}}$ of \cref{eq:scls}: the MAP estimate if each tap may change by as much as an average tap's power, a weak pull. The first version~5 script pulled with $\rho_{\mathrm{rel}} = 0.01$, a change of $-20\dB$ per block; where someone moved, the room changed by $-10$ to $-12\dB$, the new block's evidence was overruled, and it cost 2 to $5\dB$ on Sheng's first recordings, while $\rho_{\mathrm{rel}}$ from $0.1$ to 10 gave the same thresholds within $1\dB$. The receiver reports the change $10\log_{10}\bigl(\|\hat c_k - \hat c_{k-1}\|^2/\|\hat c_{k-1}\|^2\bigr)$ at each block.
+
+\paragraph{Room estimate: least squares or MMSE.}
+A switch (on the page: Receive, Receiver settings, Room estimate, or \code{?est=mmse} in the address; in the script, \code{-{}-est mmse}) replaces the first block's least squares by an MMSE estimate on the most taps the training allows (256, 512 or 1024). A least-squares pilot on those taps gives $N_{0,\mathrm{b}}$ and a prior power $p_l$ for each tap: its $|c_l|^2$ averaged over 33 taps, less the pilot's own estimation error $f = N_{0,\mathrm{b}}/(N_A - L)$, and at least $f/10$. The estimate is then a ridge with the weight $N_{0,\mathrm{b}}/p_l$ on tap $l$, and detection adds the taps' remaining error, $N_0 = N_{0,\mathrm{b}} + \sum_l p_l f/(p_l + f)$. Like least squares, it uses only the rows that see the training alone, because the rows before it still hold the control part's late echoes. Later blocks are fitted as before. On six frames of Sheng's recordings with white noise added, in $1\dB$ steps, it decoded at the same SNR as least squares on five and $1\dB$ lower on one, consistent with the $0.35$ to $0.5\dB$ that simulation predicts at $20\dB$. It costs a second fit on the first block. Least squares stays the default.
+
+\paragraph{5. Data segments.}
+Over the data between blocks $j$ and $j+1$ the room is blended linearly, row by row, $c(i) = (1 - w_i)\,\hat c_j + w_i\, \hat c_{j+1}$, $w_i = \clip\bigl((i - \tau_j)/(\tau_{j+1} - \tau_j), 0, 1\bigr)$, $\tau_j$ the centre of block $j$'s fitted rows. Once the echoes of the known training on either side are removed, segment $j$'s $n$ symbols $s$ and its $n + L - 1$ rows follow
+\begin{equation}
+y = C s + w, \qquad (C s)_i = (1 - w_i)\,(\hat c_j * s)_i + w_i\,(\hat c_{j+1} * s)_i,
+\label{eq:scmodel}
+\end{equation}
+a convolution that changes linearly along the segment, $4833 \times 4322$ for the segments of the $4\times$ image. $C$ is never formed: $Cv$ and $C^H r$ cost a few FFTs of 8192 points. The detectors also use the circulant approximation $C^H C \approx \mathbf F^H \operatorname{diag}\bigl(|C(f)|^2\bigr) \mathbf F$ ($\mathbf F$ the DFT), with $|C(f)|^2$ the mean over the two anchors of the squared DFT of the taps.
+
+\subsection{Detectors}
+\label{sec:scdet}
+The detectors work on each segment, \cref{eq:scmodel} with $N_0$, and take the decoder's beliefs as prior: the extrinsic LLR $\lambda^{\mathrm a}$ of each coded bit from the last pass, 0 on the first. Each axis of a square mapping carries $m/2$ Gray bits, so the beliefs give each coordinate $u_i$ (the real or the imaginary part of a symbol) a probability for each level $A_a$ of the axis, $\pi_{i,a} \propto \prod_k P\bigl(b_k = b_k(a)\bigr)$ with $P(b = 1) = 1/(1 + e^{-\lambda^{\mathrm a}})$.
+
+\paragraph{Linear MMSE with soft interference cancellation.}
+The detector ``Linear MMSE'' of the page is the classical one~\cite{tuchlertsp,tuchlertcom}. With the soft symbols $\bar x$ (the means of the levels under $\pi$) and one average variance $\bar v$ for all symbols,
+\begin{equation}
+z = \bar x + \frac{1}{\kappa}\, C^H \bigl(\bar v\, C C^H + N_0 I\bigr)^{-1} (y - C\bar x), \qquad \kappa = \frac1F \sum_f \frac{|C(f)|^2}{\bar v\, |C(f)|^2 + N_0},
+\end{equation}
+solved by conjugate gradients. Under the circulant approximation, $z_n = x_n$ plus a Gaussian noise of variance $1/\kappa - \bar v$ that does not depend on the prior of $x_n$, so the bit LLRs of that Gaussian channel with equally likely points, as in coherent OFDM, are extrinsic. On the first pass ($\bar x = 0$, $\bar v = 1$) $z$ is the unbiased linear MMSE estimate. The single average variance is also its weakness: a symbol the decoder is sure of is cancelled no better than one it doubts, and at 256QAM, whose points are close, what is left dominates the noise. With ideal priors in which $2\,\%$ of the bits were wrong, its output still had $13.5\,\%$ of the bits wrong; a version with one filter per symbol would cost $O(nL^2)$, too much for a browser.
+
+\paragraph{Soft SMAP.}
+SMAP~\cite{smap} replaces the discrete prior of each coordinate by a mixture of Gaussians of variance $\tau^2$ around the levels, weighted by the beliefs, and minimizes the smoothed negative log-posterior over $u = (\operatorname{Re} s, \operatorname{Im} s) \in \mathbb R^{2n}$:
+\begin{equation}
+f(u) = \frac{\|y - C s\|^2}{N_0} - \sum_{i=1}^{2n} \ln \sum_a \pi_{i,a}\, e^{-(u_i - A_a)^2/2\tau^2}, \qquad \tau^2 = \kappa_m\, d^2,
+\label{eq:smap}
+\end{equation}
+$d$ the spacing of the levels and $\kappa_m = 0.25$ (QPSK, 16QAM), $0.3$ (64QAM) or $0.4$ (256QAM). Its gradient,
+\begin{equation}
+\nabla f(u) = \frac{2}{N_0} \begin{bmatrix} \operatorname{Re} \\ \operatorname{Im} \end{bmatrix} C^H (C s - y) + \frac{u - \mu(u)}{\tau^2},
+\end{equation}
+with $\mu_i(u) = \sum_a \omega_{i,a} A_a$ the mean of the levels under the weights $\omega_{i,a} \propto \pi_{i,a}\, e^{-(u_i - A_a)^2/2\tau^2}$, costs a few FFTs. $f$ is minimized by L-BFGS~\cite{lbfgs} (memory 10, a backtracking line search with Armijo's condition), from the linear MMSE estimate $(C^H C + N_0 I)^{-1} C^H y$ on the first pass and from the previous pass's minimum afterwards, for at most 30 steps (20 on later passes) with the fast effort and 150 (100) with the full one, or until $\|\nabla f\| < 10^{-5}\sqrt{2n}$. The mixture pulls each coordinate towards the levels the decoder believes in, each with its own weight: the reliability per symbol that the linear detector lacks.
+
+The paper anneals $\tau^2$ down to about $0.08\,d^2$ for hard decisions. Here one wider $\tau^2$ serves both the search and the soft output, because at the code's threshold many coordinates sit in the wrong well of a sharp mixture, where the local Gaussian claims near-certainty. With $\tau^2 = 0.08\,d^2$, on the room response of one of Sheng's recordings (3000 symbols, 16QAM and 256QAM near their thresholds), SMAP's LLRs claimed $1.1$ to $1.9\,\%$ of wrong bits where $10.6$ to $16.4\,\%$ were wrong, and carried $0.10$ to $0.45$ bit of mutual information per bit against $0.49$ to $0.63$ for the linear MMSE's. With the values above, the LLRs are calibrated (claimed $14.7\,\%$, real $15.8\,\%$) and carry more than the linear MMSE's ($0.50$ to $0.66$ bit).
+
+\paragraph{Soft output.}
+At the minimum $x$, the Hessian of $f$ is $\tfrac{2}{N_0}\bigl[C^H C\bigr]_{\mathbb R} + \operatorname{diag}(D)$, with the mixture's own curvature $D_i = 1/\tau^2 - \operatorname{Var}_i/\tau^4$, $\operatorname{Var}_i$ the variance of the levels under $\omega_{i,\cdot}$. The circulant approximation gives the data part the eigenvalues $\lambda(f) = 2|C(f)|^2/N_0$, and each coordinate's local variance, corrected for its own curvature, is
+\begin{equation}
+\sigma_i^2 = \Bigl(\frac{1}{\bar q} + D_i - \bar D\Bigr)^{-1}, \qquad \bar q = \frac1F \sum_f \frac{1}{\lambda(f) + \bar D}, \qquad \bar D = \frac{1}{2n}\sum_i D_i
+\end{equation}
+(with a small margin added to $\lambda(f) + \bar D$ should it come near 0). The decoder needs what the data say, without the beliefs that came from it: the data alone see $u_i$ as a Gaussian of precision $\lambda_{x,i} = 1/\sigma_i^2 - D_i$ around $m_i = x_i + (x_i - \mu_i)/(\tau^2 \lambda_{x,i})$, since at the minimum the data's pull balances the prior's, $(x_i - \mu_i)/\tau^2$. Each bit of the axis then gets
+\begin{equation}
+\lambda(b_k) = \ln \sum_{a:\, b_k(a) = 1} e^{-\lambda_{x,i} (m_i - A_a)^2/2} \;-\; \ln \sum_{a:\, b_k(a) = 0} e^{-\lambda_{x,i} (m_i - A_a)^2/2},
+\end{equation}
+an extrinsic output in the manner of expectation propagation.
+
+\subsection{Turbo equalization}
+\label{sec:scturbo}
+Each pass runs four steps.
+\begin{enumerate}
+\item On each segment, the detector, with the prior of the previous pass, gives an extrinsic LLR $\lambda^{\mathrm{det}}$ for every channel bit.
+\item Descrambled and joined, the first $\nc$ go to the turbo decoder of \cref{sec:turbo}, which here (\code{turbo\_siso}, \code{scTurboSiso}) also gives the a-posteriori LLR $\lambda^{\mathrm{app}}$ of every coded bit: of the message bits from $\Lambda^{\mathrm s} + \Lambda^{\mathrm e}_1 + \Lambda^{\mathrm e}_2$, of the parities and the tails from one more forward--backward pass of each constituent decoder with the last extrinsic values, in the order of the codeword and through the rectangular interleaver. It makes the same decisions on the message as the turbo decoder of the other modes.
+\item If the decisions $[\lambda^{\mathrm{app}} > 0]$ on all $\nc$ coded bits equal the decided message encoded again, they form a codeword, and the receiver stops.
+\item Otherwise the decoder's extrinsic LLR $\lambda^{\mathrm{app}} - \lambda^{\mathrm{det}}$, clipped at $\pm 20$ and scrambled again, is the detector's prior for the next pass.
+\end{enumerate}
+There are at most 4 passes with the fast effort and 8 with the full one. Fast is the page's default: on Sheng's recordings it cost at most $1\dB$ at the threshold, and it takes from a third (a frame that fails) to two thirds of the time. Near the threshold the passes converge abruptly: the coded bits in doubt stay flat, then drop to zero (8687, 8307, 0 on one frame), so progress gives no warning. Of 122 decodes near the threshold, 16 needed 5 to 8 passes, which the cap of 4 gives up, perhaps $0.5$ to $1\dB$ at the very edge (inferred). The codeword test is also what tells the page whether the frame was decoded (\cref{sec:decode}).
+
+\subsection{Cost}
+Per data symbol, each step of the detector costs a few FFTs' worth of operations, each of order $\log_2 8192 = 13$, whatever the length of the echo; a linear equalizer in the time domain would cost 512 multiplications per symbol for a 512-tap room, plus its design, and a trellis equalizer $256^{511}$ states at 256QAM. Measured in Node with the page's code on Sheng's quiet recording (large Great Wave, turbo $1/2$, clean, one pass), 256QAM takes $0.96$\,s with OFDM, $1.34$\,s with the single carrier and linear MMSE, and $2.17$\,s with SMAP at full effort: $1.15$\,s in the detector, $0.55$\,s in the turbo decoder, $0.28$\,s for the rooms of the 5 phases. Fast effort brings SMAP to $1.7$\,s, and the $4\times$ image to $5.4$\,s (two passes near the threshold: $10.9$\,s). A frame that fails runs all its passes: $20.6$\,s for Sheng's failing $4\times$ frame with fast effort, $62.6$\,s with full effort. A phone is likely 2 to 4 times slower (inferred). OFDM spends most of its time in the turbo decoder, the single carrier in the detector.
+
+For a single-carrier frame the page plots $|\hat c_0|^2$ against the delay (0 at the first strong arrival) and the points after the linear MMSE equalizer on the first segment, and shows the SNR on the training, the change of the room at each block, the clock offset, the taps, the training, the effort and the passes. Detector and effort sit under ``Receiver settings''; changing either decodes the frame shown again (URL parameters \code{det}, \code{effort}; on the sender, \code{train}).
+
+\subsection{Results}
+\label{sec:scres}
+Sheng made the recordings below with a phone, in Voice Memos' lossless mode or with the page's own recorder; with AAC compression the SNR stayed below about 6 to $9\dB$, too low for this test.
+
+\paragraph{The same recordings for both modulations.}
+A test sound holds single-carrier and OFDM frames $0.4$\,s apart, so both are heard at the same spot, volume and minute. It was recorded twice in one room (``Rue Joliot Curie'', quiet and about $7\dB$ louder). White noise was then added in steps of $2\dB$, then $1\dB$, with one draw per level, until the frame failed. \Cref{tab:scres} gives the in-band SNR ($3.2$ to $16\kHz$) at the last level that decoded, good to about $\pm 1\dB$, with the two receiver changes of \cref{sec:scrx} (the weak pull and the phase chosen by rate) and full effort. All seven frames of both recordings decode with no error before noise is added, with SMAP and with linear MMSE, each single-carrier frame in one pass.
+
+\begin{table}[ht]
+\centering
+\caption{SNR needed (dB, in-band, $\pm 1\dB$) on Sheng's two recordings of the version~5 test sound, medium training, turbo codes, large Great Wave unless stated.}
+\label{tab:scres}
+\small
+\begin{tabular}{lcc}
+\toprule
+Frame & quiet & loud\\
+\midrule
+single carrier, 256QAM, turbo $1/2$ & 18 & 17\\
+single carrier, 256QAM, turbo $1/2$, $4\times$ image & 19 & 18\\
+OFDM, 256QAM, turbo $1/2$, long guard & 22 & 23\\
+single carrier, 64QAM, turbo $1/2$ & 13 & 13\\
+OFDM, 64QAM, turbo $1/2$, long guard & 15 & 15\\
+single carrier, 16QAM, turbo $1/2$ & 8 & 9\\
+single carrier, 256QAM, turbo $1/3$ & 14 & 13\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+\item \emph{Per SNR}, the single carrier with SMAP needs 4 to $6\dB$ less than OFDM at 256QAM and $2\dB$ less at 64QAM. Before the two receiver changes it needed about as much as OFDM (21 to $24\dB$ at 256QAM).
+\item \emph{At the same noise}, the single carrier of that test sound was sent at rms $0.33$, $2.7\dB$ quieter than OFDM. It still survived as much noise as OFDM, or up to $2.3\dB$ more, at 256QAM, and $1.2$ to $1.7\dB$ less at 64QAM. Sent at rms $0.45$, as it is now, it should survive 1 to $5\dB$ more noise than OFDM in all six comparisons (inferred, not recorded).
+\item \emph{Where the rest goes} (first frame, against a receiver that knows the room): 1 to $2\dB$ for learning the room from the training alone, about $1\dB$ for its drift between training blocks, about $1\dB$ for its frequency selectivity, and about $1\dB$ of detector and code above the code's threshold on a Gaussian channel (about $13.7\dB$ in-band). The echo beyond 512 taps ($-31\dB$ in that room) and the speaker's distortion cost nothing measurable.
+\item \emph{SMAP against linear MMSE.} In a prototype on the room responses of Sheng's first two recordings, with the room known, SMAP with turbo passes needed 3 to $4\dB$ less than the linear MMSE equalizer, with or without passes, at 256QAM, and no less at 16QAM, where what the linear cancellation leaves is small against the noise. Refitting the room from the decoder's beliefs (turbo channel estimation) would reach the known room's figure if the beliefs were right; with the real ones it gained nothing, so version~5 does not do it.
+\end{itemize}
+
+\paragraph{A longer room.}
+In another room, the page on Sheng's phone saved a $4\times$ 256QAM frame sent with medium training (the only one then). The background SNR was $42\dB$, yet the SNR on the training was $16.6\dB$ and the frame failed. Fitted with every symbol known, 512 taps left $17.6\dB$ and 1024 taps $24.6\dB$: the echo between 53 and $107\ms$ was the limit. More taps on the same 1280-symbol blocks did worse (257 rows per later block for 1024 taps), while longer blocks, emulated by treating some data symbols as known for the fit, decoded the frame in one pass (1024 taps, blocks of 2048 or 2560 symbols). This led to the training switch.
+
+\paragraph{Rooms that change.}
+Two recordings (``Impasse Carnot'' 8 and 9) of an eight-frame test sound, with the phone lying still on the table next to the laptop and a background SNR of 37 to $38\dB$, show both the strength and the limit of the single carrier. OFDM failed at 256QAM and at 64QAM (median $5\dB$ per subcarrier, about $20\,\%$ of the energy arriving after the long guard), as did short and medium training: the echo lasts beyond $100\ms$, and 1024 taps leave $23\dB$ where 512 leave 12. With long training, recording~8 decoded the 256QAM frame, and recording~9 the 64QAM frame and the $4\times$ 256QAM frame. The other long-training frames failed because the room changed within the frame: by $-6$ to $-9\dB$ from one training block to the next, against $-14$ to $-25\dB$ in steady frames, and the SNR on the data rows slid from 15 to $9\dB$ along a segment. Following the arrivals with every symbol known, the direct sound and the main echoes stayed within $1\dB$, while one reflection $1.25\ms$ after the direct sound fell by $4.5\dB$ and turned by $55^\circ$, about $5$\,mm of path at $10\kHz$. One path changing while the others stay means that the geometry changed (likely a person at the table, inferred): a filter in either device would change every path alike, and a vibration of the table moves micrometres. Tracking the room from the receiver's own decisions failed on all three frames, because the first pass had about $25\,\%$ of the coded bits wrong and each refit learnt a worse room.
+
+Another receiver would hardly do better (inferred from a bound). A least-squares room of $L$ taps learnt from $N$ rows adds about $L/N$ of the noise (\cref{eq:scls}); keeping that to $1\dB$ needs $N \ge 4L$, about 4100 symbols ($0.43$\,s) of a steady room for 1024 taps, and recording~9's frame needed a fresh room about every $0.1$\,s even with every symbol known. So 256QAM with long training needs a still room; 16QAM or 64QAM is the choice when people move.
+
+%======================================================================
+\section{Short control part (version~6)}
+\label{sec:c6}
+With the 127-bit preamble, the control part of \cref{sec:frame} lasts $0.65$\,s, whatever follows it. That suits FSK, whose message parts are slow and must reach far, but it is longer than the whole OFDM part of a short text ($0.19$\,s for the 57-character text at 64QAM with the long guard), and it reaches farther than the fast message parts need: in Rue Joliot Curie it is still read with noise 7 to $8\dB$ above its own level in the band, where the single carrier needs 8 to $19\dB$ of SNR and OFDM 15 to $23\dB$ (\cref{tab:scres}). A matched filter collects the energy of a known signal against the noise in its band, whatever the signal's bit rate: its output SNR is the in-band SNR times the product of the signal's duration and bandwidth, and over the $12.8\kHz$ of OFDM's band, one period of $42.7\ms$ already gives a product of about 550 ($27\dB$). Version~6 therefore gives OFDM and single-carrier frames, by default, a control part sent over the whole band at once, of $0.19$\,s (\cref{tab:c6dur}). FSK frames and room soundings keep the 400 bit/s one. On the page, OFDM and the single carrier get a ``Control part'' row on the sender: Short (the default) or Long, for receivers of version~5 (\code{?ctl=long} in the address; the WAV file's name then ends in \code{\_longctl}); in the script, \code{-{}-control short} or \code{long} on \code{tx}. Receivers of version~6 look for both control parts, so they still need no settings.
+
+Its layout is that of the start of an IEEE~802.11a/g frame~\cite{ieee80211}, two identical long training symbols after a long guard, from which the receiver learns the channel, then the SIGNAL field, one BPSK OFDM symbol coded with the same $K = 7$ convolutional code as our header and read against that channel. Here the repeated symbol serves for detection too (802.11 has a separate short training field for that), and, as in the preamble of Schmidl and Cox~\cite{schmidl}, the repetition is what gives the offset between the two devices: here the clock's, as a phase that grows with frequency, rather than the carrier's.
+
+\subsection{Signal}
+\label{sec:c6sig}
+With $N = 2048$, the $K = 546$ subcarriers $k_j$ from 3.2 to $16\kHz$ and the phases $\theta_j$ of OFDM's reference symbol (\cref{sec:dqpsk}), the preamble symbol $P$ and the header symbol $H$ are, for $n = 0, \dots, N - 1$,
+\begin{equation}
+\begin{aligned}
+p[n] &= a \sum_{j=0}^{K-1} \cos\!\Bigl(\frac{2\pi k_j n}{N} - \theta_j\Bigr),\\
+h[n] &= a \sum_{j=0}^{K-1} \bigl(1 - 2\, c_{\pi(j)}\bigr) \cos\!\Bigl(\frac{2\pi k_j n}{N} - \theta_j\Bigr), \qquad \pi(j) = 37\, j \bmod 92,
+\end{aligned}
+\label{eq:c6sig}
+\end{equation}
+with $a = 0.45\sqrt{2/K}$ as in \cref{eq:ofdmsym}, and $c_0, \dots, c_{91}$ the 92 coded header bits as the 400 bit/s control part sends them (\cref{sec:header}: the same 40 bits, the same code and interleaver). The control part is $P$ three times, then $H$ with a guard of $C = 1024$ samples, clipped at $\pm 0.9$ (\cref{fig:c6}):
+\[
+p \;\big|\; p \;\big|\; p \;\big|\; h[N - C], \dots, h[N - 1] \;\big|\; h, \qquad 3N + C + N = 9216 \text{ samples, } 0.192\text{\,s}.
+\]
+The message part follows at once: the OFDM symbols of \cref{sec:ofdm,sec:coh}, or the single-carrier part of \cref{sec:scframe} with its $0.1$\,s of silence. The header is unchanged; nothing in the frame says which control part it had.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[x=1.0cm,y=1cm, every node/.style={font=\scriptsize}]
+\def\h{0.8}
+\fill[icemagenta!70] (0,0) rectangle (2.4,\h); \node[white] at (1.2,\h/2) {$P$};
+\fill[icemagenta!70] (2.4,0) rectangle (4.8,\h); \node[white] at (3.6,\h/2) {$P$};
+\fill[icemagenta!70] (4.8,0) rectangle (7.2,\h); \node[white] at (6.0,\h/2) {$P$};
+\fill[icemagenta!25] (7.2,0) rectangle (8.4,\h); \node at (7.8,\h/2) {guard};
+\fill[icemagenta!40] (8.4,0) rectangle (10.8,\h); \node at (9.6,\h/2) {$H$};
+\fill[icegrey!20] (10.8,0) rectangle (14.1,\h); \node at (12.45,\h/2) {message part};
+\draw[icegrey] (0,0) rectangle (14.1,\h);
+\foreach \x in {2.4,4.8,7.2,8.4,10.8} \draw[icegrey] (\x,0) -- (\x,\h);
+\draw[decorate,decoration={brace,amplitude=5pt},icemagenta] (0,\h+0.1) -- (7.2,\h+0.1) node[midway,above=5pt,align=center] {detection: all three periods\\the room, the clock and the noise: the last two};
+\draw[decorate,decoration={brace,amplitude=5pt},icemagenta] (7.2,\h+0.1) -- (10.8,\h+0.1) node[midway,above=5pt,align=center] {the header,\\BPSK};
+\draw[decorate,decoration={brace,mirror,amplitude=4pt},icegrey] (0,-0.1) -- (2.4,-0.1) node[midway,below=4pt] {2048};
+\draw[decorate,decoration={brace,mirror,amplitude=4pt},icegrey] (7.2,-0.1) -- (8.4,-0.1) node[midway,below=4pt] {1024};
+\draw[decorate,decoration={brace,mirror,amplitude=4pt},icegrey] (8.4,-0.1) -- (10.8,-0.1) node[midway,below=4pt] {2048};
+\draw[decorate,decoration={brace,mirror,amplitude=4pt},icemagenta] (0,-0.55) -- (10.8,-0.55) node[midway,below=4pt] {9216 samples, $0.192$\,s};
+\end{tikzpicture}
+\caption{The short control part (version~6), samples at $48\kHz$. The frame starts and ends with $0.2$\,s of silence, as in \cref{fig:frame}.}
+\label{fig:c6}
+\end{figure}
+
+\begin{itemize}
+\item \emph{Three periods.} The first lets the speaker and the microphone settle and fills the room, like a guard of $43\ms$. The last two then each hold the circular convolution of $P$ with the room, the same in both if the room is steady: their DFTs give the room's response on every subcarrier, with no pilots or training to learn first, the clock from their phase drift, and the noise from their difference. All three count for detection.
+\item \emph{Equal amplitudes, Newman's phases negated.} With a flat spectrum, the matched filter of $P$ shows the room's impulse response in the band, and Newman's phases keep the peaks low ($0.84$ for an rms of $0.45$), so $P$ is never clipped. Their quadratic phase sweeps the band; negated, $P$ sweeps it the other way from OFDM's reference symbols, sent at the start and the end of every OFDM part with the same $N$. Their normalized cross-correlation is at most $0.064$, so the matched filter of $P$ collects at most $0.4\,\%$ of a reference symbol's energy, and OFDM parts do not pass for control parts.
+\item \emph{Level.} As loud as OFDM, rms $0.45$, which is $3\dB$ below the FSK control part ($0.9/\sqrt2 = 0.64$). Two louder variants at rms $0.6$, a chirp and $P$ itself clipped at $0.9$, survived 1 to $3\dB$ less noise in the emulation of \cref{sec:c6res}.
+\item \emph{The header symbol.} $H$ is $P$ with a sign per subcarrier, so that $P$, through the same room, is its reference. Since 37 is prime to $92 = 4 \cdot 23$, $\pi$ runs through all 92 bits every 92 subcarriers: each bit has 5 or 6 copies ($546 = 5 \cdot 92 + 86$), $2.2\kHz$ apart, which the receiver adds, so a bit survives a notch of the room's response on one copy; neighbouring subcarriers carry bits 37 apart. $H$'s guard holds $21\ms$ of echo, as OFDM's long guard. Its samples are nearly Gaussian, $4.9\,\%$ of them clipped, as for OFDM's data symbols.
+\end{itemize}
+
+\begin{table}[ht]
+\centering
+\caption{Frame durations in seconds (turbo $1/2$, without the $0.4$\,s of silence) with the two control parts. The text has 57 characters, the image is the large Great Wave ($160 \times 108$).}
+\label{tab:c6dur}
+\small
+\begin{tabular}{lcc}
+\toprule
+& \multicolumn{2}{c}{control part}\\
+\cmidrule(lr){2-3}
+Frame & 400 bit/s, $0.65$\,s & short, $0.19$\,s\\
+\midrule
+text, OFDM 64QAM, long guard & 0.84 & 0.38\\
+text, OFDM 64QAM, short guard & 0.73 & 0.27\\
+text, single carrier 64QAM, medium training & 1.17 & 0.71\\
+image, OFDM 256QAM, long guard & 1.35 & 0.90\\
+image, single carrier 256QAM, medium training & 1.60 & 1.14\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Detection}
+\label{sec:c6det}
+Both receivers search on the transmitter's grid at $48\kHz$; at another microphone rate the recording is first interpolated onto it (windowed sinc). The recording $y_b$, limited to the band (DFT bins outside 3.2 to $16\kHz$ set to 0), goes through the matched filter of one period,
+\begin{equation}
+c[n] = \sum_{m=0}^{N-1} y_b[n + m]\, p[m], \qquad E_i(n) = \sum_{m=0}^{N-1} y_b[n + iN + m]^2,
+\end{equation}
+and the receiver computes, for $P$ starting at sample $n$,
+\begin{equation}
+\rho(n) = \frac{c[n]^2 + c[n + N]^2 + c[n + 2N]^2}{3\, \|p\|^2 \max_{i = 0, 1, 2} E_i(n)}, \qquad
+\beta(n) = \frac{c[n + N]\, c[n + 2N]}{\tfrac12\bigl(c[n + N]^2 + c[n + 2N]^2\bigr)}.
+\label{eq:c6rho}
+\end{equation}
+By the Cauchy--Schwarz inequality, $c[n + iN]^2 \le \|p\|^2 E_i(n)$, so $\rho \le 1$, with equality for $P$ alone, at any level. Through a room of impulse response $\gamma$ that $P$ has filled, period $i$ is the circular convolution $p \circledast \gamma$; with a flat spectrum, $E_i \approx \|p\|^2 \|\gamma\|^2$ (in the band), and at the lag of a path of gain $\gamma_l$, apart from the others by more than the matched filter's main lobe, $c \approx \gamma_l \|p\|^2$. So
+\begin{equation}
+\rho \approx \frac{\gamma_l^2}{\|\gamma\|^2}\, \frac{\mathrm{snr}}{1 + \mathrm{snr}},
+\end{equation}
+the share of the in-band energy that the strongest path carries, reduced when noise of in-band SNR $\mathrm{snr}$ is added: like the contrast of the FSK detector (\cref{sec:detect}), it needs no level and no noise estimate. In white noise its mean is $1/1140$, about $1/(2K)$, the inverse of the $2K = 1092$ real dimensions of one period in the band. Taking the loudest of the three periods in the denominator, not their mean, keeps a loud burst followed by silence from scoring: the silence would lower a mean. $\beta$ is 1 when the last two periods give the same output, as $P$ in a steady room does, and random in $[-1, 1]$ for noise.
+
+A frame is declared at the first $n$ with $\rho(n) > 0.02$ and $\beta(n) > 0.5$. $\rho$ passes the line up to a period early, when two of its three terms already match, so $P$ is taken to start at the largest $\rho$ over the next $2N$ samples, the strongest path. The page computes $c$ and $E$ by FFTs in blocks of 16\,384 samples that overlap by 1024 (a hop of 12\,288), ahead of the search for the 400 bit/s preamble, and plots $\rho$ next to that preamble's correlation, scaled so that $0.02$ falls on the same dashed line.
+
+\paragraph{Threshold.} Over seven recordings with no short control part (the four of \cref{sec:scres}, the two of 11 October of \cref{sec:gaps} and the one saved by the phone in another room), $\rho$ never exceeded $0.013$, nor $0.012$ where $\beta > 0.5$; over 10\,s of white noise, $0.008$. Frames give $0.17$ to $0.35$ in Rue Joliot Curie and $0.05$ in Impasse Carnot~8 and~9, emulated (\cref{sec:c6res}), and $0.32$ to $0.53$ near the speaker, $0.10$ to $0.11$ farther away, recorded in Impasse Carnot. In the most reverberant room, with $\rho \approx 0.05\, \mathrm{snr}/(1 + \mathrm{snr})$, detection holds down to an in-band SNR of about $-2\dB$ (inferred from the formula), where the emulated frames of Impasse Carnot~8 and~9 failed ($-2.5$ and $-1.3\dB$, \cref{tab:c6res}): there, detection rather than the header may be the limit. Farther from the speaker in recording~12 ($\rho = 0.10$, so about $-6\dB$), the control part failed at $-3.8\dB$, before detection would (inferred).
+
+\subsection{Reading the header}
+\label{sec:c6rx}
+\code{c6Read} in the page, \code{c6\_read} in the script, from the start $n$ found above.
+
+\paragraph{1. The room and its first arrival.}
+With $Y_{2,j}$ and $Y_{3,j}$ the DFTs of periods 2 and 3 at subcarrier $k_j$, the room's envelope over $N$ lags (cyclic) is
+\begin{equation}
+e[l] = \Bigl|\sum_j \tfrac12 \bigl(Y_{2,j} + Y_{3,j}\bigr)\, e^{j\theta_j}\, w_j\, e^{j 2\pi k_j l/N}\Bigr|^2, \qquad l = 0, \dots, N - 1,
+\end{equation}
+with $w_j$ a Hann window over the band, as in step~2 of \cref{sec:ofdmrx}. Its first strong arrival $s$ is found by the single carrier's rule (step~1 of \cref{sec:scrx}): the earliest local peak with at least half the strongest's height, within $15\ms$ before the strongest. The share of the room's energy that will reach $H$'s window from outside its guard is
+\begin{equation}
+\eta = 1 - \frac{\sum_{l = s - 64}^{s + C} e[l]}{\sum_l e[l]}.
+\end{equation}
+The control part's start, the first strong arrival of $P$, is then $t = n + s$ ($s$ taken in $(-N/2, N/2]$), and the DFTs are taken again from $t$: $Y_{2,j}$, $Y_{3,j}$, and $Y_{H,j}$ on the $N$ samples after $H$'s guard.
+
+\paragraph{2. The clock.}
+A delay of $d$ samples per period turns subcarrier $j$ by $-2\pi k_j d/N$ from one period to the next, so
+\begin{equation}
+\hat d = \arg\max_{|d| \le 1.5} \Bigl|\sum_j Y_{3,j}\, Y_{2,j}^*\, e^{j 2\pi k_j d/N}\Bigr|,
+\end{equation}
+on a grid of $0.01$ sample ($\pm 1.5$ samples per period is $\pm 730$\,ppm). It serves only to read $H$: the receivers of OFDM and the single carrier measure the clock on their own parts.
+
+\paragraph{3. The noise.}
+Once $Y_2$ is turned by the clock, the room cancels in the difference of the two periods, and the noise of one period's DFT on subcarrier $j$ is
+\begin{equation}
+v_j = \Bigl\langle \tfrac12 \bigl|Y_{3,j} - Y_{2,j}\, e^{-j 2\pi k_j \hat d/N}\bigr|^2 \Bigr\rangle_{33},
+\end{equation}
+$\langle\cdot\rangle_{33}$ the mean over 33 neighbouring subcarriers ($770\Hz$).
+
+\paragraph{4. The reference.}
+The room from both periods, $R_j = \tfrac12\bigl(Y_{3,j} + Y_{2,j}\, e^{-j 2\pi k_j \hat d/N}\bigr)\, e^{j\theta_j}$, has its impulse response kept over the lags $-64$ to $C + 64$ and set to 0 elsewhere, which keeps the room and $(C + 129)/N$ of the noise; with $R'_j$ its DFT, the reference for $H$ is
+\begin{equation}
+r_j = R'_j\, e^{-j\theta_j}\, e^{-j 2\pi k_j \hat d\, (N + C)/N^2},
+\label{eq:c6ref}
+\end{equation}
+carried by the clock from period 3 to $H$'s window, $N + C$ samples later.
+
+\paragraph{5. LLRs.}
+On subcarrier $j$, $Y_{H,j} = (1 - 2 c_{\pi(j)})\, r_j + z_j$: the room and any timing error multiply $H$ as they multiply $P$, and cancel against the reference. The noise $z_j$ holds $H$'s own noise $v_j$, that of the reference (two periods averaged, $(C + 129)/N$ of the lags kept), and the echo of $P$ and $H$ from outside the guard, counted as noise in proportion to $\eta$:
+\begin{equation}
+\sigma_j^2 = v_j \Bigl(1 + \frac{C + 129}{2N}\Bigr) + \eta\, \bigl\langle |r_j|^2 \bigr\rangle_{33}, \qquad
+\lambda_j = -\frac{4 \operatorname{Re}\bigl(Y_{H,j}\, r_j^*\bigr)}{\sigma_j^2}, \qquad
+\Lambda_b = \sum_{j:\, \pi(j) = b} \lambda_j,
+\label{eq:c6llr}
+\end{equation}
+since $\ln \frac{p(Y \mid c = 1)}{p(Y \mid c = 0)} = \bigl(|Y - r|^2 - |Y + r|^2\bigr)/\sigma^2$ for a complex Gaussian noise of variance $\sigma^2$. The $\Lambda_b$, positive for a 1, are Viterbi-decoded as the 400 bit/s header (\cref{sec:hdrdec}, $\ell = 4$), and the CRC and the fields are checked (\cref{sec:header}). A header that passes but announces neither OFDM nor the single carrier is ignored, since FSK frames and soundings never use this control part, and the search resumes $N/4$ after the peak.
+
+\paragraph{6. The message part.}
+It starts at sample $t + 9216$ of the $48\kHz$ grid, that is at
+\begin{equation}
+t_0 = (t + 3N + C + N)\, \frac{\fs}{\fsT}
+\label{eq:c6t0}
+\end{equation}
+in the recording, in place of $t_0 = p_1 + (\NP + 92\,r)\,\fs/\Rc$ (\cref{sec:ofdmrx}). The receivers of OFDM and of the single carrier are unchanged and find their own timing from there. After the frame, both searches resume past its end.
+
+\subsection{Results}
+\label{sec:c6res}
+
+\paragraph{Emulated in the rooms of Sheng's recordings.}
+Before the version~6 test sound was recorded, the short control part was played through the rooms of the four recordings of \cref{sec:scres}. For each of their 30 frames, a room response from $-21$ to $250\ms$, with the clock offset, was fitted by least squares to the frame's 400 bit/s control part; the short control part was passed through it, and what the fit leaves unexplained (the noise, and the room's changes) was added back. White noise was then added in steps of $1\dB$, three draws per frame, until the header was misread or the start was off by 100 samples or more. All 30 frames were found and read without noise, the start 3 to 33 samples from where the emulation puts it.
+
+\paragraph{Recorded.}
+Sheng recorded the version~6 test sound (a text in OFDM 64QAM and in single carrier 64QAM, the large Great Wave in OFDM 256QAM and in single carrier 256QAM, each with the short control part, then the long one) at two spots in Impasse Carnot: near the speaker (recording~11) and farther away (12). The short control parts arrived at $-38.5$ and $-50.8$\,dBFS in the band, the room's own background was at $-83$ and $-80$\,dBFS. Both receivers found and read all 16 control parts, with the same frames, times and channel errors. Noise was added as above, two draws per frame.
+
+\begin{table}[ht]
+\centering
+\caption{The two control parts against added white noise: the in-band noise level of the last step read right (dBFS, higher is more robust), and the in-band SNR of the control part there. Medians over the draws; ranges over the frames and draws.}
+\label{tab:c6res}
+\small
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{lcccccc}
+\toprule
+& & \multicolumn{2}{c}{noise survived (dBFS)} & short $-$ 400 bit/s & \multicolumn{2}{c}{SNR at failure (dB)}\\
+\cmidrule(lr){3-4} \cmidrule(lr){6-7}
+Recording & frames & 400 bit/s & short & median (range) & 400 bit/s & short\\
+\midrule
+\multicolumn{7}{l}{\emph{emulated: the short control part played through each frame's fitted room}}\\
+Rue Joliot Curie, quiet & 7 & $-34$ to $-31$ & $-39$ to $-36$ & $-5$ ($-7$ to $-3$) & $-7.9$ & $-5.5$\\
+Rue Joliot Curie, loud & 7 & $-28$ to $-24$ & $-33$ to $-31$ & $-6$ ($-8$ to $-3$) & $-6.9$ & $-4.5$\\
+Impasse Carnot~8 & 8 & $-42$ to $-39$ & $-42$ to $-40$ & $-0.5$ ($-3$ to $+2$) & $-0.1$ & $-2.5$\\
+Impasse Carnot~9 & 8 & $-48$ to $-42$ & $-45$ to $-42$ & $+1$ ($0$ to $+5$) & $+3.3$ & $-1.3$\\
+\midrule
+\multicolumn{7}{l}{\emph{recorded: the version~6 test sound}}\\
+Impasse Carnot~11, near & 4 & $-29$ to $-25$ & $-36$ to $-31$ & $-7.5$ ($-9$ to $-5$) & $-9.5$ & $-5.0$\\
+Impasse Carnot~12, far & 4 & $-50$ to $-46$ & $-50$ to $-45$ & $0$ ($-4$ to $+2$) & $-0.5$ & $-3.8$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+\item \emph{In an ordinary room, and near the speaker}, the short control part survives 5 to $7.5\dB$ less noise than the 400 bit/s one (\cref{tab:c6res}). It carries $8.4\dB$ less energy, a third of the time at half the power, so for the same energy it is read 1 to $3\dB$ better: a coherent matched filter and a room learnt on the spot, against non-coherent tones.
+\item \emph{That margin is not needed.} On the same frames of Rue Joliot Curie, the most robust message, single carrier 16QAM with turbo $1/2$, survived 17 to $19\dB$ less noise than the short control part; near the speaker in Impasse Carnot, the short control part survived noise $50\dB$ above the room's own.
+\item \emph{In the reverberant room farther away}, both survive the same noise, though the short control part arrives $3\dB$ weaker: between the two spots, the SNR that the 400 bit/s tones need rose by $9\dB$ (echo), that of the short control part by about $1\dB$. The emulation in the rooms of Impasse Carnot~8 and~9 agrees: as good or better there, per SNR always better.
+\item \emph{The messages are the limit there.} Farther away, OFDM 64QAM and both 256QAM images failed after either control part (OFDM: a median SNR of $8\dB$ per subcarrier, 9 to $11\,\%$ of the energy after the guard; single carrier: $15\dB$ on the training); the single-carrier text decoded after both. Near the speaker, all four messages decoded after both, their SNR within $1\dB$.
+\item \emph{Timing.} Near the speaker, the OFDM receiver (step~2 of \cref{sec:ofdmrx}) placed its windows 5 to 7 samples from where either control part had put them; farther away, 3 samples from where the short one had, and 196 from where the long one had, whose tones the echo smears.
+\end{itemize}
+
+\paragraph{Compatibility.}
+\code{audiocomm\_v6.py} reads the 30 frames of the four recordings of \cref{sec:scres} with the same bits and channel errors as \code{audiocomm\_v5.py}, and finds no short control part in them. Receivers of version~5 and before look only for the 400 bit/s preamble and do not find frames with the short control part: the sender's Long setting is for them, and for the longest range. The page and the script agree: on the test sound at 48 and $44.1\kHz$, fed to the page in blocks of 128 or 4096 samples, 8 of 8 frames with the same bits and channel errors; on the two recordings, the same 16 frames.
+
+%======================================================================
 \section{Channel codes}
 \label{sec:codes}
 The code is chosen on the transmitter and announced in the header. \Cref{tab:codes} summarises the codes; their lengths are such that a frame lasts exactly as long with the convolutional code and the rate-$1/2$ turbo code.
@@ -946,7 +1405,7 @@ The two decoders exchange \emph{extrinsic} information~\cite{hagenauer96}, what 
 \Lambda^{\mathrm e}_{1} &= \Lambda_{1} - \Lambda^{\mathrm s} - \Lambda^{\mathrm a}_{1}, \qquad \Lambda^{\mathrm a}_{1} = \Lambda^{\mathrm e}_{2} \text{ (de-interleaved)},\\
 \Lambda^{\mathrm e}_{2} &= \Lambda_{2} - \Lambda^{\mathrm s}_{\pi} - \Lambda^{\mathrm a}_{2}, \qquad \Lambda^{\mathrm a}_{2} = \Lambda^{\mathrm e}_{1} \text{ (interleaved)},
 \end{align}
-where at rate $1/2$ decoder 1 uses the even parities and its own tail, and decoder 2 the interleaved systematic values, the odd parities and its own tail; at rates $1/3$ and $1/4$ each decoder gets its whole parity stream $p$, and at rate $1/4$ also its half of $q'$. After each iteration the decisions are $\hat u_{\pi(i)} = [\Lambda_{2,i} < 0]$; the decoder stops after 8 iterations, or earlier when the decisions no longer change from one iteration to the next (the page shows the number of iterations). Unlike the Viterbi algorithm, log-MAP decoding uses the size of the L-values, so it needs a well-scaled soft input (\cref{sec:alpha}).
+where at rate $1/2$ decoder 1 uses the even parities and its own tail, and decoder 2 the interleaved systematic values, the odd parities and its own tail; at rates $1/3$ and $1/4$ each decoder gets its whole parity stream $p$, and at rate $1/4$ also its half of $q'$. After each iteration the decisions are $\hat u_{\pi(i)} = [\Lambda_{2,i} < 0]$; the decoder stops after 8 iterations, or earlier when the decisions no longer change from one iteration to the next (the page shows the number of iterations). Decisions that settle are not decisions that are right: a failed frame with $29\,\%$ of its bits wrong stopped after 3 iterations. Version~5 tells success by a codeword test instead (\cref{sec:decode}). Unlike the Viterbi algorithm, log-MAP decoding uses the size of the L-values, so it needs a well-scaled soft input (\cref{sec:alpha}).
 
 \paragraph{Gain.}
 On the textbook channel (BPSK, white Gaussian noise, 456 message bits) the turbo code needs about $1.3\dB$ less $E_b/N_0$ than the convolutional code for the same frame error rate (an LDPC code of the same length, tried for comparison, about $1.1\dB$). In the simulated rooms the gain shrinks to $0.5$--$1\dB$, roughly 10\,\% more distance: the bit error rate climbs steeply with distance, frames that fail have 15--19\,\% wrong channel bits, beyond what any rate-$1/2$ code corrects, and about $1\dB$ farther the frame itself is no longer detected.
@@ -1062,7 +1521,7 @@ This is done with hopping only. With fixed tones, the echo of the earlier bits l
 
 \subsection{Soft output}
 \label{sec:soft}
-The receiver offers two soft outputs, chosen on the receiver; switching after a reception re-decodes the same recording.
+Pages up to version~4 offer two soft outputs, chosen on the receiver; switching after a reception re-decodes the same recording. Since version~5 the page always uses the calibrated LLR, which has done at least as well since version~1 handles a missing postamble (on the 1600 bit/s recording where the ratio once did better: 0 wrong pixels against 256); the script keeps the ratio for comparison (\code{-{}-soft ratio}).
 
 \paragraph{Plain ratio.}
 $\lambda^{\mathrm{ratio}} = \ln\bigl((E_1 + \epsilon)/(E_0 + \epsilon)\bigr)$, $\epsilon = 10^{-9}$. It has the right sign when both tones arrive equally strong, but its size is not a reliability: it is the same for $(E_0, E_1) = (1, 2)$ and $(100, 200)$.
@@ -1125,11 +1584,14 @@ The E-step is exact under the model (with equally likely bits, which the scrambl
 \label{sec:decode}
 The LLRs are descrambled, $\lambda_i \leftarrow (-1)^{k_i}\lambda_i$, de-interleaved and decoded (\cref{sec:codes}); the Viterbi and turbo decoders get $\ell = 4$ with the ratio and $\ell = \infty$ with the calibrated LLR. The receiver then re-encodes the decoded message, $\hat{\bm c} = \mathrm{Enc}(\hat{\bm u}) \oplus \bm k$, and counts the channel errors the code corrected, $\sum_i [\lambda_i > 0] \oplus \hat c_i$.
 
+\paragraph{Did the decoding succeed? (version~5)}
+For every turbo frame, FSK and OFDM as well as the single carrier, the version~5 page tests whether the decoder's a-posteriori decisions on all $\nc$ coded bits, message and parity alike (\cref{sec:scturbo}), equal the decided message encoded again, that is, whether they form a codeword. If they do, the message is almost surely right, since another codeword differs from the one sent in many coded bits, and the page says ``decoded''; if not, ``some bits wrong''. For FSK and OFDM the check (\code{turboCheck}) decodes the LLRs once more with the a-posteriori decoder, in the background worker; it gave the same message bits as the turbo decoder on all 58 frames tried. It flagged the 9 failures among 50 simulated FSK and OFDM frames and the 4 failed OFDM frames of two recordings, and none of the frames that decoded. With the demo image, which every receiver knows, the page also counts the wrong bits. Hamming and the convolutional code give no such check, and the page then says only ``received''.
+
 The page also shows what an uncoded frame would have shown with ``the same channel errors''. With $e_i = [\lambda_i > 0] \oplus \hat c_i$ the error pattern on the channel bits, it displays $\hat u_j \oplus e_j$ for $j = 0, \dots, \nz - 1$, the decoded message with the errors of the first $\nz$ channel positions applied. This assumes that the decoding was right and that the errors would fall the same way on an uncoded frame sent at the same channel bit rate (a binary symmetric channel; with hopping, the scrambler spreads each pair's errors evenly over both bits).
 
 \subsection{Differences in the Python receiver}
 \label{sec:pydiff}
-\code{audiocomm\_v2.py} and \code{audiocomm\_v1.py} compute the same quantities on a whole recording with vectorised numpy code. They find the frame at the first sample where the score exceeds 1, then take the maximum over the next $2W$ samples. They have no early--late gate: without the postamble they read the symbols at the nominal instants ($\rho = 1$). Their fine timing compares the new instants with the unshifted instants $t_j$. Otherwise they decode the same frames to the same bits (checked on simulated recordings at every setting). For OFDM frames (version~3) the page and the script run the same steps and give the same clock offsets and the same corrected bits.
+\code{audiocomm\_v2.py} and \code{audiocomm\_v1.py} compute the same quantities on a whole recording with vectorised numpy code. They find the frame at the first sample where the score exceeds 1, then take the maximum over the next $2W$ samples. They have no early--late gate: without the postamble they read the symbols at the nominal instants ($\rho = 1$). Their fine timing compares the new instants with the unshifted instants $t_j$. Otherwise they decode the same frames to the same bits (checked on simulated recordings at every setting). For OFDM frames (version~3) and single-carrier frames (version~5) the page and the script run the same steps and give the same clock offsets and the same corrected bits.
 
 %======================================================================
 \section{Room sounding}
@@ -1195,7 +1657,7 @@ The context must not be closed as soon as the buffer has been handed over: the a
 %======================================================================
 \section{Parameter choices}
 \label{sec:params}
-\Cref{tab:ptx,tab:prx,tab:psnd} list the parameters with the reason for each value. ``Simulation'' refers to the tests documented in \code{audioComm\_two\_devices.md}: model rooms ($T_{60} = 0.6$\,s unless stated, with early reflections), white noise or the background noise of the real recording, clock offsets and a 44.1\,kHz microphone, decoded by the page's receiver or the script.
+\Cref{tab:ptx,tab:prx,tab:psnd,tab:pofdm,tab:psc,tab:pc6} list the parameters with the reason for each value. ``Simulation'' refers to the tests documented in \code{audioComm\_two\_devices.md}: model rooms ($T_{60} = 0.6$\,s unless stated, with early reflections), white noise or the background noise of the real recording, clock offsets and a 44.1\,kHz microphone, decoded by the page's receiver or the script.
 
 \begin{table}[p]
 \centering
@@ -1226,11 +1688,6 @@ Hopping stride & $s = H/2 - 1$ & Visits every pair once per $H$ symbols; consecu
 Turbo code & LTE constituents, S-random & Same length as the convolutional code; the well-studied 8-state constituents of LTE; an interleaver defined for any length.\\
 Turbo code rates & $1/2$, $1/3$, $1/4$, nested & Lower rates for the farthest phones, with the 511 preamble; in the same airtime a lower bit rate does as well in noise and better in echo (\cref{tab:rates}).\\
 TX close delay & $2\,\text{s}$ + output latency & Lets the speaker play the end of the frame (\cref{sec:txend}).\\
-OFDM band (v3) & 3.2 to 16\,kHz & The band of tone hopping: the weak, noisy low frequencies are avoided, and 16\,kHz is still reproduced by most phones and laptops.\\
-OFDM guard (v3) & $21.3\ms$ ($N = 2048$) or $5.3\ms$ ($N = 1024$) & The long guard holds most of a classroom's early echo for a third of the airtime; the short one shows what happens when the echo outlasts the guard (\cref{sec:ofdmres}).\\
-OFDM mapping (v3) & DQPSK, Gray & No estimate of the room's response is needed, and phase noise from a moving phone only matters between consecutive symbols (\cref{sec:dqpsk}).\\
-OFDM level (v3) & rms 0.45, clipped at 0.9 & Half the FSK peak: $4.5\,\%$ of the samples are clipped, with the clipping noise $19\dB$ below the signal.\\
-Reference symbol (v3) & Newman phases, sent first and last & Low peaks (never clipped); the pair gives the time scale (\cref{sec:ofdmrx}).\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -1261,11 +1718,6 @@ Blind EM & 8 rounds & Converges in a few rounds from the hard decisions.\\
 Fine timing & $K \le 8$ blocks of $\ge 128$ symbols, $|\epsilon| \le \min(T/2, 0.5\ms)$, $t > 2$ & Enough symbols per block for a stable contrast; the $t$-test keeps the old instants unless the new ones are clearly better.\\
 Viterbi clipping $\ell$ & 4 (ratio), $\infty$ (calibrated) & Limits the weight of clicks with the uncalibrated ratio.\\
 Turbo iterations & $\le 8$, early stop & Stops as soon as the decisions settle (3--4 iterations on the real recording), which saves time on phones.\\
-OFDM interpolation (v3) & sinc, Hann window, $A = 16$ & Reads the recording on the transmitter's grid at any rate and time scale, with errors far below the noise.\\
-OFDM timing (v3) & latest stretch with $\ge 99\,\%$ of the most energy & Puts the direct sound at the start of the guard, so that the guard covers as much later echo as possible.\\
-OFDM time scale (v3) & $\pm 500$\,ppm, 1\,ppm steps, parabola & Covers clock offsets and a phone moving at up to about 0.17\,m/s; the phase error left is far below DQPSK's $45^\circ$.\\
-OFDM window margin (v3) & 8 samples & Keeps the direct sound inside the guard if the timing is slightly late.\\
-OFDM noise groups (v3) & 32 subcarriers & Enough decisions for a stable estimate of $N_0$, narrow enough to follow the room's response and the speaker's.\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -1286,6 +1738,74 @@ Interpolation & Lanczos, $a = 6$ & Band-limited resampling with a short kernel.\
 Low-pass & $\min(20\kHz, 0.45\fs)$ & Removes interpolation errors above the audio band.\\
 $T_{20}$ / $T_{10}$ & decay range $\ge 35$ / $25\dB$ & Standard evaluation ranges~\cite{iso3382}, each with $10\dB$ of margin above the noise.\\
 DRR window & $\pm 2.5\ms$ & Contains the direct sound, excludes most early reflections.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{OFDM (versions~3 and~4).}
+\label{tab:pofdm}
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}p{3.1cm}X}
+\toprule
+Parameter & Value & Reason\\
+\midrule
+OFDM band (v3) & 3.2 to 16\,kHz & The band of tone hopping: the weak, noisy low frequencies are avoided, and 16\,kHz is still reproduced by most phones and laptops.\\
+OFDM guard (v3) & $21.3\ms$ ($N = 2048$) or $5.3\ms$ ($N = 1024$) & The long guard holds most of a classroom's early echo for a third of the airtime; the short one shows what happens when the echo outlasts the guard (\cref{sec:ofdmres}).\\
+OFDM mapping (v3) & DQPSK, Gray & No estimate of the room's response is needed, and phase noise from a moving phone only matters between consecutive symbols (\cref{sec:dqpsk}).\\
+OFDM level (v3) & rms 0.45, clipped at 0.9 & Half the FSK peak: $4.5\,\%$ of the samples are clipped, with the clipping noise $19\dB$ below the signal.\\
+Reference symbol (v3) & Newman phases, sent first and last & Low peaks (never clipped); the pair gives the time scale (\cref{sec:ofdmrx}).\\
+OFDM interpolation (v3) & sinc, Hann window, $A = 16$ & Reads the recording on the transmitter's grid at any rate and time scale, with errors far below the noise.\\
+OFDM timing (v3) & latest stretch with $\ge 99\,\%$ of the most energy & Puts the direct sound at the start of the guard, so that the guard covers as much later echo as possible.\\
+OFDM time scale (v3) & $\pm 500$\,ppm, 1\,ppm steps, parabola & Covers clock offsets and a phone moving at up to about 0.17\,m/s; the phase error left is far below DQPSK's $45^\circ$.\\
+OFDM window margin (v3) & 8 samples & Keeps the direct sound inside the guard if the timing is slightly late.\\
+OFDM noise groups (v3) & 32 subcarriers & Enough decisions for a stable estimate of $N_0$, narrow enough to follow the room's response and the speaker's.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Single carrier (version~5).}
+\label{tab:psc}
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}p{3.1cm}X}
+\toprule
+Parameter & Value & Reason\\
+\midrule
+Symbols & 9600 symbols/s at $9.6\kHz$, root-raised cosine, roll-off $1/3$ & Fills OFDM's band, $3.2$ to $16\kHz$, with 5 samples of $48\kHz$ per symbol (\cref{sec:scsig}).\\
+Level & rms $0.45$, clipped at $0.9$ & As loud as OFDM; about $1\,\%$ of the samples clipped at 256QAM, the distortion $35\dB$ below the symbols.\\
+Training & 640, 1280 or 2560 QPSK symbols after every $\le 4800$ data symbols & Sets the longest room learnt (20, 47 or $100\ms$) for 12, 21 or $35\,\%$ of the airtime; a block every $0.5$\,s follows the clock and a changing room (\cref{sec:scframe}).\\
+Silence before the training & $0.1$\,s & The control part's echo fades before the training.\\
+Codes & turbo only, no extra interleaver & Turbo equalization needs the beliefs on every coded bit; a random bit interleaver made it worse.\\
+Timing & earliest peak $\ge 0.5$ of the strongest, $\le 15\ms$ before it & The taps start $6.7\ms$ before $T_0$, and a late echo can be the strongest arrival.\\
+Room & 256, 512 or 1024 taps, 64 before $T_0$ & $1.5$ rows per tap on each later training block (\cref{sec:scframe}).\\
+Pull between blocks & $\rho_{\mathrm{rel}} = 1$ & A tight pull ($-20\dB$) kept an outdated room when people moved (\cref{sec:scrx}).\\
+Sampling phase & 1 of 5, by Gaussian rate & The fits' residuals hardly differ; the folded room does, by 1 to $1.5\dB$.\\
+SMAP width & $\tau^2 = 0.25, 0.25, 0.3, 0.4\,d^2$ & Calibrated LLRs at the code's threshold; sharper mixtures are overconfident (\cref{sec:scdet}).\\
+Effort & fast: 30 (20) steps, $\le 4$ passes; full: 150 (100), $\le 8$ & Fast costs at most $1\dB$ at the threshold, for a third to two thirds of the time.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[ht]
+\centering
+\caption{Short control part (version~6).}
+\label{tab:pc6}
+\small
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}p{3.1cm}X}
+\toprule
+Parameter & Value & Reason\\
+\midrule
+Preamble $P$ & 2048 samples, 546 subcarriers of equal amplitude, Newman's phases negated & Flat spectrum: the matched filter shows the room; peaks of $0.84$, never clipped; it sweeps the band the other way from OFDM's reference symbol, of which it matches at most $0.4\,\%$ of the energy (\cref{sec:c6sig}).\\
+Periods & 3 & The first fills the room (a guard of $43\ms$); the last two give the room, the clock and the noise.\\
+Level & rms $0.45$ & As loud as OFDM; two louder variants at rms $0.6$ survived 1 to $3\dB$ less noise.\\
+Header symbol & BPSK on $P$'s subcarriers, bit $37\,j \bmod 92$, guard 1024 & $P$ is its reference; 5 or 6 copies of each bit, $2.2\kHz$ apart; the guard holds $21\ms$ of echo, as OFDM's long one.\\
+Detection & $\rho > 0.02$ and $\beta > 0.5$ & In noise $\rho$ stayed below $0.013$ on seven recordings; frames give $0.05$ in the most reverberant room (emulated), $0.10$ to $0.53$ recorded (\cref{sec:c6det}).\\
+Start & first strong arrival & The single carrier's rule: the message part's guard or taps start at the direct sound, not at a later, stronger echo.\\
+Clock for $H$ & $\pm 1.5$ samples per period, steps of $0.01$ & $\pm 730$\,ppm; the message's receivers measure the clock again on their own parts.\\
+Noise & difference of periods 2 and 3, over 33 subcarriers & Measured where the room cancels; the echo after the guard is added in proportion to its energy (\cref{sec:c6rx}).\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -1423,7 +1943,7 @@ At the same bit rate, four tones tolerated about $2\dB$ more noise and, for 9 te
 On the 1600 bit/s hopping recording, the improvements of version~1 were measured one by one: handling the missing postamble took the calibrated LLR from 1373 pixel errors to 0; fine timing and the fitted scale lowered the channel errors from $8.2$ to $6.1\,\%$ and the turbo iterations from 8 to 3--4; the per-pair error count then pointed to the lowest tone pair, which led to the $3.2\kHz$ band.
 
 \paragraph{Not yet verified on real hardware.}
-Room sounding, the new hopping band (top tones up to $15.8\kHz$ at 200 bit/s), long-range hopping and the turbo rates $1/3$ and $1/4$ have been tested in simulation and with the page in a browser fed simulated recordings, not yet with real phones in a real room. Versions~2 and~3 worked well in first tests with real devices (9 October 2026, without saved recordings). A classroom test with recordings saved from the phones would confirm them all.
+Room sounding, the new hopping band (top tones up to $15.8\kHz$ at 200 bit/s), long-range hopping and the turbo rates $1/3$ and $1/4$ have been tested in simulation and with the page in a browser fed simulated recordings, not yet with real phones in a real room. Versions~2 and~3 worked well in first tests with real devices (9 October 2026, without saved recordings). A classroom test with recordings saved from the phones would confirm them all. The single carrier of version~5 was developed on Sheng's recordings in three rooms (\cref{sec:scres}).
 
 %======================================================================
 \clearpage
@@ -1583,8 +2103,38 @@ O. Edfors, M. Sandell, J.-J. van de Beek, S.~K. Wilson, and P.~O. B\"orjesson, `
 \bibitem{levinson}
 N. Levinson, ``The Wiener RMS (root mean square) error criterion in filter design and prediction,'' \emph{J. Math. Phys.}, vol.~25, pp.~261--278, 1947.
 
+\bibitem{smap}
+V.~Tucci Ramos, S.~Senecal, and S.~Yang, ``Deterministic smoothed MAP detection for high-dimensional MIMO systems,'' arXiv:2609.24592 [cs.IT], Sep. 2026.
+
+\bibitem{douillard}
+C.~Douillard, M.~J\'ez\'equel, C.~Berrou, A.~Picart, P.~Didier, and A.~Glavieux, ``Iterative correction of intersymbol interference: Turbo-equalization,'' \emph{Eur. Trans. Telecommun.}, vol.~6, no.~5, pp.~507--511, 1995.
+
+\bibitem{tuchlertsp}
+M.~T\"uchler, A.~C. Singer, and R.~Koetter, ``Minimum mean squared error equalization using a priori information,'' \emph{IEEE Trans. Signal Process.}, vol.~50, no.~3, pp.~673--683, Mar. 2002.
+
+\bibitem{tuchlertcom}
+M.~T\"uchler, R.~Koetter, and A.~C. Singer, ``Turbo equalization: principles and new results,'' \emph{IEEE Trans. Commun.}, vol.~50, no.~5, pp.~754--767, May 2002.
+
+\bibitem{falconer}
+D.~Falconer, S.~L. Ariyavisitakul, A.~Benyamin-Seeyar, and B.~Eidson, ``Frequency domain equalization for single-carrier broadband wireless systems,'' \emph{IEEE Commun. Mag.}, vol.~40, no.~4, pp.~58--66, Apr. 2002.
+
+\bibitem{lbfgs}
+D.~C. Liu and J.~Nocedal, ``On the limited memory BFGS method for large scale optimization,'' \emph{Math. Program.}, vol.~45, pp.~503--528, 1989.
+
+\bibitem{hestenes}
+M.~R. Hestenes and E.~Stiefel, ``Methods of conjugate gradients for solving linear systems,'' \emph{J. Res. Natl. Bur. Stand.}, vol.~49, no.~6, pp.~409--436, 1952.
+
+\bibitem{kay}
+S.~M. Kay, \emph{Fundamentals of Statistical Signal Processing: Estimation Theory}. Upper Saddle River, NJ: Prentice Hall, 1993.
+
 \bibitem{boyd}
 S.~Boyd, ``Multitone signals with low crest factor,'' \emph{IEEE Trans. Circuits Syst.}, vol.~33, no.~10, pp.~1018--1022, Oct. 1986.
+
+\bibitem{godsill}
+S.~J. Godsill and P.~J.~W. Rayner, \emph{Digital Audio Restoration: A Statistical Model Based Approach}. London: Springer, 1998.
+
+\bibitem{schmidl}
+T.~M. Schmidl and D.~C. Cox, ``Robust frequency and timing synchronization for OFDM,'' \emph{IEEE Trans. Commun.}, vol.~45, no.~12, pp.~1613--1621, Dec. 1997.
 
 \end{thebibliography}
 

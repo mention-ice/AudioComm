@@ -48,9 +48,11 @@ h1{font:700 23px/1.25 "Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",s
 .sub{color:var(--brand-ink);opacity:.85;margin:0}
 header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,255,255,.55)}
 .opts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center;margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:10px}
-.opts>.muted:nth-child(odd){white-space:nowrap}
+.opts>.muted:nth-child(odd){max-width:8.5em}
 .opts>.seg{justify-self:start}
+.opts .seg button{padding:7px 10px}
 .opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk,.opts.sc .nsc,.opts:not(.sc) .sco{display:none}
+.opts.sc .xsc{opacity:.35;pointer-events:none}
 @media (max-width:520px){.opts{grid-template-columns:1fr;gap:4px}.opts>.seg{margin-bottom:6px}}
 .card h2{border-left:4px solid var(--accent);padding-left:8px}
 main{max-width:1200px;margin:0 auto;padding:8px 16px 40px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -95,6 +97,21 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 .qrbox{background:#fff;color:#111;border-radius:16px;padding:20px;text-align:center;max-width:100%}
 .qrbox canvas{width:min(78vmin,560px);height:auto;image-rendering:pixelated;margin:0 auto}
 .qrbox p{margin:8px 0 0;color:#444;font-size:14px;word-break:break-all}
+.logbox{max-height:18em;overflow:auto}
+.log{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+.log caption{text-align:left;color:var(--muted);font-size:12px;padding-bottom:4px}
+.log td{padding:5px 6px;border-top:1px solid var(--line);vertical-align:top}
+.log td:first-child{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums}
+.log td:last-child{white-space:nowrap;font-weight:600;text-align:right}
+.log tbody tr{cursor:pointer}.log tbody tr:hover td,.log tr[aria-selected="true"] td{background:var(--bg)}
+.log tr[aria-selected="true"] td:first-child{box-shadow:inset 3px 0 var(--accent)}
+.r-ok{color:var(--ok)}.r-warn{color:var(--warn)}.r-bad{color:var(--bad)}
+.stat[title]{cursor:help}
+.help dt{font-size:13px;font-weight:600;margin-top:6px}.help dd{margin:0;color:var(--muted);font-size:13px}
+details .row{margin:8px 0}
+#rxSet{margin:2px 0 10px}
+.legend{flex-wrap:wrap;gap:2px 14px}
+@media (min-width:861px){main{grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr)}}
 .rawtext{font-size:15px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-word;margin-top:4px}
 </style>
 </head>
@@ -109,7 +126,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 <div class="hd">
   <div>
     <h1>Acoustic modem <span style="font-weight:500;opacity:.75">v5</span></h1>
-    <p class="sub">FSK with 2 or 4 tones, OFDM (DQPSK, QPSK, 8PSK, 16QAM, 64QAM or 256QAM), or a single carrier with SMAP detection (QPSK to 256QAM), over the air: one device transmits through its speaker, any device in the room decodes through its microphone.</p>
+    <p class="sub">Data over sound: one device plays a frame through its speaker, and every device in the room decodes it through its microphone, with FSK, OFDM or a single carrier with SMAP detection.</p>
   </div>
   <button class="btn" id="qrBtn">QR code for phones</button>
 </div></header>
@@ -138,18 +155,18 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     </div>
   </div>
   <div class="opts" id="txOpts">
-    <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button class="nsc" data-v="none">None</button><button class="nsc" data-v="hamming">Hamming (7,4)</button><button class="nsc" data-v="conv">Convolutional</button><button data-v="turbo">Turbo</button></span>
+    <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button class="xsc" data-v="none">None</button><button class="xsc" data-v="hamming">Hamming (7,4)</button><button class="xsc" data-v="conv">Convolutional</button><button data-v="turbo">Turbo</button></span>
     <span class="muted mo tr">Turbo code rate</span><span class="seg mo tr" id="trSeg"><button data-v="turbo">1/2</button><button data-v="turbo3">1/3</button><button data-v="turbo4">1/4</button></span>
     <span class="muted mo">Modulation</span><span class="seg mo" id="modSeg"><button data-v="2">2 tones, 1 bit</button><button data-v="4">4 tones, 2 bits</button><button data-v="ofdm">OFDM</button><button data-v="sc">Single carrier</button></span>
     <span class="muted fk">Tones</span><span class="seg fk" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
     <span class="muted mo fk">Rate, bit/s</span><span class="seg mo fk" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button><button data-v="3200">3200</button><button data-v="6400">6400</button></span>
-    <span class="muted mo of">Mapping</span><span class="seg mo of" id="mapSeg"><button class="nsc" data-v="dqpsk">DQPSK</button><button data-v="qpsk">QPSK</button><button class="nsc" data-v="8psk">8PSK</button><button data-v="16qam">16QAM</button><button data-v="64qam">64QAM</button><button data-v="256qam">256QAM</button></span>
+    <span class="muted mo of">Mapping</span><span class="seg mo of" id="mapSeg"><button class="xsc" data-v="dqpsk">DQPSK</button><button data-v="qpsk">QPSK</button><button class="xsc" data-v="8psk">8PSK</button><button data-v="16qam">16QAM</button><button data-v="64qam">64QAM</button><button data-v="256qam">256QAM</button></span>
     <span class="muted mo of nsc">Guard interval</span><span class="seg mo of nsc" id="guardSeg"><button data-v="long">21 ms · 17 kbit/s</button><button data-v="short">5 ms · 20 kbit/s</button></span>
     <span class="muted mo sco">Training, longest echo</span><span class="seg mo sco" id="trainSeg"><button data-v="short">20 ms · 68 kbit/s</button><button data-v="medium">47 ms · 61 kbit/s</button><button data-v="long">100 ms · 50 kbit/s</button></span>
     <span class="muted so">Period</span><span class="seg so" id="ordSeg"><button data-v="14">0.34 s</button><button data-v="15">0.68 s</button><button data-v="16">1.37 s</button></span>
     <span class="muted so">Periods averaged</span><span class="seg so" id="perSeg"><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button></span>
     <span class="muted">Preamble, bits</span><span class="seg" id="preSeg"><button data-v="127">127</button><button data-v="255">255</button><button data-v="511">511</button></span>
-    <span class="mo"></span><span class="muted mo">A longer preamble, a lower rate and 4 tones reach farther; in a reverberant room, beyond a few metres, use Hopping. OFDM is the fastest (the rate is before the code): use it with a code, and in a reverberant room with the long guard. QPSK, 8PSK and 16QAM add pilots so that the receiver measures the room's response: QPSK reaches farther than DQPSK, 16QAM is nearly twice as fast but needs about 3 dB more signal, 64QAM and 256QAM are 1.5 and 2 times faster again for about 5 and 11 dB more: try them close to the speaker. The single carrier (v5) sends QPSK to 256QAM over the same band with no guard, and the receiver undoes the room's echo itself (SMAP or linear MMSE, with the turbo decoder): it takes turbo codes only, and a few seconds to decode. Receivers need no settings: they read all of these from the header of each frame.</span>
+    <span class="mo"></span><span class="muted mo" id="txHint"></span>
     <span class="so"></span><span class="muted so">Plays a loud hiss (a maximum-length sequence, MLS) from which every receiver measures the room: impulse response, reverberation time, frequency response, noise. The period must outlast the room's echo: take 1.37 s in a large or reverberant room. Each doubling of the periods averaged gives 3 dB less noise on the measurement. With Hopping, the preamble and header hop too, so that receivers far away still find the sounding.</span>
   </div>
   <p class="muted" id="txInfo"></p>
@@ -160,7 +177,7 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   <div class="progress"><div id="txProg"></div></div>
   <p class="muted" id="txStatus">Start listening on the receiver first, then press Send.</p>
   <details>
-    <summary>What is being sent</summary>
+    <summary>How it works</summary>
     <p class="muted">A frame has two parts. The <b>control part</b> is sent at 400 bit/s, at 4 / 8 kHz or hopping, two modes every receiver knows in advance: 0.1 s warm-up · MLS preamble · header. The <b>message part</b> uses the tones and rate chosen on the transmitter: coded and scrambled message · MLS postamble (the same sequence as the preamble).
     The header carries the type (text, image or room sounding) and size of the message, the code, the rate and the tones (for OFDM, the guard and the mapping; for the single carrier, the mapping), protected by a CRC-8 and the convolutional code, so the receivers need no settings, as with the SIGNAL field of Wi-Fi. Bit 0 is a burst of the low tone, bit 1 a burst of the high tone; with 4 tones, each burst carries 2 bits (see below). <code>audiocomm_v5.py</code> produces and decodes the same frames.</p>
     <p class="muted">The receivers find a frame by correlating what they hear with the three possible preambles (maximum-length sequences of 127, 255 or 511 bits).
@@ -188,12 +205,18 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
     <button class="btn primary" id="listenBtn">● Start listening</button>
     <span class="muted" id="rxFs"></span>
   </div>
-  <div class="row"><span class="muted">Single-carrier detector</span><span class="seg" id="detSeg"><button data-v="smap">Soft SMAP</button><button data-v="lmmse">Linear MMSE</button></span><span class="muted">Effort</span><span class="seg" id="effSeg"><button data-v="fast">Fast</button><button data-v="full">Full</button></span></div>
-  <div class="row"><span class="muted">Soft output</span><span class="seg" id="softSeg"><button data-v="cal">Calibrated LLR</button><button data-v="ratio">ln(E₁/E₀)</button></span></div>
+  <details id="rxSet">
+    <summary>Receiver settings (single carrier)</summary>
+    <div class="row"><span class="muted">Detector</span><span class="seg" id="detSeg"><button data-v="smap">Soft SMAP</button><button data-v="lmmse">Linear MMSE</button></span></div>
+    <div class="row"><span class="muted">Effort</span><span class="seg" id="effSeg"><button data-v="fast">Fast</button><button data-v="full">Full</button></span></div>
+    <div class="row"><span class="muted">Room estimate</span><span class="seg" id="estSeg"><button data-v="ls">Least squares</button><button data-v="mmse">MMSE</button></span></div>
+    <p class="muted">Everything else comes with each frame, in its header. Soft SMAP is the detector of v5; linear MMSE, the classical equalizer, is there to compare (it needs about 3 to 4 dB more signal at 256QAM). Full effort runs 5 times more SMAP steps and up to 8 passes instead of 4: slower, and at most about 1 dB better. The room estimate: least squares fits every tap of the room freely; MMSE first learns how the room's power fades with the delay, then pulls the weak, late taps towards zero instead of fitting their noise (on our recordings, the same or 1 dB less signal needed). Changing any of them decodes the frame shown again.</p>
+  </details>
   <canvas id="spec" class="plot"></canvas>
-  <div class="legend"><span><i style="background:var(--f0)"></i>bit 0 tone</span><span><i style="background:var(--f1)"></i>bit 1 tone</span><span>live spectrogram, last ~5 s; hopping, 4 tones or OFDM: band edges</span></div>
+  <div class="legend"><span>live spectrogram, last ~5 s</span><span>marks on the right edge: <i style="background:var(--f0)"></i>lowest and <i style="background:var(--f1)"></i>highest tone (or band edge)</span></div>
   <canvas id="corr" class="plot small" style="margin-top:10px"></canvas>
   <div class="legend"><span>match with the known preamble (frame detected above the dashed line)</span></div>
+  <div class="logbox"><table class="log hidden" id="log"><caption>Frames received, newest first: click one to show it again</caption><tbody id="logBody"></tbody></table></div>
   <div style="margin-top:14px">
     <div class="progress"><div id="rxProg"></div></div>
     <div id="rxOutText" class="rxtext" style="margin-top:10px"></div>
@@ -224,13 +247,17 @@ figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
   </div>
   <div class="stats" id="stats"></div>
   <canvas id="hist" class="plot small hidden" style="margin-top:10px"></canvas>
-  <div class="legend hidden" id="histLegend"><span>soft output log(E<sub>high</sub>/E<sub>low</sub>) per bit: two well separated humps mean a clean channel</span></div>
+  <div class="legend hidden" id="histLegend"><span><i style="background:var(--f0)"></i>bit 0 sent</span><span><i style="background:var(--f1)"></i>bit 1 sent</span><span id="histText">LLR per bit: two well separated humps mean a clean channel</span></div>
+  <details id="statsHelp" class="hidden"><summary>What these numbers mean</summary><dl class="help" id="statsDl"></dl></details>
   <div class="row"><button class="btn hidden" id="irBtn">Download impulse response (WAV)</button><button class="btn hidden" id="recBtn">Download received recording (WAV)</button></div>
   <details>
-    <summary>Soft output</summary>
-    <p class="muted"><b>ln(E₁/E₀)</b> compares the energies received on the two tones. Its sign is the right decision when both tones arrive equally strong, but its size says little about reliability: a bit drowned in noise can look as sure as a clean one.</p>
-    <p class="muted"><b>Calibrated LLR</b> measures, on the known bits of the postamble (sent at the message's tones and rate), the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². If the postamble is not found (for example when the end of the sound was cut off), A and σ² are estimated on the message itself: its bits are guessed from the energies, then the guesses and the estimates are refined in turn (EM). With the postamble, the LLR is then multiplied by the factor α ≤ 1 that best predicts the postamble's own bits: the echoes of short symbols have heavier tails than Gaussian noise, which makes the model too sure of itself (α ≈ 0.3 at 1600 bit/s in a real room). It corrects an imbalance between the tones (speaker, microphone, room) and gives the Viterbi decoder reliabilities on the right scale. With 4 tones, each tone m gets its own λ<sub>m</sub> = ln I₀(A<sub>m</sub>E<sub>m</sub>/σ<sub>m</sub>²) − A<sub>m</sub>²/2σ<sub>m</sub>², the log-likelihood that it was the tone sent, and the LLR of each of the symbol's two bits is ln Σ e<sup>λ</sup> over the two tones where that bit is 1, minus the same over the two where it is 0; ln(E₁/E₀) becomes the strongest of the first two tones against the strongest of the other two. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal. Switch after a reception to decode the same recording both ways.</p>
-    <p class="muted">OFDM frames always use their own LLR, that of differential detection: for each subcarrier, z = Y<sub>i</sub> Y<sub>i−1</sub><sup>*</sup> compares the symbol with the one before, the LLR of the first bit is −√2 Re z / N<sub>0</sub> and that of the second −√2 Im z / N<sub>0</sub>, and N<sub>0</sub> (noise plus the echo that arrives after the guard) is measured on the decisions, per group of 32 subcarriers. With QPSK, 8PSK or 16QAM (v4) they use that of the estimated channel: for each bit, ln Σ<sub>s: bit 1</sub> exp(−|Y − H s|² / N<sub>0</sub>) − ln Σ<sub>s: bit 0</sub> exp(−|Y − H s|² / N<sub>0</sub>) over the points s of the mapping, with N<sub>0</sub> measured on the pilots and the reference symbols.</p>
+    <summary>Soft output (LLR)</summary>
+    <p class="muted">Each receiver gives the decoder a log-likelihood ratio per bit, LLR = ln P(what was heard | bit 1) / P(what was heard | bit 0): its sign is the decision, its size the confidence. The soft decoders (Viterbi, turbo) need both, on the right scale. The histogram under the results shows the LLRs of a frame, split by the bit sent.</p>
+    <p class="muted"><b>FSK: the calibrated LLR</b> measures, on the known bits of the postamble (sent at the message's tones and rate), the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². If the postamble is not found (for example when the end of the sound was cut off), A and σ² are estimated on the message itself: its bits are guessed from the energies, then the guesses and the estimates are refined in turn (EM). With the postamble, the LLR is then multiplied by the factor α ≤ 1 that best predicts the postamble's own bits: the echoes of short symbols have heavier tails than Gaussian noise, which makes the model too sure of itself (α ≈ 0.3 at 1600 bit/s in a real room). It corrects an imbalance between the tones (speaker, microphone, room) and gives the decoder reliabilities on the right scale. With 4 tones, each tone m gets its own λ<sub>m</sub> = ln I₀(A<sub>m</sub>E<sub>m</sub>/σ<sub>m</sub>²) − A<sub>m</sub>²/2σ<sub>m</sub>², the log-likelihood that it was the tone sent, and the LLR of each of the symbol's two bits is ln Σ e<sup>λ</sup> over the two tones where that bit is 1, minus the same over the two where it is 0. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal.</p>
+    <p class="muted">Earlier versions also offered the plain ratio ln(E₁/E₀) of the two tones' energies. Its sign is the right decision when both tones arrive equally strong, but its size says little about reliability: a bit drowned in noise can look as sure as a clean one. Since v1 also calibrates when the postamble is lost, the calibrated LLR has done better (on the 1600 bit/s recording where the ratio once won: 0 against 256 wrong pixels), so the page no longer offers the ratio.</p>
+    <p class="muted"><b>OFDM</b> uses the LLR of its detector. DQPSK: for each subcarrier, z = Y<sub>i</sub> Y<sub>i−1</sub><sup>*</sup> compares the symbol with the one before, the LLR of the first bit is −√2 Re z / N<sub>0</sub> and that of the second −√2 Im z / N<sub>0</sub>, and N<sub>0</sub> (noise plus the echo that arrives after the guard) is measured on the decisions, per group of 32 subcarriers. QPSK to 256QAM (v4): that of the estimated channel, for each bit ln Σ<sub>s: bit 1</sub> exp(−|Y − H s|² / N<sub>0</sub>) − ln Σ<sub>s: bit 0</sub> exp(−|Y − H s|² / N<sub>0</sub>) over the points s of the mapping, with N<sub>0</sub> measured on the pilots and the reference symbols.</p>
+    <p class="muted"><b>Single carrier</b> (v5): the detector (soft SMAP or linear MMSE) gives the LLRs; the turbo decoder returns what it learnt about every coded bit (its extrinsic LLRs), and the detector starts again with that as prior, pass after pass (turbo equalization). The histogram shows the detector's first pass.</p>
+    <p class="muted"><b>Did the decoding succeed?</b> With a turbo code, the receiver checks whether the decoder's decisions on every coded bit, message and parity alike, agree with the re-encoded message, that is, whether they form a codeword. If they do, the message is almost surely right (✓ decoded); if not, some bits are wrong (✗). With the demo image, which every receiver knows, it also counts the wrong bits. Hamming and the convolutional code give no such check.</p>
   </details>
   <details>
     <summary>Room sounding</summary>
@@ -630,7 +657,7 @@ function decodeFrame(res, soft) {
   const { hdr, key } = res;
   if (hdr.sc) {   // v5, single carrier: decoded by turbo equalization already (scReceive); llr: the detector's first pass, as sent
     const bits = Uint8Array.from(res.sc.bits), sent = Uint8Array.from(encodeFEC(hdr.code, bits), (x, j) => x ^ key[j]), llr = Array.from(res.sc.llr);
-    return { soft: 'cal', bits, llr, sent, chErr: llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0), iters: res.sc.passes };
+    return { soft: 'cal', bits, llr, sent, chErr: llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0), iters: res.sc.passes, codeword: res.sc.codeword };
   }
   let llr = [];
   if (hdr.ofdm) { llr = Array.from(res.ofdm.llr); soft = 'cal'; }   // OFDM: the differential detector's LLRs, whatever the soft output chosen
@@ -642,6 +669,16 @@ function decodeFrame(res, soft) {
   const bits = Uint8Array.from(dec.bits), sent = Uint8Array.from(encodeFEC(hdr.code, bits), (x, j) => x ^ key[j]);
   const chErr = llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0);    // channel errors the code corrected
   return { soft, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks, iters: dec.iters };
+}
+
+// v5 page: whether the turbo decoder's decisions on all the coded bits, message and parity, agree with the decoded message encoded
+// again (a codeword: the message is then almost surely right). llr, key: the frame's channel LLRs and scrambler; bits: the message
+// decodeFEC gave. scTurboSiso makes the same decisions as turboDecode, and also gives the a-posteriori LLRs of the parity bits.
+function turboCheck(code, n0, llr, key, bits) {
+  const d = scTurboSiso(Array.from(llr, (r, j) => key[j] ? -r : r), n0, TURBO_R[code]), cw = encodeFEC(code, d.bits);
+  for (let j = 0; j < n0; j++) if (d.bits[j] !== bits[j]) return false;
+  for (let j = 0; j < cw.length; j++) if ((d.app[j] > 0 ? 1 : 0) !== cw[j]) return false;
+  return true;
 }
 
 // ---- QR code (byte mode, error level M, versions 1-9), built here so the page needs no network ----
@@ -1641,6 +1678,19 @@ const SC_REL = 1.0;           // ridge prior of a training block's room: the one
                                // pull; a tight one, -20 dB, cost 2 to 7 dB on our recordings when people moved)
 const SC_T0_FRAC = 0.5, SC_T0_BACK = 0.015;   // timing: the earliest arrival with half the strongest's correlation, up to 15 ms before it
 const SC_MAX_PPM = 500;       // clock offset plus a moving phone
+const SC_EST = ['ls', 'mmse'];   // the receiver's estimate of the room on the first block: least squares (default) or MMSE with
+                               // a prior power per tap learned from a least-squares pilot; on Sheng's recordings with noise
+                               // added, MMSE decoded at the same SNR as least squares or 1 dB lower (v5/taps/tap_estimation.md)
+const SC_SMOOTH = 33;         // MMSE: taps over which the pilot's power is averaged into the prior
+const SC_GAP_MAX = 1024;      // v5.1: the time map also looks this many samples farther, for samples the microphone lost or
+const SC_GAP_COH = 1.5;       // repeated between two training blocks; such a jump is a gap if the blocks agree this much
+                               // better there than in the usual window (coherence of their cross-spectrum)
+const SC_GAP_AR = 32;         // order of the linear predictor that finds where the samples went missing (scClick)
+const SC_GAP_W = 16;          // scClick: samples on each side of the join over which the prediction errors are summed
+const SC_GAP_SPAN = SC_SPAN * SC_SPS + 8;   // samples on each side of a jump that the matched filter and the interpolation smear it over
+const SC_GAP_EDGE = 600;      // a jump inside the first block is looked for only this far from its end (closer, the next block
+                               // sees it) and past its first L symbols (before, the timing takes the part after it)
+const SC_GAP_MIN = 4;         // inside the first block: a jump of more samples than this
 
 function scRRC(beta = SC_BETA, sps = SC_SPS, span = SC_SPAN) {   // root-raised-cosine pulse, unit energy
   const n = 2 * span * sps + 1, h = new Float64Array(n); let e = 0;
@@ -1813,9 +1863,10 @@ function scLBFGS(fg, x, iters = 150, mem = 10, tol = 1e-5) {   // minimizes f (f
   }
   return x;
 }
-function scFit(x, y, mask, L, c0, lam, it = 100) {   // taps c (L of them): least squares over the rows where mask = 1 of y ~ x * c, plus lam |c - c0|^2
+function scFit(x, y, mask, L, c0, lam, it = 100) {   // taps c (L of them): least squares over the rows where mask = 1 of y ~ x * c, plus sum of lam_l |c_l - c0_l|^2 (lam: one number, or one per tap)
   const T = new SCConv([x], null, L), m = v => { for (let j = 0; j < v.r.length; j++) { v.r[j] *= mask[j]; v.i[j] *= mask[j]; } return v; };   // x * c = c * x: the taps are the unknown "symbols"
-  const d = scCG(v => { const a = T.adj(m(T.fwd(v))); for (let j = 0; j < L; j++) { a.r[j] += lam * v.r[j]; a.i[j] += lam * v.i[j]; } return a; }, T.adj(m(csub(y, T.fwd(c0)))), it, 1e-8);
+  const lw = typeof lam === 'number' ? new Float64Array(L).fill(lam) : lam;
+  const d = scCG(v => { const a = T.adj(m(T.fwd(v))); for (let j = 0; j < L; j++) { a.r[j] += lw[j] * v.r[j]; a.i[j] += lw[j] * v.i[j]; } return a; }, T.adj(m(csub(y, T.fwd(c0)))), it, 1e-8);
   for (let j = 0; j < L; j++) { d.r[j] += c0.r[j]; d.i[j] += c0.i[j]; }
   return d;
 }
@@ -2005,23 +2056,141 @@ function scFirstArrival(v) {
   for (let j = Math.max(1, i - Math.round(SC_T0_BACK * FS_TX)); j < i; j++) if (v[j] >= SC_T0_FRAC * v[i] && v[j] >= v[j - 1] && v[j] > v[j + 1]) return j;
   return i;
 }
+// MMSE room on the first block, on the rows that see the training only (as least squares; the rows before it would add
+// the control part's late echoes). Pilot: least squares on L taps; its residual gives N0 (echoes beyond L taps count as
+// noise). Prior power of tap l: the pilot's |c_l|^2 averaged over SC_SMOOTH taps, minus the pilot's estimation floor
+// f = N0 / (nA - L) (at least f / 10). Then a ridge with the weight N0 / p_l on tap l. Returns the taps, N0 of the fit,
+// and N0 for detection: plus the taps' remaining error, sum of p_l f / (p_l + f) (white training).
+function scMmseFirst(xA, y1, nA, L) {
+  const mask = new Float64Array(nA + L - 1).fill(1, L, nA), c1 = scFit(xA, y1, mask, L, cvec(L), 0, 200), f1 = new SCConv([xA], null, L).fwd(c1);
+  let e = 0; for (let j = 0; j < nA + L - 1; j++) e += mask[j] * ((y1.r[j] - f1.r[j]) ** 2 + (y1.i[j] - f1.i[j]) ** 2);
+  const N0b = e / (nA - 2 * L), f = N0b / (nA - L), h = SC_SMOOTH >> 1, lam = new Float64Array(L);
+  let N0 = N0b;
+  for (let l = 0; l < L; l++) {
+    let a = 0; for (let k = Math.max(0, l - h); k <= Math.min(L - 1, l + h); k++) a += c1.r[k] ** 2 + c1.i[k] ** 2;
+    const p = Math.max(a / SC_SMOOTH - f, f / 10); lam[l] = N0b / p; N0 += p * f / (p + f);
+  }
+  return { c0: scFit(xA, y1, mask, L, cvec(L), lam, 200), N0b, N0 };
+}
+class SCMask {   // v5.1: an SCConv seen through a row mask g (0 or 1): rows lost with the samples the microphone dropped
+  constructor(op, g) { this.op = op; this.g = g; this.n = op.n; this.L = op.L; this.nr = op.nr; }
+  fwd(s) { const o = this.op.fwd(s), g = this.g; for (let j = 0; j < this.nr; j++) { o.r[j] *= g[j]; o.i[j] *= g[j]; } return o; }
+  adj(y) { const g = this.g; return this.op.adj({ r: y.r.map((v, j) => v * g[j]), i: y.i.map((v, j) => v * g[j]) }); }
+  spectrum(n) { return this.op.spectrum(n); }
+}
+// v5.1: the recording sample in [lo, hi) where y jumps. Samples lost or repeated by the microphone join two stretches of
+// sound that do not follow each other; the sound itself fills only 3.2 to 16 kHz of the 24 kHz band, so a linear
+// predictor fitted on the stretch follows it closely everywhere but there (the click detector of audio restoration).
+// Predicted from the past, the W samples after the join go wrong; predicted from the future, the W before it: their
+// squared errors summed. Returns the first sample after the join, the runner-up place (more than 2 SC_GAP_SPAN away)
+// and its score over the best's (near 1: unsure).
+function scClick(y, lo, hi, order = SC_GAP_AR, W = SC_GAP_W) {
+  lo = Math.max(Math.floor(lo), order); hi = Math.min(Math.ceil(hi), y.length - order);
+  const m = hi - lo, n = m + 2 * order, N = scN(2 * n), P = scPlan(N), re = new Float64Array(N), im = new Float64Array(N);
+  for (let k = 0; k < n; k++) re[k] = y[lo - order + k];
+  scFFT(re, im, P);
+  for (let k = 0; k < N; k++) { re[k] = re[k] * re[k] + im[k] * im[k]; im[k] = 0; }
+  scFFT(re, im, P, true);   // the autocorrelation
+  const R = re.slice(0, order + 1), a = new Float64Array(order + 1), t = new Float64Array(order + 1);
+  R[0] *= 1 + 1e-9;
+  let E = R[0];
+  for (let i = 1; i <= order; i++) {   // Levinson-Durbin: y[t] ~ sum_k a_k y[t - k]
+    let acc = R[i]; for (let j = 1; j < i; j++) acc -= a[j] * R[i - j];
+    const kk = acc / E; t.set(a); a[i] = kk; for (let j = 1; j < i; j++) a[j] = t[j] - kk * t[i - j];
+    E *= 1 - kk * kk;
+  }
+  const ef = new Float64Array(m), eb = new Float64Array(m), sc = new Float64Array(m);
+  for (let i = 0; i < m; i++) {   // sample lo + i from the order samples before it, and from the order samples after it
+    const q = lo + i; let e = y[q], g = y[q];
+    for (let k = 1; k <= order; k++) { e -= a[k] * y[q - k]; g -= a[k] * y[q + k]; }
+    ef[i] = e * e; eb[i] = g * g;
+  }
+  let f = 0, b = 0; for (let i = 0; i < W && i < m; i++) f += ef[i];
+  for (let i = 0; i < m; i++) {   // ef over lo + i .. lo + i + W - 1, eb over lo + i - W .. lo + i - 1
+    if (i) { f += (i + W - 1 < m ? ef[i + W - 1] : 0) - ef[i - 1]; b += eb[i - 1] - (i > W ? eb[i - 1 - W] : 0); }
+    sc[i] = f + b;
+  }
+  let bi = 0; for (let i = 1; i < m; i++) if (sc[i] > sc[bi]) bi = i;
+  let bj = -1; for (let i = 0; i < m; i++) if (Math.abs(i - bi) > 2 * SC_GAP_SPAN && (bj < 0 || sc[i] > sc[bj])) bj = i;
+  return bj < 0 ? [lo + bi, lo + bi, 0] : [lo + bi, lo + bj, sc[bi] > 0 ? sc[bj] / sc[bi] : 0];
+}
+// v5.1: the clock (delay gained per transmitted sample) from the first training block alone, for a jump in the only
+// interval. The room fitted on each half of the block (rows that see TA and TC only), on all 5 sampling phases, predicts
+// the other half; the delay between that prediction and the recording (cross-spectrum phase, as the time map) is the
+// clock's drift between the halves: the room cancels. Its error on Sheng's recordings: 0.5 to 5 ppm, up to 20 ppm when
+// the phone or the speaker moved (scReceive then tries the other size).
+function scClock0(y, fs, T0, nt, L) {
+  const rho = fs / FS_TX, P5 = SC_SPS, [ta, tc] = scTraining(nt), G = SC_G, NG = G.length;
+  const x0 = { r: Float64Array.from([...ta.r, ...tc.r]), i: Float64Array.from([...ta.i, ...tc.i]) }, nA = x0.r.length, nrows = nA + L - 1;
+  const n00 = -P5 * SC_PRE, nv = P5 * (nrows + 2 * SC_SPAN + 2);
+  const z = scRead(y, Float64Array.from({ length: nv }, (_, k) => T0 + rho * (n00 + k))), vr = new Float64Array(nv), vi = new Float64Array(nv);
+  for (let k = 0; k < nv; k++) { const w = -2 * Math.PI * SC_FC / FS_TX * ((((n00 + k) % P5) + P5) % P5); vr[k] = Math.SQRT2 * z[k] * Math.cos(w); vi[k] = Math.SQRT2 * z[k] * Math.sin(w); }
+  const mid = (L + nA) >> 1, hal = [[L, mid], [mid, nA]], Y = cvec(P5 * nrows), M = [cvec(P5 * nrows), cvec(P5 * nrows)];   // row r, phase p at 5 r + p
+  for (let p = 0; p < P5; p++) {
+    const yy = cvec(nrows);
+    for (let i = 0; i < nrows; i++) { const j = 2 * SC_DLY + p + P5 * i; let a = 0, b = 0; for (let q = 0; q < NG; q++) { a += vr[j - q] * G[q]; b += vi[j - q] * G[q]; } yy.r[i] = Y.r[P5 * i + p] = a; yy.i[i] = Y.i[P5 * i + p] = b; }
+    hal.forEach(([a, b], h) => {
+      const f = new SCConv([x0], null, L).fwd(scFit(x0, yy, new Float64Array(nrows).fill(1, a, b), L, cvec(L), 0));
+      for (let i = 0; i < nrows; i++) { M[h].r[P5 * i + p] = f.r[i]; M[h].i[P5 * i + p] = f.i[i]; }
+    });
+  }
+  const nf = scN(P5 * (mid - L)), PF = scPlan(nf), kb = [];
+  for (let k = 0; k < nf; k++) if (Math.abs((k < nf / 2 ? k : k - nf) * FS_TX / nf) < 6000) kb.push(k);
+  const delay = (ys, ms, a, b) => {   // rows a .. b - 1: ys late on ms by this many samples
+    const ar = new Float64Array(nf), ai = new Float64Array(nf), br = new Float64Array(nf), bi = new Float64Array(nf);
+    ar.set(ys.r.subarray(P5 * a, P5 * b)); ai.set(ys.i.subarray(P5 * a, P5 * b)); br.set(ms.r.subarray(P5 * a, P5 * b)); bi.set(ms.i.subarray(P5 * a, P5 * b));
+    scFFT(ar, ai, PF); scFFT(br, bi, PF);
+    const Xr = Float64Array.from(kb, k => ar[k] * br[k] + ai[k] * bi[k]), Xi = Float64Array.from(kb, k => ai[k] * br[k] - ar[k] * bi[k]);   // times conj
+    const fq = Float64Array.from(kb, k => 2 * Math.PI * (k < nf / 2 ? k : k - nf) / nf);
+    const ph = d => { let sr = 0, si = 0; for (let q = 0; q < kb.length; q++) { const cw = Math.cos(fq[q] * d), sw = Math.sin(fq[q] * d); sr += Xr[q] * cw - Xi[q] * sw; si += Xr[q] * sw + Xi[q] * cw; } return sr * sr + si * si; };
+    let best = 0, bv = -1;
+    for (let q = 0; q <= 300; q++) { const d = -1.5 + q / 100, v = ph(d); if (v > bv) { bv = v; best = d; } }
+    const b0 = best; bv = -1;
+    for (let q = 0; q <= 40; q++) { const d = b0 - 0.01 + q * 0.0005, v = ph(d); if (v > bv) { bv = v; best = d; } }
+    return best;
+  };
+  return (delay(Y, M[0], mid, nA) - delay(Y, M[1], L, mid)) / 2 / (P5 * (mid - L));
+}
+// v5.1: a jump at sample u of the waveform p sent, which arrives near sample t of the recording y. The envelope of the
+// correlation of the recording with p's part before u, against that of its part after (cross-correlated, so the room
+// cancels): [the jump in samples of the recording, the first strong arrival of the part before].
+function scSplit(y, rho, t, p, u) {
+  const G = SC_GAP_MAX, lo = t - rho * (Math.round(SC_T0_BACK * FS_TX) + G), n = Math.round(2 * SC_T0_BACK * FS_TX) + 2 * G;
+  const at = (o, m) => Float64Array.from({ length: m }, (_, k) => o + rho * k), pb = p.subarray(0, u - SC_GAP_SPAN), pq = p.subarray(u + SC_GAP_SPAN);
+  const cb = scEnvXcorr(scRead(y, at(lo, n + pb.length)), pb), cq = scEnvXcorr(scRead(y, at(lo + rho * (u + SC_GAP_SPAN), n + pq.length)), pq);
+  const xc = new Float64Array(2 * G + 1);   // lags -G .. G
+  for (let d = -G; d <= G; d++) { let a = 0; for (let i = Math.max(0, -d); i < Math.min(cb.length, cq.length - d); i++) a += cq[i + d] * cb[i]; xc[d + G] = a; }
+  return [(scPeak(xc, scArgmax(xc)) - G) * rho, lo + rho * scPeak(cb, scFirstArrival(cb))];
+}
 // The single-carrier part of a frame whose control part ends near sample t0 of the recording y.
 // 1. Timing: the first strong arrival of the first training block (its correlation with the waveform sent): the
 //    earliest peak with at least half the strongest's, up to 15 ms before it (a later echo can be the strongest).
 // 2. Time scale: the clean stretch of each block's TC (rows that see no data) is the same waveform each time; the
 //    delay of each against the first (the peak of their band-limited cross-correlation, to 1/2000 of a sample)
 //    gives the time map, linear between blocks: clock offset, a moving phone. The part is read on that map.
+//    v5.1: the delay is also searched SC_GAP_MAX samples farther; a block that agrees clearly better there marks samples
+//    lost or repeated by the microphone since the block before. Their number is the jump less the clock's share (the
+//    clock from the nearest interval without a jump, else from the first block alone, scClock0), rounded to whole
+//    samples of the recording. Where they went missing: where the prediction errors forward and backward peak (scClick),
+//    from the middle of the block before to the middle of the block after; if the frame then fails, it is tried again
+//    with the other whole number or the runner-up place, whichever was less certain. The map then jumps there, and the
+//    rows the jump smears are masked: the room is
+//    fitted without them, and the detector neither uses them nor trusts the symbols they carry (their LLRs are 0, the
+//    code fills them in). A jump inside the first block, whose TC is the reference: the arrival of the block's part
+//    before the prediction error's peak against that of the part after (step 1, the envelopes of their correlations
+//    cross-correlated); the timing is then that of the part before. The same in the last block, which no later block checks.
 // 3. Down-conversion, matched filter, symbol-rate samples for each of the 5 sampling phases; the phase whose room
 //    (fitted on the first block) would carry the most, mean of log2(1 + |C(f)|^2 / N0), is kept: the 5 fits leave the
 //    same error to 0.1 dB, but the room folded at the symbol rate differs from phase to phase by 1 to 1.5 dB for detection.
 // 4. The room: 256, 512 or 1024 taps (SC_TAPS, as the TC of nt symbols allows) by least squares on the first block
 //    (rows that see no data), the noise from what they leave; with the long TC, 1024 taps if they leave less, their
 //    own error counted; each later block by ridge regression from the one before (rows that see TC only); over the
-//    data between two blocks, the two blended linearly row by row.
+//    data between two blocks, the two blended linearly row by row. With est 'mmse', the first block's room is instead
+//    the most taps the TC allows, by MMSE (scMmseFirst).
 // 5. Each data segment's rows, the training's echoes removed; detector (soft SMAP or linear MMSE) on each segment,
 //    turbo decoder over the whole message, its beliefs back to the detector; stops once the decisions form a
 //    codeword or after the passes of the effort chosen (SC_EFFORT). onPass (optional) hears of each pass.
-function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt = SC_NC, effort = 'fast') {
+function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt = SC_NC, effort = 'fast', est = 'ls', swap = null) {
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()), tStart = now();
   const m = OFDM_BITS[map], ns = Math.ceil(nc / m), { blocks, segs, n: ntot } = scLayout(ns, nt), rho = fs / FS_TX, P5 = SC_SPS, ax = scAxis(map);
   const [steps, npass] = SC_EFFORT[effort] || SC_EFFORT.fast;
@@ -2031,37 +2200,103 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
   // 1. the first block's first strong arrival: frame time 0 (the part's first sample after the silence) arrives at T0
   const tr = { r: Float64Array.from([...ta.r, ...tc.r]), i: Float64Array.from([...ta.i, ...tc.i]) }, pa = scPassband(tr);
   const lo = t0 + SC_GAP * fs - 0.03 * fs, nz = pa.length + Math.round(0.09 * FS_TX), at = (o, k0, k1) => Float64Array.from({ length: k1 - k0 }, (_, k) => o + rho * (k0 + k));
-  const env = scEnvXcorr(scRead(y, at(lo, 0, nz)), pa), T0 = lo + scPeak(env, scFirstArrival(env)) * rho;
+  const env = scEnvXcorr(scRead(y, at(lo, 0, nz)), pa);
+  let T0 = lo + scPeak(env, scFirstArrival(env)) * rho;
+  // v5.1: a jump inside the first block (its TC is every later block's reference): the arrival of the block's part before
+  // the prediction error's peak against that of the part after (the envelopes of their correlations with what was sent,
+  // cross-correlated; the room cancels)
+  const sw = (i, w) => swap !== null && swap[0] === i && swap[1] === w;   // the second try: [gap, 'size' or 'place']
+  const gaps0 = [], unsure = [], ub = P5 * (SC_NA + nt) + 2 * SC_DLY - SC_GAP_EDGE;   // unsure: [how unsure, [gap, what]]
+  if (ub > P5 * L) {
+    const [tg] = scClick(y, T0 + rho * P5 * L, T0 + rho * ub), [raw, Tb] = scSplit(y, rho, T0, pa, Math.trunc((tg - T0) / rho));
+    if (Math.abs(raw) > SC_GAP_MIN) {
+      T0 = Tb;   // the arrival of the part before it
+      let sz = Math.round(raw);
+      if (sw(0, 'size')) sz += raw > sz ? 1 : -1;   // the second try: the other whole number
+      unsure.push([2 * Math.abs(raw - Math.round(raw)), [0, 'size']]);
+      gaps0.push([(tg - T0) / rho, sz / rho]);
+    }
+  }
+  const J0 = t => { let a = 0; for (const [g, sz] of gaps0) if (t >= g) a += sz; return a; };
   // 2. the time map T(n) = T0 + rho (n + D(n)), D through the blocks' delays
   const starts = [SC_NA, ...blocks.slice(1).map(b => b[0])];   // where each TC starts (symbols)
   const w0 = SC_DLY * 2 + P5 * (L - SC_PRE), w1 = P5 * (nt - SC_PRE), NW = scN(w1 - w0), PW = scPlan(NW), kb = [];   // clean stretch of a TC, in samples after its start
   for (let k = 0; k <= NW / 2; k++) { const f = k * FS_TX / NW; if (f > 3400 && f < 15800) kb.push(k); }
   const spec = w => { const r = new Float64Array(NW), i = new Float64Array(NW); r.set(w); scFFT(r, i, PW); return [Float64Array.from(kb, k => r[k]), Float64Array.from(kb, k => i[k])]; };
-  const W0 = scRead(y, at(T0, P5 * starts[0] + w0, P5 * starts[0] + w1)), [F0r, F0i] = spec(W0);
-  const mk = [P5 * starts[0] + (w0 + w1 - 1) / 2], dk = [0];
-  for (let k = 1; k < starts.length; k++) {
-    const c = P5 * starts[k] + (w0 + w1 - 1) / 2, j = dk.length;
-    const pred = dk[j - 1] + (j > 1 ? (dk[j - 1] - dk[j - 2]) / (mk[j - 1] - mk[j - 2]) * (c - mk[j - 1]) : 0);
-    const S = Math.round(SC_MAX_PPM * 1e-6 * (c - mk[j - 1]) * (j > 1 ? 1 : 2)) + 8;   // the lags searched
-    const e = scEnvXcorr(scRead(y, at(T0 + rho * pred, P5 * starts[k] + w0 - S, P5 * starts[k] + w1 + S)), W0), lag = scPeak(e, scArgmax(e)) - S;
-    const [Xr0, Xi0] = spec(scRead(y, at(T0 + rho * (pred + lag), P5 * starts[k] + w0, P5 * starts[k] + w1)));
+  const W0 = scRead(y, Float64Array.from({ length: w1 - w0 }, (_, k) => T0 + rho * (P5 * starts[0] + w0 + k + J0(P5 * starts[0] + w0 + k)))), [F0r, F0i] = spec(W0);
+  const fine = (k, a0) => {   // sub-sample delay of block k near a0, and the coherence of the two blocks there
+    const [Xr0, Xi0] = spec(scRead(y, at(T0 + rho * a0, P5 * starts[k] + w0, P5 * starts[k] + w1)));
     const Xr = Xr0.map((a, q) => a * F0r[q] + Xi0[q] * F0i[q]), Xi = Xr0.map((a, q) => Xi0[q] * F0r[q] - a * F0i[q]);   // times conj(F0)
     const ph = d => { let sr = 0, si = 0; kb.forEach((kk, q) => { const w = 2 * Math.PI * kk / NW * d, cw = Math.cos(w), sw = Math.sin(w); sr += Xr[q] * cw - Xi[q] * sw; si += Xr[q] * sw + Xi[q] * cw; }); return sr * sr + si * si; };
     let best = 0, bv = -1;
     for (let q = 0; q <= 200; q++) { const d = -1 + q / 100, v = ph(d); if (v > bv) { bv = v; best = d; } }
     const b0 = best; bv = -1;
     for (let q = 0; q <= 40; q++) { const d = b0 - 0.01 + q * 0.0005, v = ph(d); if (v > bv) { bv = v; best = d; } }
+    let sa = 0; for (let q = 0; q < Xr.length; q++) sa += Math.hypot(Xr[q], Xi[q]);
+    return [best, Math.sqrt(bv) / Math.max(sa, 1e-30)];
+  };
+  const mk = [P5 * starts[0] + (w0 + w1 - 1) / 2], dk = [J0(mk[0])], cand = [], dc = i => dk[i] - J0(mk[i]);   // cand (v5.1): [block after a jump, its sample in the recording, runner-up, unsure]; dc: the clock alone, but for the jumps found after it
+  for (let k = 1; k < starts.length; k++) {
+    const c = P5 * starts[k] + (w0 + w1 - 1) / 2, j = dk.length, ks = cand.map(g => g[0]);
+    let fi = 0; for (let i = j - 1; i >= 1 && !fi; i--) if (!ks.includes(i)) fi = i;   // the last interval without a jump: the clock
+    const slope = fi ? (dc(fi) - dc(fi - 1)) / (mk[fi] - mk[fi - 1]) : 0, pred = dk[j - 1] + slope * (c - mk[j - 1]) + J0(c) - J0(mk[j - 1]);
+    const S = Math.round(SC_MAX_PPM * 1e-6 * (c - mk[j - 1]) * (j > 1 ? 1 : 2)) + 8;   // the lags searched
+    const e = scEnvXcorr(scRead(y, at(T0 + rho * pred, P5 * starts[k] + w0 - S, P5 * starts[k] + w1 + S)), W0);
+    let lag = scPeak(e, scArgmax(e)) - S, [best, coh] = fine(k, pred + lag);
+    const Sw = S + SC_GAP_MAX, ew = scEnvXcorr(scRead(y, at(T0 + rho * pred, P5 * starts[k] + w0 - Sw, P5 * starts[k] + w1 + Sw)), W0), jw = scArgmax(ew);
+    if (Math.abs(jw - Sw) > S) {   // v5.1: do the blocks agree best farther away? a gap?
+      const lag2 = scPeak(ew, jw) - Sw, [best2, coh2] = fine(k, pred + lag2);
+      if (coh2 > SC_GAP_COH * coh) {
+        const mid = (w0 + w1) / 2, ex = (w1 - w0) / 5;   // a jump early in a block moves the block, a late one the next
+        const lo = T0 + rho * (P5 * starts[k - 1] + mid - ex + dk[j - 1]), hi = T0 + rho * (P5 * starts[k] + mid + ex + pred + lag2 + best2);
+        cand.push([k, ...scClick(y, lo, hi)]); lag = lag2; best = best2;
+      }
+    }
     mk.push(c); dk.push(pred + lag + best);
   }
-  const K = mk.length, s0 = K > 1 ? (dk[1] - dk[0]) / (mk[1] - mk[0]) : 0, s1 = K > 1 ? (dk[K - 1] - dk[K - 2]) / (mk[K - 1] - mk[K - 2]) : 0;
-  const D = t => { if (K === 1) return 0; if (t <= mk[0]) return dk[0] + s0 * (t - mk[0]); if (t >= mk[K - 1]) return dk[K - 1] + s1 * (t - mk[K - 1]);
-    let q = 0; while (mk[q + 1] < t) q++; return dk[q] + (dk[q + 1] - dk[q]) * (t - mk[q]) / (mk[q + 1] - mk[q]); };
-  const ppm = K > 1 ? (dk[K - 1] - dk[0]) / (mk[K - 1] - mk[0]) * 1e6 : 0;
+  // v5.1: a jump's size is the delay it adds over its interval, less the clock's share, in whole samples of the
+  // recording; the clock from the nearest interval without a jump, else from the first block alone (scClock0)
+  const gaps = [...gaps0], ks = cand.map(g => g[0]);
+  let clk0 = null;
+  for (const [k, tg0, alt, un] of cand) {
+    let ni = 0;
+    for (let dd = 1; dd < mk.length && !ni; dd++) for (const i of [k - dd, k + dd]) if (!ni && i >= 1 && i < mk.length && !ks.includes(i)) ni = i;
+    const slope = ni ? (dc(ni) - dc(ni - 1)) / (mk[ni] - mk[ni - 1]) : (clk0 === null ? (clk0 = scClock0(y, fs, T0, nt, L)) : clk0);
+    const raw = (dc(k) - dc(k - 1) - slope * (mk[k] - mk[k - 1])) * rho;
+    let sz = Math.round(raw);
+    if (sw(gaps.length, 'size')) sz += raw > sz ? 1 : -1;   // the second try: the other whole number
+    const tg = sw(gaps.length, 'place') ? alt : tg0;   // or the runner-up place
+    unsure.push([2 * Math.abs(raw - Math.round(raw)), [gaps.length, 'size']], [un, [gaps.length, 'place']]);
+    const u = (tg - T0) / rho;   // the jump's transmitted sample, on the map before it
+    let ng = u - (dk[k - 1] + slope * (u - mk[k - 1]));
+    ng = u - (dk[k - 1] + slope * (ng - mk[k - 1]));
+    gaps.push([ng, sz / rho]);
+  }
+  {   // v5.1: a jump inside the last block's clean stretch, which no later block sees
+    const tb = T0 + rho * (P5 * blocks[blocks.length - 1][0] + dk[dk.length - 1]), lo = tb + rho * w0, hi = tb + rho * (P5 * nt + 2 * SC_DLY - SC_GAP_EDGE);
+    if (mk.length > 1 && hi > lo && !ks.includes(mk.length - 1)) {
+      const [tg] = scClick(y, lo, hi), [raw] = scSplit(y, rho, tb, scPassband(tc), Math.trunc((tg - tb) / rho));
+      if (Math.abs(raw) > SC_GAP_MIN) {
+        let sz = Math.round(raw);
+        if (sw(gaps.length, 'size')) sz += raw > sz ? 1 : -1;
+        unsure.push([2 * Math.abs(raw - Math.round(raw)), [gaps.length, 'size']]);
+        gaps.push([(tg - T0) / rho - dk[dk.length - 1], sz / rho]);
+      }
+    }
+  }
+  const jump = t => { let a = 0; for (const [g, sz] of gaps) if (g <= t) a += sz; return a; };
+  // the clock alone: less the jumps each block's delay holds (those of the blocks that saw them, wherever they fell)
+  const dcl = dk.map((d, q) => { let a = J0(mk[q]); ks.forEach((b, i) => { if (b <= q) a += gaps[gaps0.length + i][1]; }); return d - a; });
+  const K = mk.length, s0 = K > 1 ? (dcl[1] - dcl[0]) / (mk[1] - mk[0]) : 0, s1 = K > 1 ? (dcl[K - 1] - dcl[K - 2]) / (mk[K - 1] - mk[K - 2]) : 0;
+  const Dc = t => { if (K === 1) return 0; if (t <= mk[0]) return dcl[0] + s0 * (t - mk[0]); if (t >= mk[K - 1]) return dcl[K - 1] + s1 * (t - mk[K - 1]);
+    let q = 0; while (mk[q + 1] < t) q++; return dcl[q] + (dcl[q + 1] - dcl[q]) * (t - mk[q]) / (mk[q + 1] - mk[q]); };
+  const D = gaps.length ? t => Dc(t) + jump(t) : Dc;
+  const ppm = K > 1 ? (dcl[K - 1] - dcl[0]) / (mk[K - 1] - mk[0]) * 1e6 : 0;
   let bend = 0;   // departure from a steady clock (samples): the delays against their straight-line fit
   if (K > 2) {
-    const ma = mk.reduce((a, b) => a + b) / K, da = dk.reduce((a, b) => a + b) / K; let sxy = 0, sxx = 0;
-    mk.forEach((v, q) => { sxy += (v - ma) * (dk[q] - da); sxx += (v - ma) ** 2; });
-    mk.forEach((v, q) => { bend = Math.max(bend, Math.abs(dk[q] - (da + sxy / sxx * (v - ma)))); });
+    const ma = mk.reduce((a, b) => a + b) / K, da = dcl.reduce((a, b) => a + b) / K; let sxy = 0, sxx = 0;
+    mk.forEach((v, q) => { sxy += (v - ma) * (dcl[q] - da); sxx += (v - ma) ** 2; });
+    mk.forEach((v, q) => { bend = Math.max(bend, Math.abs(dcl[q] - (da + sxy / sxx * (v - ma)))); });
   }
   // 3. symbol-rate samples, row i <-> symbol i - SC_PRE at its first strong arrival
   const nrows = ntot + Math.max(...SC_TAPS[nt]) - 1, nv = P5 * (nrows + 2 * SC_SPAN + 2), n00 = -P5 * SC_PRE, zt = new Float64Array(nv);
@@ -2073,7 +2308,10 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
     for (let i = 0; i < n1; i++) { const j = 2 * SC_DLY + p + P5 * i; let a = 0, b = 0; for (let q = 0; q < NG; q++) { a += vr[j - q] * G[q]; b += vi[j - q] * G[q]; } o.r[i] = a; o.i[i] = b; }
     return o;
   };
+  const good = new Float64Array(nrows).fill(1);   // v5.1: 0 on the rows a gap smears (row r: sample 5 (r - 64) + 60)
+  for (const [g, sz] of gaps) for (let r = 0; r < nrows; r++) { const t = P5 * (r - SC_PRE) + SC_DLY; if (t > g - SC_GAP_SPAN - P5 && t < g + Math.max(0, -sz) + SC_GAP_SPAN + P5) good[r] = 0; }
   const nA = SC_NA + nt, mask0 = new Float64Array(nA + L - 1).fill(0, 0, L).fill(1, L, nA), xA = cslice(x, 0, nA), zero = cvec(L);
+  for (let j = 0; j < mask0.length; j++) mask0[j] *= good[j];
   let best = null;
   const p4 = scPlan(4096), Fr = new Float64Array(4096), Fi = new Float64Array(4096);
   for (let p = 0; p < P5; p++) {
@@ -2088,15 +2326,17 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
   const { p: phase } = best, yy = mfRows(phase, nrows);
   let { e: e0, c0 } = best, nfit = nA - L, N0b = e0 / (nfit - L), N0 = N0b * (1 + L / nfit);   // plus the error of the taps' estimate
   for (const L2 of SC_TAPS[nt].slice(1)) {   // a longer room, if it leaves less (its own error counted)
-    const m2 = new Float64Array(nA + L2 - 1).fill(1, L2, nA), y2 = cslice(yy, 0, nA + L2 - 1), c2 = scFit(xA, y2, m2, L2, cvec(L2), 0, 200), f2 = new SCConv([xA], null, L2).fwd(c2);
+    const m2 = new Float64Array(nA + L2 - 1).fill(1, L2, nA).map((v, j) => v * good[j]), y2 = cslice(yy, 0, nA + L2 - 1), c2 = scFit(xA, y2, m2, L2, cvec(L2), 0, 200), f2 = new SCConv([xA], null, L2).fwd(c2);
     let e2 = 0; for (let j = 0; j < nA + L2 - 1; j++) e2 += m2[j] * ((y2.r[j] - f2.r[j]) ** 2 + (y2.i[j] - f2.i[j]) ** 2);
     const nf2 = nA - L2;
     if (e2 / (nf2 - L2) * (1 + L2 / nf2) < N0) { L = L2; c0 = c2; e0 = e2; nfit = nf2; N0b = e0 / (nfit - L); N0 = N0b * (1 + L / nfit); }
   }
+  if (est === 'mmse') { L = Math.max(...SC_TAPS[nt]); ({ c0, N0b, N0 } = scMmseFirst(xA, cslice(yy, 0, nA + L - 1), nA, L)); }
   // 4. the room at each block
   const chs = [c0], tk = [(L + nA) / 2], change = [], en = c => cdot(c, c);
   for (let k = 1; k < blocks.length; k++) {
     const b0 = blocks[k][0], last = k === blocks.length - 1, mk_ = new Float64Array(nt + L - 1).fill(1, L - 1, nt + (last ? L - 1 : 0));   // the last block: the rows after it see silence
+    for (let j = 0; j < mk_.length; j++) mk_[j] *= good[b0 + j];
     const cp = chs[k - 1], ck = scFit(tc, cslice(yy, b0, b0 + nt + L - 1), mk_, L, cp, N0b / (SC_REL * en(cp) / L), L <= 512 ? 100 : 200);
     change.push(10 * Math.log10(en(csub(ck, cp)) / en(cp)));
     chs.push(ck); tk.push(b0 + (L - 1 + nt + (last ? L - 1 : 0)) / 2);
@@ -2107,8 +2347,11 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
     const nr = E - S + L - 1, wb = Float64Array.from({ length: nr }, (_, q) => Math.max(0, Math.min(1, (S + q - tk[j]) / (tk[j + 1] - tk[j])))), w = [wb.map(v => 1 - v), wb];
     const T = new SCConv([cslice(x, S - L + 1, E + L - 1)], null, L), o = { r: yy.r.slice(S, S + nr), i: yy.i.slice(S, S + nr) };
     [0, 1].forEach(a => { const f = T.fwd(chs[j + a]); for (let q = 0; q < nr; q++) { o.r[q] -= w[a][q] * f.r[L - 1 + q]; o.i[q] -= w[a][q] * f.i[L - 1 + q]; } });
-    obs.push(o); ops.push(new SCConv([chs[j], chs[j + 1]], w, E - S));
+    const gw = good.subarray(S, S + nr), op = new SCConv([chs[j], chs[j + 1]], w, E - S);
+    for (let q = 0; q < nr; q++) { o.r[q] *= gw[q]; o.i[q] *= gw[q]; }
+    obs.push(o); ops.push(gw.every(v => v === 1) ? op : new SCMask(op, gw));
   });
+  let nErased = 0; for (const [S, E] of segs) for (let q = S; q < E; q++) if (!good[SC_PRE + q]) nErased++;   // data symbols whose first arrival is on a masked row
   const key = prbs(ns * m), r = TURBO_R[code], lprior = new Float64Array(ns * m), xs = segs.map(() => null);
   let first = null, passes = 0, bits = null, zc = null; const hist = [];
   for (let it = 0; it < npass; it++) {
@@ -2123,6 +2366,7 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
       }
       ext.set(le, q * m); q += E - S;
     });
+    if (gaps.length) { let qe = 0; for (const [S, E] of segs) for (let q = S; q < E; q++, qe++) if (!good[SC_PRE + q]) ext.fill(0, qe * m, qe * m + m); }   // v5.1: left to the code
     const lin = Float64Array.from({ length: nc }, (_, i) => key[i] ? -ext[i] : ext[i]);
     if (!first) first = ext.slice(0, nc);
     const d = scTurboSiso(lin, n0, r);
@@ -2137,9 +2381,14 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
   const cw = encodeFEC(code, bits); let chErr = 0;
   for (let i = 0; i < nc; i++) chErr += (first[i] > 0 ? 1 : 0) !== (cw[i] ^ key[i]);
   const h = Float32Array.from(c0.r, (v, k) => v * v + c0.i[k] * c0.i[k]), step = Math.max(1, Math.floor(zc.r.length / 5000));
-  return { bits: Uint8Array.from(bits), passes, codeword: hist[hist.length - 1] === 0, chErr, snr: 10 * Math.log10(en(c0) / N0), ppm, bend, phase, change, nseg: segs.length, taps: L, train: nt, effort, npass,
-           T0, sec: (now() - tStart) / 1000, det, hist, llr: Float32Array.from(first), h, map,
+  const out = { bits: Uint8Array.from(bits), passes, codeword: hist[hist.length - 1] === 0, chErr, snr: 10 * Math.log10(en(c0) / N0), ppm, bend, phase, change, nseg: segs.length, taps: L, train: nt, effort, npass, est,
+           T0, sec: (now() - tStart) / 1000, det, hist, llr: Float32Array.from(first), h, map, gaps: gaps.map(([g, sz]) => [g / FS_TX, sz]), erased: nErased, swap,
            zr: Float32Array.from({ length: Math.ceil(zc.r.length / step) }, (_, k) => zc.r[k * step]), zi: Float32Array.from({ length: Math.ceil(zc.r.length / step) }, (_, k) => zc.i[k * step]) };
+  if (gaps.length && !out.codeword && swap === null) {   // v5.1: the other size, or the runner-up place, of the least sure gap
+    const o2 = scReceive(y, fs, t0, map, code, n0, nc, det, onPass, nt, effort, est, unsure.reduce((a, b) => b[0] > a[0] ? b : a)[1]);
+    if (o2.codeword) return Object.assign(o2, { sec: (now() - tStart) / 1000 });
+  }
+  return out;
 }
 
 class Receiver {
@@ -2421,7 +2670,7 @@ class Receiver {
       return;
     }
     const s0 = Math.max(this.base, Math.floor(t0s) - 16), s1 = Math.min(this.n, Math.ceil(ends));
-    const job = { y: this.y.slice(s0 - this.base, s1 - this.base), fs, t0: t0s - s0, map: hdr.map, code: hdr.code, n0: hdr.n0, nc: hdr.nc, det: this.cfg.det || 'smap', nt: hdr.train, effort: this.cfg.effort || 'fast' };
+    const job = { y: this.y.slice(s0 - this.base, s1 - this.base), fs, t0: t0s - s0, map: hdr.map, code: hdr.code, n0: hdr.n0, nc: hdr.nc, det: this.cfg.det || 'smap', nt: hdr.train, effort: this.cfg.effort || 'fast', est: this.cfg.est || 'ls' };
     const r0 = Math.max(this.base, Math.round(this.p1 - 0.3 * fs)), r1 = Math.min(this.n, Math.round(ends + 0.3 * fs));
     const res = { hdr, NP: this.NP, key: this.key, found: true, cmax: this.cmax, hopCtl: this.hop, t: this.p1 / fs, recording: this.y.slice(r0 - this.base, r1 - this.base), fs, job };
     const done = o => { res.sc = o; res.ppm = o.ppm; Object.assign(res, decodeFrame(res, 'cal')); this.cb.onDone && this.cb.onDone(res); };
@@ -2429,7 +2678,7 @@ class Receiver {
     if (this.cb.scDecode) {
       this.cb.onState && this.cb.onState('decoding', hdr);
       this.cb.scDecode(job, p => this.cb.onProgress && this.cb.onProgress({ hdr, sc: true, pass: p })).then(done, err => this.cb.onState && this.cb.onState('lost', { reason: 'single carrier: ' + err }));
-    } else done(scReceive(job.y, fs, job.t0, job.map, job.code, job.n0, job.nc, job.det, null, job.nt, job.effort));
+    } else done(scReceive(job.y, fs, job.t0, job.map, job.code, job.n0, job.nc, job.det, null, job.nt, job.effort, job.est));
   }
   finishSounding() {   // once the postamble is in: clock offset, then the room's impulse response
     const { hdr, p1, NP, NH, Lr, det, fs } = this, N = (1 << hdr.order) - 1, sc = fs / FS_TX;
@@ -2489,7 +2738,7 @@ if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATE
   turboPerm, turboEncode, turboDecode, bcjr, TURBO_R,
   OFDM_MODES, OFDM_F0, OFDM_F1, ofdmMode, ofdmCarriers, ofdmRate, ofdmReference, ofdmSymbols, fracRead, ofdmReceive, ofdmDesc,
   OFDM_MAPS, OFDM_MASKS, OFDM_BITS, OFDM_NAMES, OFDM_PSTEP, ofdmPoints, ofdmPilot, ofdmLayout, ofdmSmooth, levinson, ofdmCoherent,
-  SC_MAPS, SC_RMS, SC_NC, SC_TRAINS, SC_TCODE, SC_TAPS, SC_EFFORT, scEcho, scTrainName, scLayout, scRate, scSeconds, scDesc, scSymbols, scPassband, scPart, scChannelBits, scTraining, scReceive, scTurboSiso, scBcjrApp, SCConv, scFFT, scPlan, scRead, scSmap, scLmmse, scSic, interleave, deinterleave };
+  SC_MAPS, SC_RMS, SC_NC, SC_TRAINS, SC_TCODE, SC_TAPS, SC_EFFORT, SC_EST, scEcho, scTrainName, scLayout, scRate, scSeconds, scDesc, scSymbols, scPassband, scPart, scChannelBits, scTraining, scReceive, scMmseFirst, scFit, scTurboSiso, scBcjrApp, SCConv, scFFT, scPlan, scRead, scSmap, scLmmse, scSic, interleave, deinterleave, turboCheck };
 </script>
 
 <script>
@@ -2500,12 +2749,13 @@ const params = new URLSearchParams(location.search);
 $('demoCredit').innerHTML = DEMOS[DEMO_PICTURE].credit;
 const MOD0 = params.get('mod') === '4' ? 4 : ['ofdm', 'sc'].includes(params.get('mod')) ? params.get('mod') : 2, rateList = M => M === 4 ? [...RATES4, RATE_WIDE] : RATES;   // tones per symbol: 2 (binary) or 4, or OFDM
 const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: rateList(MOD0).includes(+params.get('rate')) ? +params.get('rate') : 400,
-              code: CODES.includes(params.get('code')) && params.get('code') !== 'rs' ? params.get('code') : 'none', soft: params.get('soft') === 'ratio' ? 'ratio' : 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127,
+              code: CODES.includes(params.get('code')) && params.get('code') !== 'rs' ? params.get('code') : 'none', soft: 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127,
               guard: params.get('guard') === 'short' ? 'short' : 'long',   // OFDM: the long (21 ms) or the short (5 ms) guard interval
               map: OFDM_MAPS.includes(params.get('map')) ? params.get('map') : 'dqpsk',
               det: params.get('det') === 'lmmse' ? 'lmmse' : 'smap',   // v5: the single carrier's detector (receiver)
               train: ['short', 'long'].includes(params.get('train')) ? params.get('train') : 'medium',   // v5: its training (sender)
-              effort: params.get('effort') === 'full' ? 'full' : 'fast' };   // v5: SMAP's steps and the passes (receiver)   // v5: the single carrier's detector (receiver)
+              effort: params.get('effort') === 'full' ? 'full' : 'fast',   // v5: SMAP's steps and the passes (receiver)
+              est: params.get('est') === 'mmse' ? 'mmse' : 'ls' };   // v5: the room's estimate, least squares or MMSE (receiver)
 if (cfg.mod === 'sc') { if (!SC_MAPS.includes(cfg.map)) cfg.map = '256qam'; if (!TURBO_R[cfg.code]) cfg.code = 'turbo'; }   // OFDM (v4): DQPSK, or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots
 if (cfg.rate === RATE_WIDE) cfg.tones = 'hop';   // 6400 bit/s: one group of 4 tones over the whole band
 const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
@@ -2531,7 +2781,14 @@ addEventListener('keydown', e => { if (e.key === 'Escape') $('qrOverlay').classL
 // 6400 bit/s takes the whole band, as one hopping group: choosing it selects Hopping, and fixed tones bring it back to 3200
 seg($('tonesSeg'), cfg.tones, v => { cfg.tones = v; if (v !== 'hop' && cfg.rate === RATE_WIDE) $('rateSeg').querySelector('[data-v="3200"]').click(); syncUrl(); txInfo(); });
 seg($('rateSeg'), cfg.rate, v => { cfg.rate = +v; if (cfg.rate === RATE_WIDE && cfg.tones !== 'hop') $('tonesSeg').querySelector('[data-v="hop"]').click(); syncUrl(); txInfo(); });
+const TX_HINT = {   // under the transmitter's options: what the modulation chosen is for
+  2: 'Binary FSK: one tone per bit, the low one for 0, the high one for 1. A lower rate, a longer preamble or 4 tones reach farther; in a reverberant room, beyond a few metres, use Hopping. Receivers need no settings: each frame\'s header tells them.',
+  4: '4-FSK: one of four tones per symbol, 2 bits each (Gray-coded). At the same bit rate, a symbol lasts twice as long as with 2 tones and gathers twice the energy, so it reaches farther. In a reverberant room use Hopping; 6400 bit/s fills the whole band. Receivers need no settings: each frame\'s header tells them.',
+  ofdm: 'OFDM: hundreds of subcarriers at once, far faster than FSK (the rates shown are before the code): use it with a code. Echo longer than the guard acts as noise, so take the long guard in a reverberant room. DQPSK needs no pilots; QPSK to 256QAM add pilots to measure the room: QPSK reaches farther than DQPSK, 16QAM is nearly twice as fast for about 3 dB more signal, 64QAM and 256QAM are 1.5 and 2 times faster again for about 5 and 11 dB more: try them close to the speaker. Receivers need no settings.',
+  sc: 'Single carrier (v5): one symbol at a time, 9600 per second, with no guard. Training blocks every 0.5 s let the receiver learn the room and undo its echo (soft SMAP with the turbo decoder), which takes a few seconds. Take a training longer than the room\'s echo. 256QAM needs a still room; 16QAM or 64QAM is safer when people move. Turbo codes only (the others are greyed out). Receivers need no settings.'
+};
 function showMod() {   // the rates and tone labels of binary or 4-tone FSK; OFDM has a guard interval instead of tones and a rate
+  $('txHint').textContent = TX_HINT[cfg.mod];
   $('txOpts').classList.toggle('ofdm', cfg.mod === 'ofdm' || cfg.mod === 'sc'); $('txOpts').classList.toggle('sc', cfg.mod === 'sc');   // the single carrier: OFDM's options less the guard
   $('rateSeg').querySelectorAll('button').forEach(b => b.classList.toggle('hidden', !rateList(cfg.mod).includes(+b.dataset.v)));
   $('tonesSeg').querySelectorAll('button').forEach(b => { if (b.dataset.v !== 'hop') b.textContent = cfg.mod === 4 ? `${TONES4[b.dataset.v][0] / 1000} to ${TONES4[b.dataset.v][3] / 1000} kHz` : TONES[b.dataset.v].map(f => f / 1000).join(' / ') + ' kHz'; });
@@ -2690,10 +2947,10 @@ showTx();
 // without workers (or if one fails), here, after the page has had time to draw
 let scWorker = null, scId = 0;
 const scJobs = new Map();
-const scLocal = (j, onPass) => new Promise((ok, no) => setTimeout(() => { try { ok(scReceive(j.y, j.fs, j.t0, j.map, j.code, j.n0, j.nc, j.det, onPass, j.nt, j.effort)); } catch (e) { no(String(e)); } }, 50));
+const scLocal = (j, onPass) => new Promise((ok, no) => setTimeout(() => { try { ok(j.kind === 'cw' ? turboCheck(j.code, j.n0, j.llr, j.key, j.bits) : scReceive(j.y, j.fs, j.t0, j.map, j.code, j.n0, j.nc, j.det, onPass, j.nt, j.effort, j.est)); } catch (e) { no(String(e)); } }, 50));
 function scDecode(job, onPass) {
   if (scWorker === null) try {
-    const glue = '\nonmessage = e => { const j = e.data; try { const o = scReceive(j.y, j.fs, j.t0, j.map, j.code, j.n0, j.nc, j.det, p => postMessage({ id: j.id, pass: p }), j.nt, j.effort); postMessage({ id: j.id, o }); } catch (err) { postMessage({ id: j.id, error: String(err) }); } };';
+    const glue = '\nonmessage = e => { const j = e.data; try { const o = j.kind === "cw" ? turboCheck(j.code, j.n0, j.llr, j.key, j.bits) : scReceive(j.y, j.fs, j.t0, j.map, j.code, j.n0, j.nc, j.det, p => postMessage({ id: j.id, pass: p }), j.nt, j.effort, j.est); postMessage({ id: j.id, o }); } catch (err) { postMessage({ id: j.id, error: String(err) }); } };';
     scWorker = new Worker(URL.createObjectURL(new Blob([$('modem-core').textContent, glue], { type: 'text/javascript' })));
     scWorker.onmessage = e => { const d = e.data, J = scJobs.get(d.id); if (!J) return; if (d.pass) { J.onPass && J.onPass(d.pass); return; } scJobs.delete(d.id); d.error ? J.no(d.error) : J.ok(d.o); };
     scWorker.onerror = () => { scWorker = false; const js = [...scJobs.values()]; scJobs.clear(); js.forEach(J => scLocal(J.job, J.onPass).then(J.ok, J.no)); };
@@ -2702,27 +2959,104 @@ function scDecode(job, onPass) {
   return new Promise((ok, no) => { const id = ++scId; scJobs.set(id, { ok, no, onPass, job }); scWorker.postMessage({ ...job, id }); });
 }
 const detName = d => d === 'lmmse' ? 'linear MMSE' : 'soft SMAP';
-let rx = null, stream = null, proc = null, analyser = null, lastRec = null;
+let rx = null, stream = null, proc = null, analyser = null, lastRec = null;   // lastRec: the result on display
 const pill = (t, cls = '') => { $('rxPill').textContent = t; $('rxPill').className = 'pill ' + cls; };
+// The frames received, newest first: each keeps its result, and a click on its row shows it again. The display follows
+// the newest frame; a single-carrier frame decoded in the background meanwhile only updates its own row.
+const LOG_MAX = 8, frames = [];
+let shown = null, live = null, frameId = 0;   // the frame on display; the frame being received
+const fpill = (f, t, c = 'live') => { f.pill = [t, c]; if (f === shown) pill(t, c); };
+function frameWhat(h) {   // the message and how it was sent, in words
+  if (h.type === 'sound') return `Room sounding, ${h.periods} × ${(((1 << h.order) - 1) / FS_TX).toFixed(2)} s`;
+  const how = h.sc ? `single carrier ${OFDM_NAMES[h.map]}, ${scTrainName(h.train)} training` : h.ofdm ? `OFDM ${OFDM_NAMES[h.map]}, ${h.ofdm} guard`
+    : `${h.M === 4 ? 4 : 2} tones, ${h.rate} bit/s${h.tones === 'hop' ? (h.rate === RATE_WIDE ? ', whole band' : ', hopping') : ''}`;
+  return `${h.type === 'text' ? `Text, ${h.len} characters` : `Image ${h.w}×${h.h}`} · ${how} · ${h.code === 'none' ? 'no code' : TURBO_R[h.code] ? `turbo ${CODE_INFO[h.code].rate}` : CODE_INFO[h.code].short}`;
+}
+function frameSnr(res) {   // one figure for the row: the SNR the receiver measured
+  try {
+    if (res.hdr.sc) return res.sc.snr;
+    if (res.hdr.ofdm) { const s = [...res.ofdm.snr].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; }
+    return Math.min(...res.cal.t.map(t => t.snrDb));
+  } catch (e) { return null; }
+}
+function checkDemo(res) {   // the demo image (either picture, any size) is known to every receiver: count the wrong bits
+  res.truth = null;
+  if (res.sound || res.hdr.type !== 'image') return;
+  const d = Object.keys(DEMOS).flatMap(k => [1, 2, 4].map(s => demoPixels(s, k))).find(q => q.h === res.hdr.h && q.w === res.hdr.w);
+  if (!d) return;
+  let e = 0; for (let i = 0; i < d.pixels.length; i++) e += d.pixels[i] !== res.bits[i];
+  res.truth = d; res.errs = e;
+}
+function outcome(res) {   // [class, words] for the pill and the row: only what can be checked
+  if (res.sound) return ['ok', '✓ room measured'];
+  if (res.truth) return res.errs === 0 ? ['ok', '✓ no errors'] : [res.errs <= 1e-3 * res.truth.pixels.length ? 'warn' : 'bad', `✗ ${res.errs} wrong bits`];
+  if (res.codeword === false) return ['bad', '✗ some bits wrong'];
+  if (res.codeword) return ['ok', '✓ decoded'];
+  if (res.cwPending) return ['', 'checking…'];
+  return ['', 'received'];   // no code, Hamming or convolutional: nothing to check the bits against
+}
+const donePill = res => { const [c, w] = outcome(res); pill(w === 'received' ? 'Received' : w, c || 'ok'); };
+function logRow(f) {
+  const [c, w] = f.res ? outcome(f.res) : f.lost ? ['bad', '✗ lost'] : ['', f.state], snr = f.res && !f.res.sound ? frameSnr(f.res) : null;
+  return `<tr data-i="${f.id}" aria-selected="${f === shown}"${f.lost ? ` title="${f.lost}"` : ''}><td>${f.time.toTimeString().slice(0, 8)}</td><td>${frameWhat(f.hdr)}${snr === null ? '' : ` · SNR ${Math.round(snr) + 0} dB`}</td><td class="r-${c}">${w}</td></tr>`;
+}
+function showLog() { $('log').classList.toggle('hidden', !frames.length); $('logBody').innerHTML = frames.map(logRow).join(''); }
+function display(f) {   // a received frame, in full
+  shown = f; lastRec = f.res; clearOut(); $('rxProg').style.width = '100%';
+  if (f.res.sound) showSounding(f.res); else { showOut(f.res.hdr, f.res.bits, f.res.hdr.n0); showStats(f.res); }
+  showLog();
+}
+$('logBody').onclick = e => { const tr = e.target.closest('tr'), f = tr && frames.find(q => q.id === +tr.dataset.i); if (f && f.res) { display(f); donePill(f.res); } };
 function makeRx() {
+  const find = h => frames.find(f => f.hdr === h);
   rx = new Receiver(actx.sampleRate, { ...cfg }, {
     onState: (s, info) => {
-      if (s === 'detected') { pill('Frame detected', 'live'); clearOut(); }
-      if (s === 'header' && info.type === 'sound') pill(`Measuring the room · ${info.periods} × ${(((1 << info.order) - 1) / FS_TX).toFixed(2)} s`, 'live');
-      else if (s === 'header') { pill((info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`) + (info.sc ? ` · single carrier ${OFDM_NAMES[info.map]}` : info.ofdm ? ` · OFDM ${OFDM_NAMES[info.map]}, ${info.ofdm} guard` : ` · ${info.rate} bit/s` + (info.M === 4 ? ' · 4 tones' : '') + (info.tones === 'hop' ? (info.rate === RATE_WIDE ? ' · whole band' : ' · hopping') : '')) + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`), 'live'); }
-      if (s === 'decoding') pill(`Decoding · ${detName(rx.cfg.det)} (${rx.cfg.effort || 'fast'}) and the turbo decoder`, 'live');
-      if (s === 'lost') { pill('Listening', 'live'); }
+      if (s === 'detected') pill('Frame detected', 'live');
+      if (s === 'header') {   // a new frame: a row of its own, and the display follows it
+        const f = { id: ++frameId, time: new Date(), hdr: info, state: info.type === 'sound' ? 'measuring…' : 'receiving…', res: null };
+        frames.unshift(f); frames.splice(LOG_MAX);
+        live = shown = f; lastRec = null; clearOut(); showLog();
+        fpill(f, info.type === 'sound' ? `Measuring the room · ${info.periods} × ${(((1 << info.order) - 1) / FS_TX).toFixed(2)} s`
+          : (info.type === 'text' ? `Receiving ${info.len} characters` : `Receiving ${info.w}×${info.h} image`) + (info.sc ? ` · single carrier ${OFDM_NAMES[info.map]}` : info.ofdm ? ` · OFDM ${OFDM_NAMES[info.map]}, ${info.ofdm} guard` : ` · ${info.rate} bit/s` + (info.M === 4 ? ' · 4 tones' : '') + (info.tones === 'hop' ? (info.rate === RATE_WIDE ? ' · whole band' : ' · hopping') : '')) + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`));
+      }
+      if (s === 'decoding') {   // v5: the single carrier is decoded in the background, listening goes on
+        const f = find(info); if (live === f) live = null;
+        if (f) { f.state = 'decoding…'; showLog(); fpill(f, `Decoding · ${detName(rx.cfg.det)} (${rx.cfg.effort || 'fast'}) and the turbo decoder`); }
+      }
+      if (s === 'lost') {
+        const f = /^single carrier/.test(info.reason) ? frames.filter(q => !q.res && !q.lost && (q.state || '').startsWith('decoding')).pop() : null;
+        if (f) { f.lost = info.reason; showLog(); fpill(f, 'Decoding failed', 'bad'); }
+        else if (shown && !shown.res && !shown.lost && shown.pill) pill(...shown.pill);
+        else pill('Listening', 'live');
+      }
     },
     scDecode,
-    onProgress: p => { if (p.pass) { pill(`Decoding · pass ${p.pass.pass} of at most ${p.pass.npass}`, 'live'); return; } if (p.sound || p.ofdm || p.sc) { $('rxProg').style.width = (100 * p.frac) + '%'; return; } $('rxProg').style.width = (100 * p.done / p.hdr.nc) + '%'; if (p.bits) showOut(p.hdr, p.bits, p.done); },
+    onProgress: p => {
+      const f = find(p.hdr) || live; if (!f) return;
+      if (p.pass) { f.state = `decoding, pass ${p.pass.pass}`; showLog(); fpill(f, `Decoding · pass ${p.pass.pass} of at most ${p.pass.npass}`); return; }
+      if (f !== shown) return;
+      if (p.sound || p.ofdm || p.sc) { $('rxProg').style.width = (100 * p.frac) + '%'; return; }
+      $('rxProg').style.width = (100 * p.done / p.hdr.nc) + '%'; if (p.bits) showOut(p.hdr, p.bits, p.done);
+    },
     onDone: res => {
-      lastRec = res;
-      if (res.sound) { $('rxProg').style.width = '100%'; showSounding(res); pill('Room measured ✓', 'ok'); }
-      else { $('rxProg').style.width = '100%'; showOut(res.hdr, res.bits, res.hdr.n0); showStats(res); pill('Received ✓', 'ok'); } setTimeout(() => { if (stream) pill('Listening', 'live'); }, 4000); }
+      let f = find(res.hdr) || live;
+      if (!f) { f = { id: ++frameId, time: new Date(), hdr: res.hdr }; frames.unshift(f); frames.splice(LOG_MAX); }
+      f.res = res; if (live === f) live = null;
+      checkDemo(res);
+      if (!res.sound && !res.hdr.sc && TURBO_R[res.hdr.code]) {   // FSK or OFDM with a turbo code: the codeword check, in the worker
+        res.cwPending = true;
+        scDecode({ kind: 'cw', code: res.hdr.code, n0: res.hdr.n0, llr: Float64Array.from(res.llr), key: res.key, bits: res.bits }).then(ok => { res.codeword = ok; }, () => {}).then(() => {
+          res.cwPending = false;
+          if (shown === f) { display(f); if (!live) donePill(res); } else showLog();
+        });
+      }
+      if (f === shown) { display(f); donePill(res); setTimeout(() => { if (stream && !live && shown === f) pill('Listening', 'live'); }, 4000); }
+      else showLog();
+    }
   });
 }
 function restartRx() { if (rx && actx) { makeRx(); clearOut(); } }
-function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('irBtn').classList.add('hidden'); $('sndOut').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); $('ofdmOut').classList.add('hidden'); $('scOut').classList.add('hidden'); }
+function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('irBtn').classList.add('hidden'); $('sndOut').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); $('ofdmOut').classList.add('hidden'); $('scOut').classList.add('hidden'); $('statsHelp').classList.add('hidden'); }
 function showOut(hdr, bits, done) {
   if (hdr.type === 'text') { $('rxOutText').textContent = decodeText(bits.subarray(0, done - done % 8)); $('rxFig').classList.add('hidden'); }
   else { $('rxOutText').textContent = ''; $('rxFig').classList.remove('hidden'); drawPixels($('rxCanvas'), { h: hdr.h, w: hdr.w, pixels: bits }, done); }
@@ -2734,62 +3068,64 @@ function showRaw(res) {
   if (hdr.type === 'text') { $('rxRawText').textContent = 'Without the code: ' + decodeText(raw); $('rxRawText').classList.remove('hidden'); }
   else { drawPixels($('rawCanvas'), { h: hdr.h, w: hdr.w, pixels: raw }); $('rawFig').classList.remove('hidden'); }
 }
+function tiles(st) {   // [value, short label, explanation]: the explanation in the tile's tooltip, and under "What these numbers mean"
+  const plain = s => s.replace(/<[^>]+>/g, '').replace(/"/g, '&quot;');
+  $('stats').innerHTML = st.map(([v, l, x]) => `<div class="stat"${x ? ` title="${plain(x)}"` : ''}><b>${v}</b><span>${l}</span></div>`).join('');
+  $('statsDl').innerHTML = st.filter(s => s[2]).map(([v, l, x]) => `<dt>${l}: ${v}</dt><dd>${x}</dd>`).join('');
+  $('statsHelp').classList.toggle('hidden', !st.some(s => s[2]));
+}
 function showStats(res) {
-  const st = [], code = res.hdr.code;
+  const st = [], h = res.hdr, code = h.code;
   showRaw(res);
-  if (res.hdr.sc) st.push([`${(res.hdr.rate / 1000).toFixed(1)} k`, `bit/s before the code, ${scDesc(res.hdr.map, res.hdr.train)}, ${res.hdr.ns} data symbols in ${res.sc.nseg} segment${res.sc.nseg > 1 ? 's' : ''}, preamble ${res.NP} (read from the header)`]);
-  else if (res.hdr.ofdm) st.push([`${(res.hdr.rate / 1000).toFixed(1)} k`, `bit/s before the code, ${ofdmDesc(ofdmMode(res.hdr.ofdm), res.hdr.map)}, ${res.hdr.ns} data symbol${res.hdr.ns > 1 ? 's' : ''}, preamble ${res.NP} (read from the header)`]);
-  else st.push([`${res.hdr.rate}`, `bit/s, ${res.hdr.M === 4 ? `4 tones (2 bits per symbol, ${res.hdr.baud} symbols/s), ` : ''}${toneDesc(res.hdr.tones, res.hdr.rate, res.hdr.M)}, preamble ${res.NP} (read from the header)`]);
-  st.push([res.hdr.n0, 'message bits']);
+  // first, were the bits right?
+  if (res.truth) st.push([`${res.errs}`, code === 'none' ? 'wrong bits' : 'wrong bits after decoding', `against the demo image, which every receiver knows: bit error rate ${(res.errs / res.truth.pixels.length).toExponential(1)}`]);
+  if (res.codeword === true || res.codeword === false) st.push([res.codeword ? '✓ yes' : '✗ no', 'a codeword?', 'whether the turbo decoder\'s decisions on all the coded bits, message and parity alike, agree with the message encoded again: if they do, the message is almost surely right']);
+  if (h.sc) st.push([`${(h.rate / 1000).toFixed(1)} kbit/s`, 'before the code', `${scDesc(h.map, h.train)}; ${h.ns} data symbols in ${res.sc.nseg} segment${res.sc.nseg > 1 ? 's' : ''}; preamble ${res.NP} bits. All read from the header.`]);
+  else if (h.ofdm) st.push([`${(h.rate / 1000).toFixed(1)} kbit/s`, 'before the code', `${ofdmDesc(ofdmMode(h.ofdm), h.map)}; ${h.ns} data symbol${h.ns > 1 ? 's' : ''}; preamble ${res.NP} bits. All read from the header.`]);
+  else st.push([`${h.rate} bit/s`, h.M === 4 ? '4 tones' : '2 tones', `${h.M === 4 ? `2 bits per symbol, ${h.baud} symbols/s, ` : ''}${toneDesc(h.tones, h.rate, h.M)}; preamble ${res.NP} bits. All read from the header.`]);
+  st.push([h.n0, 'message bits', '']);
   if (code !== 'none') {
-    st.push([CODE_INFO[code].rate, `code rate, ${CODE_INFO[code].short}`]);
-    st.push([res.chErr, `channel bit errors corrected (of ${res.hdr.nc} bits${res.hdr.sc ? ', at the detector\'s first pass' : ''})`]);
-    if (code === 'rs') st.push([`${res.rsFails} / ${res.rsBlocks}`, 'Reed–Solomon blocks with too many errors']);
-    if (TURBO_R[code] && !res.hdr.sc) st.push([res.iters, 'iterations of the turbo decoder (at most 8; it stops when its decisions no longer change)']);
+    st.push([CODE_INFO[code].rate, 'code rate', CODE_INFO[code].name]);
+    st.push([res.chErr, 'channel bits wrong', `of the ${h.nc} coded bits: the receiver's hard decisions${h.sc ? ' at the detector\'s first pass' : ''} compared with the decoded message, encoded again. If the decoding succeeded, these are the errors the code corrected.`]);
+    if (code === 'rs') st.push([`${res.rsFails} / ${res.rsBlocks}`, 'Reed–Solomon blocks failed', 'blocks with more than 16 wrong bytes']);
+    if (TURBO_R[code] && !h.sc) st.push([res.iters, 'turbo iterations', 'iterations of the turbo decoder: at most 8, it stops when its decisions no longer change']);
   }
-  if (res.hdr.sc) {   // v5, single carrier
+  if (h.sc) {   // v5, single carrier
     const o = res.sc, dn = detName(o.det);
-    st.push([`${o.snr.toFixed(1)} dB`, `SNR of the symbols, from the first training block: the noise plus the echo beyond the ${o.taps} taps (${Math.round((o.taps - SC_PRE) / SC_RS * 1000)} ms after the first strong arrival) and the room\'s drift`]);
-    st.push([o.taps, `taps of the room${SC_TAPS[o.train].length > 1 ? ` (the ${scTrainName(o.train)} training allows ${SC_TAPS[o.train].join(' or ')}: the receiver keeps the one that fits better)` : ` (what the ${scTrainName(o.train)} training allows)`}`]);
-    st.push([o.passes, `pass${o.passes > 1 ? 'es' : ''} of turbo equalization, ${dn} ↔ turbo decoder (at most ${o.npass}, ${o.effort} effort; it stops once the decisions form a codeword); coded bits in doubt after each: ${o.hist.join(' → ')}`]);
-    if (!o.codeword) st.push(['not a codeword', 'after the last pass: some bits are wrong']);
-    st.push([`${o.sec.toFixed(1)} s`, `to decode, ${dn}, ${o.effort} effort (in the background: listening went on)`]);
-    st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, `time scale Rx vs Tx (clock offset, or a moving phone), from the ${o.nseg + 1} training blocks`]);
-    if (o.change.length) st.push([`${Math.max(...o.change).toFixed(0)} dB`, 'largest change of the room from one training block to the next (0.5 s apart), relative to the room']);
-    if (o.bend > 1) st.push([o.bend.toFixed(1), 'samples by which the clock departs from a steady one (a moving phone, or samples lost)']);
-  } else if (res.hdr.ofdm) {
+    st.push([`${o.snr.toFixed(1)} dB`, 'SNR of the symbols', `from the first training block: the noise, plus the echo beyond the ${o.taps} taps (${Math.round((o.taps - SC_PRE) / SC_RS * 1000)} ms after the first strong arrival) and the room's drift`]);
+    st.push([o.taps, 'taps of the room', o.est === 'mmse' ? `by MMSE, the most the ${scTrainName(o.train)} training allows: each tap weighed by the room's power at its delay` : SC_TAPS[o.train].length > 1 ? `the ${scTrainName(o.train)} training allows ${SC_TAPS[o.train].join(' or ')}: the receiver keeps the one that fits better` : `what the ${scTrainName(o.train)} training allows`]);
+    st.push([o.passes, `pass${o.passes > 1 ? 'es' : ''}, ${dn} ↔ turbo`, `turbo equalization, at most ${o.npass} passes (${o.effort} effort); it stops once the decisions form a codeword. Coded bits in doubt after each pass: ${o.hist.join(' → ')}`]);
+    st.push([`${o.sec.toFixed(1)} s`, 'to decode', `${dn}, ${o.effort} effort, in the background: listening went on`]);
+    st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset', `time scale Rx vs Tx (clock offset, or a moving phone), from the ${o.nseg + 1} training blocks`]);
+    if (o.change.length) st.push([`${Math.max(...o.change).toFixed(0)} dB`, 'room change', 'the largest change of the room from one training block to the next (0.5 s apart), relative to the room. In our recordings: −14 to −20 dB in a still room, −6 to −9 dB when people moved.']);
+    if (o.bend > 1) st.push([o.bend.toFixed(1), 'clock wander, samples', 'samples by which the clock departs from a steady one (a moving phone, or samples lost)']);
+    if (o.gaps && o.gaps.length) st.push([o.gaps.map(([, d]) => Math.abs(d).toFixed(0)).join(' + '), `samples ${o.gaps.every(([, d]) => d < 0) ? 'lost' : 'lost or repeated'}`, `by the microphone in the middle of the part (${o.gaps.map(([t]) => `${t.toFixed(2)} s`).join(', ')} into it); the part was read again after the gap${o.erased ? `, and the ${o.erased} data symbols around it were erased and left to the code` : ''} (v5.1)`]);
+  } else if (h.ofdm) {
     const o = res.ofdm, sn = [...o.snr].sort((a, b) => a - b), med = sn[Math.floor(sn.length / 2)];
-    st.push([`${sn[0].toFixed(0)} to ${sn[sn.length - 1].toFixed(0)} dB`, `SNR per subcarrier (median ${med.toFixed(0)} dB), measured ${res.hdr.map === 'dqpsk' ? 'on the decisions' : 'on the pilots and the reference symbols'} per group of 32 subcarriers: the noise plus the echo after the guard`]);
-    st.push([`${(100 * (1 - o.inside)).toFixed(0)} %`, 'of the received energy arrives after the guard interval and acts as noise (from the reference symbols)']);
-    st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'time scale Rx vs Tx (clock offset, or a moving phone), from the two reference symbols']);
-    st.push([`${o.tau >= 0 ? '+' : ''}${o.tau}`, 'samples (at 48 kHz) from the timing given by the preamble to the start of the guard chosen on the reference symbols']);
-    if (o.slips && o.slips.length) st.push([o.slips.map(([, d]) => Math.abs(d).toFixed(0)).join(' + '), `samples ${o.slips.every(([, d]) => d < 0) ? 'lost' : 'lost or repeated'} by the microphone in the middle of the frame (before symbol ${o.slips.map(([i]) => i).join(', ')} of ${res.hdr.ns}); the symbols after the gap were read again${o.erased.length ? `, symbol ${o.erased.join(', ')} (which holds the gap) erased and left to the code` : ''} (v4.1)`]);
+    st.push([`${med.toFixed(0)} dB`, `SNR, median (${sn[0].toFixed(0)} to ${sn[sn.length - 1].toFixed(0)})`, `SNR per subcarrier, measured ${h.map === 'dqpsk' ? 'on the decisions' : 'on the pilots and the reference symbols'} per group of 32 subcarriers: the noise plus the echo after the guard`]);
+    st.push([`${(100 * (1 - o.inside)).toFixed(0)} %`, 'energy after the guard', 'of the received energy arrives after the guard interval and acts as noise (from the reference symbols)']);
+    st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset', 'time scale Rx vs Tx (clock offset, or a moving phone), from the two reference symbols']);
+    st.push([`${o.tau >= 0 ? '+' : ''}${o.tau}`, 'timing shift, samples', 'samples (at 48 kHz) from the timing given by the preamble to the start of the guard chosen on the reference symbols']);
+    if (o.slips && o.slips.length) st.push([o.slips.map(([, d]) => Math.abs(d).toFixed(0)).join(' + '), `samples ${o.slips.every(([, d]) => d < 0) ? 'lost' : 'lost or repeated'}`, `by the microphone in the middle of the frame (before symbol ${o.slips.map(([i]) => i).join(', ')} of ${h.ns}); the symbols after the gap were read again${o.erased.length ? `, symbol ${o.erased.join(', ')} (which holds the gap) erased and left to the code` : ''} (v4.1)`]);
   } else {
-  const T = res.cal.t, M = res.hdr.M, snr = `${T.map(t => t.snrDb.toFixed(0)).join(' / ')} dB`, from = `from the ${res.found ? 'postamble' : 'message: postamble not found'}`;
-  if (res.hdr.tones === 'hop') {
-    st.push([snr, `SNR per symbol, ${M === 2 ? 'bit-0 / bit-1 tones' : 'tones 1 to 4 of each group'}, after levelling each tone (${from})`]);
-    st.push([`${res.spread.toFixed(0)} dB`, 'spread of the tone levels across the band (speaker, room, microphone)']);
-  } else {
-    st.push([snr, `SNR per symbol, ${M === 2 ? 'low / high tone' : 'tones from low to high'} (${from})`]);
-    st.push([`${(20 * Math.log10(T[M - 1].mu / T[0].mu)).toFixed(1)} dB`, `level of the ${M === 2 ? 'high' : 'highest'} tone relative to the ${M === 2 ? 'low' : 'lowest'} tone`]);
+    const T = res.cal.t, M = h.M, snr = `${T.map(t => t.snrDb.toFixed(0)).join(' / ')} dB`, from = `measured on the ${res.found ? 'postamble' : 'message: postamble not found'}`;
+    if (h.tones === 'hop') {
+      st.push([snr, 'SNR per symbol', `${M === 2 ? 'bit-0 / bit-1 tones' : 'tones 1 to 4 of each group'}, after levelling each tone, ${from}`]);
+      st.push([`${res.spread.toFixed(0)} dB`, 'tone level spread', 'spread of the tone levels across the band (speaker, room, microphone)']);
+    } else {
+      st.push([snr, 'SNR per symbol', `${M === 2 ? 'low / high tone' : 'tones from low to high'}, ${from}`]);
+      st.push([`${(20 * Math.log10(T[M - 1].mu / T[0].mu)).toFixed(1)} dB`, M === 2 ? 'high vs low tone' : 'highest vs lowest tone', `level of the ${M === 2 ? 'high' : 'highest'} tone relative to the ${M === 2 ? 'low' : 'lowest'} tone (speaker, room, microphone)`]);
+    }
+    st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset', 'Rx vs Tx']);
+    st.push([res.pilotErr === null ? 'not found' : `${res.pilotErr} / ${res.PS.length * Math.log2(M)}`, 'postamble bit errors', 'the postamble is known to every receiver: its errors show the channel before the code']);
+    if (res.cal.alpha !== undefined) st.push([res.cal.alpha.toFixed(2), 'LLR scale α', 'scale of the calibrated LLR, fitted on the postamble (below 1: the noise model was too sure of itself)']);
+    if (res.timing) st.push([res.timing.map(v => (v > 0 ? '+' : '') + v).join(' → '), 'fine timing, samples', 'fine timing on the message, start → end']);
   }
-  st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
-  st.push([res.pilotErr === null ? 'not found' : `${res.pilotErr} / ${res.PS.length * Math.log2(M)}`, 'bit errors on the postamble']);
-  if (res.cal.alpha !== undefined) st.push([res.cal.alpha.toFixed(2), 'scale of the calibrated LLR, fitted on the postamble (below 1: the noise model was too sure of itself)']);
-  if (res.timing) st.push([res.timing.map(v => (v > 0 ? '+' : '') + v).join(' → '), 'samples of fine timing on the message, start → end']);
-  }
-  let truth = null;
-  const demo = res.hdr.type === 'image' ? Object.keys(DEMOS).flatMap(k => [1, 2, 4].map(s => demoPixels(s, k))).find(d => d.h === res.hdr.h && d.w === res.hdr.w) : null;   // a demo image, either picture, any size
-  if (demo) truth = demo.pixels;
-  if (truth) {
-    let e = 0; for (let i = 0; i < truth.length; i++) e += truth[i] !== res.bits[i];
-    st.push([(e / truth.length).toExponential(1), `bit error rate${code === 'none' ? '' : ' after decoding'} (${e} errors)`]);
-    drawPixels($('refCanvas'), demo); $('refFig').classList.remove('hidden');
-  }
-  $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
-  drawHist(res, truth ? Uint8Array.from(encodeFEC(code, truth), (x, j) => x ^ res.key[j]) : res.sent);
-  if (res.hdr.ofdm) drawOFDM(res.ofdm);
-  if (res.hdr.sc) drawSC(res.sc);
+  tiles(st);
+  if (res.truth) { drawPixels($('refCanvas'), res.truth); $('refFig').classList.remove('hidden'); }
+  drawHist(res, res.truth ? Uint8Array.from(encodeFEC(code, res.truth.pixels), (x, j) => x ^ res.key[j]) : res.sent);
+  if (h.ofdm) drawOFDM(res.ofdm);
+  if (h.sc) drawSC(res.sc);
   $('recBtn').classList.remove('hidden');
 }
 function drawOFDM(o) {   // |h|^2 in dB as the FFT windows see it, index 0 = start of the guard; the guard shaded
@@ -2833,9 +3169,8 @@ function drawHist(res, sent) {   // sent: transmitted channel bits (known for th
   const cv = $('hist'); cv.classList.remove('hidden'); $('histLegend').classList.remove('hidden');
   const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
   g.fillStyle = css('--plot-bg'); g.fillRect(0, 0, W, H);
-  const a = res.llr.map(Math.abs).sort((x, y) => x - y), lim = res.soft === 'ratio' ? 6 : Math.max(6, 1.3 * (a[Math.floor(0.95 * (a.length - 1))] || 0));
-  $('histLegend').firstElementChild.innerHTML = res.hdr.sc ? `the detector's LLR per bit, first pass (axis ±${lim.toFixed(0)}): two well separated humps mean a clean channel` : res.soft === 'ratio' ? (res.hdr.M === 2 ? 'soft output ln(E<sub>high</sub>/E<sub>low</sub>) per bit' : 'soft output ln(E<sub>strongest tone for 1</sub>/E<sub>strongest tone for 0</sub>) per bit') + ': two well separated humps mean a clean channel'
-    : `calibrated LLR per bit (axis ±${lim.toFixed(0)}): two well separated humps mean a clean channel`;
+  const a = res.llr.map(Math.abs).sort((x, y) => x - y), lim = Math.max(6, 1.3 * (a[Math.floor(0.95 * (a.length - 1))] || 0));
+  $('histText').innerHTML = `${res.hdr.sc ? 'the detector\'s LLR per bit, first pass' : res.hdr.ofdm ? 'LLR per bit' : 'calibrated LLR per bit'} (axis ±${lim.toFixed(0)})${res.truth ? '' : '; bits sent as decoded'}: two well separated humps mean a clean channel`;
   const nb = 80, h0 = new Float32Array(nb), h1 = new Float32Array(nb);
   res.llr.forEach((r, i) => {
     const k = Math.max(0, Math.min(nb - 1, Math.floor((r + lim) / (2 * lim) * nb)));
@@ -2845,24 +3180,20 @@ function drawHist(res, sent) {   // sent: transmitted channel bits (known for th
   [[h0, css('--f0')], [h1, css('--f1')]].forEach(([h, col]) => { g.fillStyle = col; g.globalAlpha = .8; h.forEach((v, k) => g.fillRect(k * bw, H - v / mx * (H - 6), bw - 1, v / mx * (H - 6))); });
   g.globalAlpha = 1; g.strokeStyle = '#fff8'; g.beginPath(); g.moveTo(W / 2, 0); g.lineTo(W / 2, H); g.stroke();
 }
-function scAgain() {   // v5: decodes the last single-carrier frame again, with the detector and the effort chosen
-  const res = lastRec;
+function scAgain() {   // v5: decodes the single-carrier frame on display again, with the detector, the effort and the room estimate chosen
+  const f = shown, res = f && f.res;
   if (!res || res.sound || !res.hdr.sc || !res.job) return;
-  const job = { ...res.job, det: cfg.det, effort: cfg.effort };
-  pill(`Decoding again · ${detName(job.det)} (${job.effort})`, 'live');
-  scDecode(job, p => pill(`Decoding again · pass ${p.pass} of at most ${p.npass}`, 'live')).then(o => {
-    if (lastRec !== res) return;
-    res.job = job; res.sc = o; res.ppm = o.ppm; Object.assign(res, decodeFrame(res, 'cal'));
-    clearOut(); $('rxProg').style.width = '100%'; showOut(res.hdr, res.bits, res.hdr.n0); showStats(res); pill('Received ✓', 'ok');
-  }, () => pill('Decoding failed', 'bad'));
+  const job = { ...res.job, det: cfg.det, effort: cfg.effort, est: cfg.est };
+  pill(`Decoding again · ${detName(job.det)} (${job.effort})${job.est === 'mmse' ? ', MMSE room' : ''}`, 'live');
+  scDecode(job, p => { if (shown === f) pill(`Decoding again · pass ${p.pass} of at most ${p.npass}`, 'live'); }).then(o => {
+    res.job = job; res.sc = o; res.ppm = o.ppm; Object.assign(res, decodeFrame(res, 'cal')); checkDemo(res);
+    if (shown === f) { display(f); donePill(res); } else showLog();
+  }, () => { if (shown === f) pill('Decoding failed', 'bad'); });
 }
 function rxParam(k, v, d) { const u = new URL(location.href); if (v !== d) u.searchParams.set(k, v); else u.searchParams.delete(k); history.replaceState(null, '', u); }
 seg($('detSeg'), cfg.det, v => { cfg.det = v; if (rx) rx.cfg.det = v; rxParam('det', v, 'smap'); scAgain(); });   // v5: the single carrier's detector
 seg($('effSeg'), cfg.effort, v => { cfg.effort = v; if (rx) rx.cfg.effort = v; rxParam('effort', v, 'fast'); scAgain(); });   // v5: SMAP's steps and the passes
-seg($('softSeg'), cfg.soft, v => {   // re-decode the last message with the other soft output
-  cfg.soft = v; if (rx) rx.cfg.soft = v;
-  if (lastRec && !lastRec.sound) { Object.assign(lastRec, decodeFrame(lastRec, v)); clearOut(); $('rxProg').style.width = '100%'; showOut(lastRec.hdr, lastRec.bits, lastRec.hdr.n0); showStats(lastRec); }
-});
+seg($('estSeg'), cfg.est, v => { cfg.est = v; if (rx) rx.cfg.est = v; rxParam('est', v, 'ls'); scAgain(); });   // v5: the room's estimate
 $('recBtn').onclick = () => { if (lastRec) download(wavBlob(lastRec.recording, lastRec.fs), lastRec.sound ? `received_sounding_${Math.round(lastRec.fs)}Hz.wav` : `received_${lastRec.hdr.sc ? `sc_${lastRec.hdr.map}_${scTrainName(lastRec.hdr.train)}` : lastRec.hdr.ofdm ? `ofdm_${lastRec.hdr.map}_${lastRec.hdr.ofdm}` : `${lastRec.hdr.M === 4 ? '4fsk_' : ''}${lastRec.hdr.tones}_${lastRec.hdr.rate}bps`}_${Math.round(lastRec.fs)}Hz.wav`); };
 $('irBtn').onclick = () => {   // the measured response, peak at 0.9, from 5 ms before the direct sound to the end of the decay
   if (!lastRec || !lastRec.sound) return;
@@ -2876,17 +3207,17 @@ function showSounding(res) {
   const s = res.sound, db = v => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)} dB`, st = [];
   $('sndOut').classList.remove('hidden');
   $('rxOutText').textContent = (s.rt ? `RT60 ${s.rt.rt60.toFixed(2)} s · ` : '') + `DRR ${s.drr >= 0 ? '+' : '−'}${Math.abs(s.drr).toFixed(1)} dB`;
-  st.push(s.rt ? [`${s.rt.rt60.toFixed(2)} s`, `reverberation time RT60 (${s.rt.method})`] : ['—', 'reverberation time: the decay is too short above the noise']);
-  st.push([`${(1000 * s.tauRms).toFixed(1)} ms`, 'rms delay spread τ<sub>rms</sub> (a bit lasts 2.5 ms at 400 bit/s)']);
-  st.push([db(s.drr), 'direct-to-reverberant ratio']);
-  st.push([db(s.c50), 'clarity C50, first 50 ms vs the rest']);
+  st.push(s.rt ? [`${s.rt.rt60.toFixed(2)} s`, 'RT60', `reverberation time (${s.rt.method}): the time the sound energy takes to fall by 60 dB`] : ['—', 'RT60', 'reverberation time: the decay is too short above the noise']);
+  st.push([`${(1000 * s.tauRms).toFixed(1)} ms`, 'delay spread', 'rms delay spread τ<sub>rms</sub> (a bit lasts 2.5 ms at 400 bit/s)']);
+  st.push([db(s.drr), 'direct to reverberant', 'direct-to-reverberant ratio: the energy within 2.5 ms of the direct sound against the rest']);
+  st.push([db(s.c50), 'clarity C50', 'the first 50 ms against the rest']);
   const [t4, t8, t16] = s.tones;
-  st.push([db(t8.gain - t4.gain) + (t16.gain === null ? '' : ` / ${db(t16.gain - t8.gain)}`), 'gain of 8 vs 4 kHz' + (t16.gain === null ? '' : ' / 16 vs 8 kHz') + ' (speaker, room, microphone)']);
-  if (s.snr) { const t = s.tones.filter(x => x.snr !== null); st.push([t.map(x => (x.snr + ESN0_400).toFixed(0)).join(' / ') + ' dB', `E<sub>s</sub>/N<sub>0</sub> of a tone at 400 bit/s, ${t.map(x => x.f / 1000).join(' / ')} kHz (noise only)`]); }
-  st.push([`${s.inr.toFixed(0)} dB`, 'decay range above the noise']);
-  st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset Rx vs Tx']);
-  if (s.glitch) st.push([`${s.used} / ${res.hdr.periods}`, 'periods used: the audio skipped or repeated samples, periods realigned']);
-  $('stats').innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+  st.push([db(t8.gain - t4.gain) + (t16.gain === null ? '' : ` / ${db(t16.gain - t8.gain)}`), '8 vs 4 kHz' + (t16.gain === null ? '' : ' / 16 vs 8'), 'gain of 8 vs 4 kHz' + (t16.gain === null ? '' : ' and of 16 vs 8 kHz') + ' (speaker, room, microphone)']);
+  if (s.snr) { const t = s.tones.filter(x => x.snr !== null); st.push([t.map(x => (x.snr + ESN0_400).toFixed(0)).join(' / ') + ' dB', 'E<sub>s</sub>/N<sub>0</sub> at 400 bit/s', `of a tone at 400 bit/s, at ${t.map(x => x.f / 1000).join(' / ')} kHz (noise only)`]); }
+  st.push([`${s.inr.toFixed(0)} dB`, 'decay range', 'decay range above the noise']);
+  st.push([res.ppm === null ? '—' : `${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset', 'Rx vs Tx']);
+  if (s.glitch) st.push([`${s.used} / ${res.hdr.periods}`, 'periods used', 'the audio skipped or repeated samples: periods realigned']);
+  tiles(st);
   drawIR(s); drawFR(s);
   $('irBtn').classList.remove('hidden'); $('recBtn').classList.remove('hidden');
 }
@@ -2961,7 +3292,7 @@ $('listenBtn').onclick = async () => {
   analyser = a.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0; analyser.minDecibels = -100; analyser.maxDecibels = -25;
   const mute = a.createGain(); mute.gain.value = 0;
   src.connect(analyser); mute.connect(a.destination);
-  makeRx(); clearOut();
+  makeRx(); clearOut(); shown = live = null; showLog();
   // v5: the samples come from an AudioWorklet (the audio thread) in blocks of 4096 posted to the page, so a long
   // decode here (OFDM's takes up to a second) only delays them; a ScriptProcessor (older browsers) loses audio then
   proc = await tapNode(a);
