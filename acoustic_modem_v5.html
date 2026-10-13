@@ -176,6 +176,7 @@ details .row{margin:8px 0}
   </div>
   <div class="progress"><div id="txProg"></div></div>
   <p class="muted" id="txStatus">Start listening on the receiver first, then press Send.</p>
+  <p class="muted hidden" id="teleTx"></p>
   <details>
     <summary>How it works</summary>
     <p class="muted">A frame has two parts. The <b>control part</b> is sent at 400 bit/s, at 4 / 8 kHz or hopping, two modes every receiver knows in advance: 0.1 s warm-up · MLS preamble · header. The <b>message part</b> uses the tones and rate chosen on the transmitter: coded and scrambled message · MLS postamble (the same sequence as the preamble).
@@ -205,6 +206,8 @@ details .row{margin:8px 0}
     <button class="btn primary" id="listenBtn">● Start listening</button>
     <span class="muted" id="rxFs"></span>
   </div>
+  <div class="row hidden" id="teleRx"><label class="muted"><input type="checkbox" id="teleAuto"> Send failed frames automatically</label>
+    <span class="muted">This page reports each frame's SNR and result for the class summary. Audio is sent only when you press "Send this recording" or tick the box.</span></div>
   <details id="rxSet">
     <summary>Receiver settings (single carrier)</summary>
     <div class="row"><span class="muted">Detector</span><span class="seg" id="detSeg"><button data-v="smap">Soft SMAP</button><button data-v="lmmse">Linear MMSE</button></span></div>
@@ -249,7 +252,7 @@ details .row{margin:8px 0}
   <canvas id="hist" class="plot small hidden" style="margin-top:10px"></canvas>
   <div class="legend hidden" id="histLegend"><span><i style="background:var(--f0)"></i>bit 0 sent</span><span><i style="background:var(--f1)"></i>bit 1 sent</span><span id="histText">LLR per bit: two well separated humps mean a clean channel</span></div>
   <details id="statsHelp" class="hidden"><summary>What these numbers mean</summary><dl class="help" id="statsDl"></dl></details>
-  <div class="row"><button class="btn hidden" id="irBtn">Download impulse response (WAV)</button><button class="btn hidden" id="recBtn">Download received recording (WAV)</button></div>
+  <div class="row"><button class="btn hidden" id="irBtn">Download impulse response (WAV)</button><button class="btn hidden" id="recBtn">Download received recording (WAV)</button><button class="btn hidden" id="teleBtn">Send this recording for analysis</button></div>
   <details>
     <summary>Soft output (LLR)</summary>
     <p class="muted">Each receiver gives the decoder a log-likelihood ratio per bit, LLR = ln P(what was heard | bit 1) / P(what was heard | bit 0): its sign is the decision, its size the confidence. The soft decoders (Viterbi, turbo) need both, on the right scale. The histogram under the results shows the LLRs of a frame, split by the bit sent.</p>
@@ -808,6 +811,7 @@ function crc8(bits) {   // CRC-8, generator x^8 + x^2 + x + 1
   for (const b of bits) { const fb = ((r >> 7) & 1) ^ b; r = (r << 1) & 0xff; if (fb) r ^= 0x07; }
   return msb(r, 8);
 }
+let lastHb = null;   // telemetry: the 40 header bits of the last frame built
 function headerBits(h) {   // 6400 bit/s: tone set 3, rate field 3; OFDM: tone set 3, rate field = its mode; single carrier (v5): tone set 3, rate field 2
   const c = CODES.indexOf(h.code), om = h.ofdm ? OFDM_MODES.findIndex(m => m.name === h.ofdm) : -1, wide = h.rate === RATE_WIDE, coh = om >= 0 || !!h.sc;
   const t = wide || coh ? 3 : TONE_SETS.indexOf(h.tones), four = h.mod === 4 || coh;
@@ -815,7 +819,7 @@ function headerBits(h) {   // 6400 bit/s: tone set 3, rate field 3; OFDM: tone s
   const v = [...msb(h.type, 2), ...msb(h.a | (T >> 1) << 10, 11), ...msb(h.b | (T & 1) << 10, 11), ...msb(c & 3, 2),
              ...msb(h.sc ? SC_FIELD : om >= 0 ? om : wide ? 3 : (four ? RATES4 : RATES).indexOf(h.rate), 2), ...msb(four ? 3 : t, 2), ...msb(four ? t : 0, 2)];
   const mask = (c >> 2 ? 0xff : 0) ^ (coh ? OFDM_MASKS[Math.max(0, OFDM_MAPS.indexOf(h.map))] : 0);   // v4: the mapping's mask (OFDM, and the single carrier in v5)
-  return encodeFEC('conv', [...v, ...crc8(v).map((b, i) => b ^ ((mask >> (7 - i)) & 1))]);
+  return encodeFEC('conv', lastHb = [...v, ...crc8(v).map((b, i) => b ^ ((mask >> (7 - i)) & 1))]);
 }
 // msg = {type:'text', text} | {type:'image', h, w, pixels (col-major, 1 = white)} | {type:'sound', order, periods}
 function buildFrame(msg, cfg) {
@@ -2917,7 +2921,7 @@ $('sendBtn').onclick = async () => {
   if (playing) { playing.stop(); return; }
   const a = new (window.AudioContext || window.webkitAudioContext)();
   try { await a.resume(); } catch (e) {}
-  const x = modulate(buildFrame(currentMsg(), cfg));
+  lastHb = null; const x = modulate(buildFrame(currentMsg(), cfg)), teleHdr = lastHb && parseHeader(lastHb);
   const buf = a.createBuffer(1, x.length, FS_TX); buf.copyToChannel(x, 0);
   const src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination);
   const dur = x.length / FS_TX; let t0 = a.currentTime;
@@ -2932,6 +2936,7 @@ $('sendBtn').onclick = async () => {
   };
   src.onended = () => finish('Sent.');
   src.start(); t0 = a.currentTime; tick();
+  if (teleHdr) Tele.sent(frameWhat(teleHdr), teleHdr, dur);
   // If the audio clock does not move, the browser is not playing anything: reset instead of hanging on "Stop".
   setTimeout(() => { if (playing === src && a.currentTime - t0 < 0.1) finish('The browser gave no audio output. Click Send again.'); }, 1500);
 };
@@ -3025,7 +3030,7 @@ function makeRx() {
       }
       if (s === 'lost') {
         const f = /^single carrier/.test(info.reason) ? frames.filter(q => !q.res && !q.lost && (q.state || '').startsWith('decoding')).pop() : null;
-        if (f) { f.lost = info.reason; showLog(); fpill(f, 'Decoding failed', 'bad'); }
+        if (f) { f.lost = info.reason; showLog(); fpill(f, 'Decoding failed', 'bad'); teleReport(f); }
         else if (shown && !shown.res && !shown.lost && shown.pill) pill(...shown.pill);
         else pill('Listening', 'live');
       }
@@ -3046,17 +3051,130 @@ function makeRx() {
       if (!res.sound && !res.hdr.sc && TURBO_R[res.hdr.code]) {   // FSK or OFDM with a turbo code: the codeword check, in the worker
         res.cwPending = true;
         scDecode({ kind: 'cw', code: res.hdr.code, n0: res.hdr.n0, llr: Float64Array.from(res.llr), key: res.key, bits: res.bits }).then(ok => { res.codeword = ok; }, () => {}).then(() => {
-          res.cwPending = false;
+          res.cwPending = false; teleReport(f);
           if (shown === f) { display(f); if (!live) donePill(res); } else showLog();
         });
       }
+      if (!res.cwPending) teleReport(f);
       if (f === shown) { display(f); donePill(res); setTimeout(() => { if (stream && !live && shown === f) pill('Listening', 'live'); }, 4000); }
       else showLog();
     }
   });
 }
+// ---- telemetry (optional): live counts, reception reports, recordings sent for analysis ----
+// The page talks to a small server (TELE_SERVER) only when one is set: ?tele=<url> overrides it, ?tele=off turns it
+// off, ?room=<name> picks the room (default 'class'). It reports when it opens, listens, sends a frame, and, for each
+// frame received, the SNR and the result; never any audio unless the person presses "Send this recording" or ticks
+// "Send failed frames automatically". A page is a random id, new at every load.
+const TELE_SERVER = 'https://bit2noisy-telemetry.sheng-yang-e9e.workers.dev';   // e.g. 'https://bit2noisy-telemetry.<account>.workers.dev'
+const Tele = (() => {
+  const qs = new URLSearchParams(location.search), q = qs.get('tele');
+  const server = (q === 'off' ? '' : q || TELE_SERVER).replace(/\/$/, ''), room = (qs.get('room') || 'class').replace(/[^\w-]/g, '').slice(0, 40) || 'class';
+  const sid = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)).slice(0, 36);
+  const dev = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform)) ? 'phone' : 'computer';
+  const T = { on: !!server, room, sid, dev, onCount: null, onSummary: null, counts: null, summary: null };
+  let ws = null, listening = false, backoff = 1000, refN = 0, queue = [];
+  const waiting = new Map();   // ref -> resolve, for acks
+  const url = p => `${server}${p}${p.includes('?') ? '&' : '?'}room=${encodeURIComponent(room)}`;
+  function raw(o) { if (ws && ws.readyState === 1) { ws.send(JSON.stringify(o)); return true; } return false; }
+  function send(o) { if (!raw(o)) { queue.push(o); queue = queue.slice(-20); } }
+  function connect() {
+    if (!T.on) return;
+    try { ws = new WebSocket(url('/ws').replace(/^http/, 'ws')); } catch (e) { return; }
+    ws.onopen = () => {
+      backoff = 1000; raw({ t: 'hello', sid, dev, listening, version: typeof PAGE_VERSION === 'string' ? PAGE_VERSION : '' });
+      for (const o of queue.splice(0)) raw(o);
+    };
+    ws.onmessage = e => {
+      let m; try { m = JSON.parse(e.data); } catch (err) { return; }
+      if (m.t === 'count') { T.counts = m; T.onCount && T.onCount(m); }
+      else if (m.t === 'summary') { T.summary = m; T.onSummary && T.onSummary(m); }
+      else if (m.ref && waiting.has(m.ref)) { waiting.get(m.ref)(m); waiting.delete(m.ref); }
+    };
+    ws.onclose = () => { ws = null; setTimeout(connect, backoff); backoff = Math.min(30000, 2 * backoff); };
+    ws.onerror = () => { try { ws.close(); } catch (e) {} };
+  }
+  function ask(o) {   // a message with an ack; falls back to plain HTTP for reports when the socket is down
+    const ref = ++refN; o.ref = ref;
+    return new Promise(res => {
+      waiting.set(ref, res);
+      if (!raw(o)) {
+        waiting.delete(ref);
+        if (o.t === 'report') fetch(url('/report'), { method: 'POST', body: JSON.stringify({ ...o, sid, dev }) }).then(r => r.json()).then(res, () => res(null));
+        else { queue.push(o); res(null); }
+      }
+      setTimeout(() => { if (waiting.has(ref)) { waiting.delete(ref); res(null); } }, 10000);
+    });
+  }
+  T.listening = on => { listening = !!on; if (T.on) send({ t: 'listen', on: listening }); };
+  T.sent = (what, hdr, dur) => T.on ? ask({ t: 'sent', what, hdr, dur }) : Promise.resolve(null);
+  T.report = r => T.on ? ask({ t: 'report', dev, ...r }) : Promise.resolve(null);
+  // the recording as a 32-bit float WAV (the phone's level can be very low: 16 bits would keep only ~30 dB of it)
+  T.wav = (x, fs) => {
+    const n = x.length, buf = new ArrayBuffer(44 + 4 * n), v = new DataView(buf);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + 4 * n, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 3, true); v.setUint16(22, 1, true);
+    v.setUint32(24, fs, true); v.setUint32(28, 4 * fs, true); v.setUint16(32, 4, true); v.setUint16(34, 32, true); w(36, 'data'); v.setUint32(40, 4 * n, true);
+    new Float32Array(buf, 44).set(x);
+    return buf;
+  };
+  T.upload = async (x, fs, meta) => {
+    if (!T.on) return { error: 'off' };
+    try {
+      const r = await fetch(url('/upload'), { method: 'POST', body: T.wav(x, Math.round(fs)), headers: { 'content-type': 'audio/wav', 'x-meta': encodeURIComponent(JSON.stringify({ sid, dev, fs, ...meta })) } });
+      return await r.json();
+    } catch (e) { return { error: String(e) }; }
+  };
+  setInterval(() => raw({ t: 'ping' }), 25000);
+  connect();
+  return T;
+})();
+
+// the class summary on the transmitter; each frame's report; recordings sent on request
+function teleShowTx() {
+  if (!Tele.on) return;
+  const k = Tele.counts, m = Tele.summary;
+  let t = k ? `Class: ${k.listening} listening (${k.phones} on phones), ${k.open} pages open` : 'Connecting to the class server…';
+  if (k && m) {
+    const v = m.snrs, med = v.length ? v[Math.floor(v.length / 2)] : null;
+    t += ` · last frame sent: ${m.n} of ${m.listening} reported` + (m.n ? `, ${m.ok} ✓ ${m.bad} ✗` : '') + (med !== null ? `, SNR median ${Math.round(med)} dB (${Math.round(v[0])} to ${Math.round(v[v.length - 1])})` : '');
+  }
+  $('teleTx').textContent = t; $('teleTx').classList.remove('hidden');
+}
+Tele.onCount = Tele.onSummary = teleShowTx;
+if (Tele.on) { $('teleRx').classList.remove('hidden'); teleShowTx(); }
+function teleOk(res) {   // true, false, or null when nothing can be checked
+  if (!res) return false;
+  if (res.sound) return true;
+  if (res.truth) return res.errs === 0;
+  return res.codeword === true ? true : res.codeword === false ? false : null;
+}
+function teleReport(f) {   // once, when the frame's result is final
+  if (!Tele.on || f.teleRep) return;
+  const res = f.res, ok = teleOk(res);
+  f.teleRep = Tele.report({ what: frameWhat(f.hdr), snr: res && !res.sound ? frameSnr(res) : null, result: res ? outcome(res)[1] : '✗ lost', ok,
+    errs: res && res.truth ? res.errs : null, nbits: res && res.truth ? res.truth.pixels.length : null,
+    extra: { lost: f.lost || null, fs: res ? res.fs : null, det: rx && rx.cfg.det, effort: rx && rx.cfg.effort, est: rx && rx.cfg.est, page: location.pathname } })
+    .then(a => { f.teleId = a ? a.rx : null; if (ok === false && res && $('teleAuto').checked) teleUpload(f, 'auto'); return a; });
+}
+function teleUpload(f, why) {
+  if (f.teleUp || !f.res || !f.res.recording) return f.teleUp;
+  const res = f.res;
+  f.teleUp = (f.teleRep || Promise.resolve()).then(() => Tele.upload(res.recording, res.fs, { what: frameWhat(f.hdr), result: outcome(res)[1], ok: teleOk(res),
+    snr: res.sound ? null : frameSnr(res), rx: f.teleId, why, hdr: f.hdr })).then(r => { f.teleDone = r && r.ok ? 'sent' : 'failed'; if (f === shown) teleBtnShow(); return r; });
+  if (f === shown) teleBtnShow();
+  return f.teleUp;
+}
+function teleBtnShow() {
+  if (!Tele.on || !shown) return;
+  const b = $('teleBtn'), f = shown;
+  b.classList.remove('hidden'); b.disabled = !!f.teleUp;
+  b.textContent = f.teleDone === 'sent' ? 'Recording sent ✓' : f.teleDone === 'failed' ? 'Sending failed' : f.teleUp ? 'Sending…' : 'Send this recording for analysis';
+  if (f.teleDone === 'failed') { b.disabled = false; f.teleUp = null; }
+}
+$('teleBtn').onclick = () => { if (shown) teleUpload(shown, 'button'); };
 function restartRx() { if (rx && actx) { makeRx(); clearOut(); } }
-function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('irBtn').classList.add('hidden'); $('sndOut').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); $('ofdmOut').classList.add('hidden'); $('scOut').classList.add('hidden'); $('statsHelp').classList.add('hidden'); }
+function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('teleBtn').classList.add('hidden'); $('irBtn').classList.add('hidden'); $('sndOut').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); $('ofdmOut').classList.add('hidden'); $('scOut').classList.add('hidden'); $('statsHelp').classList.add('hidden'); }
 function showOut(hdr, bits, done) {
   if (hdr.type === 'text') { $('rxOutText').textContent = decodeText(bits.subarray(0, done - done % 8)); $('rxFig').classList.add('hidden'); }
   else { $('rxOutText').textContent = ''; $('rxFig').classList.remove('hidden'); drawPixels($('rxCanvas'), { h: hdr.h, w: hdr.w, pixels: bits }, done); }
@@ -3126,7 +3244,7 @@ function showStats(res) {
   drawHist(res, res.truth ? Uint8Array.from(encodeFEC(code, res.truth.pixels), (x, j) => x ^ res.key[j]) : res.sent);
   if (h.ofdm) drawOFDM(res.ofdm);
   if (h.sc) drawSC(res.sc);
-  $('recBtn').classList.remove('hidden');
+  $('recBtn').classList.remove('hidden'); teleBtnShow();
 }
 function drawOFDM(o) {   // |h|^2 in dB as the FFT windows see it, index 0 = start of the guard; the guard shaded
   $('ofdmOut').classList.remove('hidden');
@@ -3219,7 +3337,7 @@ function showSounding(res) {
   if (s.glitch) st.push([`${s.used} / ${res.hdr.periods}`, 'periods used', 'the audio skipped or repeated samples: periods realigned']);
   tiles(st);
   drawIR(s); drawFR(s);
-  $('irBtn').classList.remove('hidden'); $('recBtn').classList.remove('hidden');
+  $('irBtn').classList.remove('hidden'); $('recBtn').classList.remove('hidden'); teleBtnShow();
 }
 function plotArea(cv) {
   const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
@@ -3284,7 +3402,7 @@ async function tapNode(a) {
 
 $('listenBtn').onclick = async () => {
   const a = ctx();
-  if (stream) { stream.getTracks().forEach(t => t.stop()); proc.disconnect(); if (proc.port) proc.port.onmessage = null; stream = null; $('listenBtn').textContent = '● Start listening'; pill('Idle'); return; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); proc.disconnect(); if (proc.port) proc.port.onmessage = null; stream = null; $('listenBtn').textContent = '● Start listening'; pill('Idle'); Tele.listening(false); return; }
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
   } catch (e) { pill('No microphone', 'bad'); $('rxFs').textContent = 'Microphone access was refused or the page is not served over https.'; return; }
@@ -3299,7 +3417,7 @@ $('listenBtn').onclick = async () => {
   if (proc) proc.port.onmessage = e => rx.push(e.data);
   else { proc = a.createScriptProcessor(4096, 1, 1); proc.onaudioprocess = e => rx.push(e.inputBuffer.getChannelData(0)); }
   src.connect(proc); proc.connect(mute);
-  $('listenBtn').textContent = '■ Stop listening'; pill('Listening', 'live');
+  $('listenBtn').textContent = '■ Stop listening'; pill('Listening', 'live'); Tele.listening(true);
   $('rxFs').textContent = `microphone at ${a.sampleRate} Hz`;
   draw();
 };
