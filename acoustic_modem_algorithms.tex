@@ -1,5 +1,5 @@
 % acoustic_modem_algorithms.tex
-% Algorithms of the acoustic modem demo, version 6 (acoustic_modem_v6.html, audiocomm_v6.py), version 5 (acoustic_modem_v5.html = acoustic_modem.html, audiocomm_v5.py), version 4 (acoustic_modem_v4.html, audiocomm_v4.py), version 3 (acoustic_modem_v3.html, audiocomm_v3.py), version 2 (acoustic_modem_v2.html, audiocomm_v2.py) and version 1 (acoustic_modem_v1.html, audiocomm_v1.py).
+% Algorithms of the acoustic modem demo, version 7.2's second try, 7.1's JPEG pictures and SMAP correction (acoustic_modem_v7.html, audiocomm_v7.py), version 6 (acoustic_modem_v6.html, audiocomm_v6.py), version 5 (acoustic_modem_v5.html = acoustic_modem.html, audiocomm_v5.py), version 4 (acoustic_modem_v4.html, audiocomm_v4.py), version 3 (acoustic_modem_v3.html, audiocomm_v3.py), version 2 (acoustic_modem_v2.html, audiocomm_v2.py) and version 1 (acoustic_modem_v1.html, audiocomm_v1.py).
 % Compile with: pdflatex acoustic_modem_algorithms.tex (twice, for the references and the table of contents).
 \documentclass[11pt,a4paper]{article}
 \usepackage[T1]{fontenc}
@@ -50,7 +50,7 @@
 \title{\color{icemagenta}\textbf{An acoustic modem for the classroom}\\[4pt]
 \large Algorithms, equations and parameter choices of the demo, version~6}
 \author{Communication Theory (2A), CentraleSup\'elec\,---\,Mention ICE}
-\date{13 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py},\\ and versions $N = 1$ to 5, \code{acoustic\_modem\_v}$N$\code{.html} and \code{audiocomm\_v}$N$\code{.py} (version~5 is also served as \code{acoustic\_modem.html})}
+\date{14 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py},\\ the SMAP correction and JPEG pictures of version~7.1 and the second try of version~7.2 (\code{acoustic\_modem\_v7.html}, \code{audiocomm\_v7.py}),\\ and versions $N = 1$ to 5, \code{acoustic\_modem\_v}$N$\code{.html} and \code{audiocomm\_v}$N$\code{.py} (version~5 is also served as \code{acoustic\_modem.html})}
 
 \begin{document}
 \maketitle
@@ -78,6 +78,7 @@ Version~4 adds coherent detection for OFDM (\cref{sec:coh}): a channel estimate 
 Version~4.1 changes only the OFDM receiver: it finds samples that the microphone loses or repeats in the middle of a frame, reads the symbols after the gap again, and erases the symbol that holds it (\cref{sec:gaps}).
 Version~5 adds the single carrier (\cref{sec:sc}): a time map from its training blocks, a room of up to 1024 taps learnt by least squares, and turbo equalization with soft SMAP or a linear MMSE detector. Its page no longer offers the plain ratio $\ln(E_1/E_0)$ as soft output (\cref{sec:soft}), and tells for every turbo frame whether the decoding succeeded (\cref{sec:decode}).
 Version~6 adds the short control part (\cref{sec:c6}): the receiver finds it with a matched filter normalized to the share of the energy that the room's strongest path carries, learns the room, the clock and the noise from its last two periods, and reads the header against them.
+Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft output (\cref{sec:scdet}). Version~7.1 can send a picture as a JPEG file followed by a CRC-32, so that a receiver shows the file as it arrived and tells whether it is intact (\cref{sec:jpeg}). Version~7.2 gives a single-carrier frame that fails a second try, with a room of 2048 taps learned from the whole frame (\cref{sec:screlearn}).
 \end{abstract}
 
 \tableofcontents
@@ -89,6 +90,7 @@ Version~6 adds the short control part (\cref{sec:c6}): the receiver finds it wit
 
 \subsection{Files and scope}
 \begin{itemize}
+\item \code{acoustic\_modem\_v7.html} and \code{audiocomm\_v7.py} are version~7: version~6 with the LDPC codes of 5G~NR at rates $1/4$ to $3/4$ in place of the Hamming code, and SMAP's soft output corrected (\cref{sec:scdet}). Since 14 October 2026 (version~7.1) they can also send a picture as a JPEG file (\cref{sec:jpeg}). Version~7.2, the same day, adds the single carrier's second try (\cref{sec:screlearn}); the frames did not change. Pages and scripts made before version~7 ignore LDPC frames, and those made before version~7.1 JPEG frames. The LDPC code is not described in this document yet.
 \item \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py} are version~6: version~5.1 plus a short control part for OFDM and single-carrier frames, their default (\cref{sec:c6}). They read every frame of version~5 with the same bits. Version~5 and earlier pages and scripts do not find frames with the short control part, so the sender can still choose the 400 bit/s one for them. \code{acoustic\_modem.html} is still a copy of \code{acoustic\_modem\_v5.html}.
 \item \code{acoustic\_modem\_v5.html} and \code{audiocomm\_v5.py} are version~5: version~4.1 plus a single carrier with QPSK, 16QAM, 64QAM or 256QAM, received by turbo equalization with soft SMAP (\cref{sec:sc}). Since 13 October 2026 \code{acoustic\_modem.html} is a copy of \code{acoustic\_modem\_v5.html}, whose receiver no longer offers the plain ratio $\ln(E_1/E_0)$ (\cref{sec:soft}) and checks every turbo frame for a codeword (\cref{sec:decode}). They send and read every frame of version~4; earlier pages and scripts ignore the single-carrier frames. Since 13 October 2026 (version~5.1) their single-carrier receiver also survives samples lost or repeated by the microphone, and offers an MMSE estimate of the room (\cref{sec:scrx}); the frames did not change.
 \item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK, 16QAM, 64QAM or 256QAM, DQPSK that follows a moving phone (\cref{sec:coh}), and images at four times the size. From 9 to 13 October 2026 \code{acoustic\_modem.html} was a copy of \code{acoustic\_modem\_v4.html}. Since 11 October 2026 (version~4.1) their OFDM receiver also survives samples lost by the microphone (\cref{sec:gaps}); the frames did not change. They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
@@ -274,6 +276,12 @@ The header has no free field left for the mapping, so version~4 marks it the way
 \paragraph{Signalling the single carrier (version~5).}
 Tone set~3 with rate field~2 is the single carrier (\cref{sec:sc}), which receivers made before version~5 reject. Its mapping (QPSK, 16QAM, 64QAM or 256QAM) is in the CRC mask, as for coherent OFDM, and a version~5 receiver rejects a single-carrier header with another mapping or with a code other than the turbo codes. The training length goes in the top bits of $a$ and $b$, which are free because a text has at most 1023 characters and an image at most $512 \times 512$ pixels: $(a_{10}, b_{10}) = 0\,0$ medium, $0\,1$ short, $1\,0$ long, $1\,1$ rejected. Medium frames are bit for bit those of the first version~5 page (12 October 2026), which reads no other.
 
+\paragraph{Signalling LDPC (version~7).}
+Type~3, which no earlier receiver accepts, is a frame coded by LDPC: a text of $a$ characters if $b = 0$, otherwise an image of $a \times b$ pixels. The code field, plus 4 when the CRC is inverted (as for the turbo codes), indexes the rates $1/4$, $1/3$, $1/2$, $2/3$ and $3/4$; 5 to 7 are unused. Version~7 sends no Hamming code and reads code~1 as no code; code~3 (Reed--Solomon) stays unused.
+
+\paragraph{Signalling a JPEG file (version~7.1).}
+An image (type 1, or 3 with LDPC) with $a > 512$ is a JPEG file of $512(a - 513) + b$ bytes (\cref{sec:jpeghdr}). Receivers made before version~7.1 reject it.
+
 \paragraph{Coding and repetition.}
 The 40 bits go through the convolutional code of \cref{sec:conv}, with 6 tail bits: $2(40+6) = 92$ coded bits, sent $r$ times. The receiver adds the $r$ soft values of each coded bit before Viterbi decoding, which gains $10\log_{10} r$\,dB on the header (\cref{sec:hdrdec}).
 
@@ -281,6 +289,7 @@ The 40 bits go through the convolutional code of \cref{sec:conv}, with 6 tail bi
 \begin{itemize}
 \item \emph{Text}: each character is mapped to its Unicode code point if that is below 256 (Latin-1), else to \code{?}, and sent as 8 bits, most significant first. At most 1023 characters.
 \item \emph{Image}: $h \times w$ black-and-white pixels (1 = white), column by column. The demo image is $74 \times 57$ pixels. The page can also send it at twice the size, $148 \times 114$ pixels ($\nz = 16\,872$, the picture it is taken from), and likewise drawings ($64 \times 64$ instead of $32 \times 32$) and photos (at most 128 pixels instead of 64); with turbo $1/2$, the large demo image lasts $2.76$\,s with OFDM and $5.94$\,s with FSK at 6400 bit/s. Version~4 adds four times the size: $296 \times 228$ pixels ($\nz = 67\,488$), \code{bartS.png} at twice its size with its grey levels interpolated linearly between pixels (row $r$ of the result at $r/2 - 1/4$, then the same for the columns) before the threshold, so that the edges stay smooth (\code{-{}-up 2} in the script); drawings on a $128 \times 128$ grid, photos up to 256 pixels. Receivers made before it reject such headers. With turbo $1/2$ and the long guard the $4\times$ demo image lasts $2.95$\,s with 256QAM, $5.13$\,s with 16QAM and $8.71$\,s with DQPSK; $21.8$\,s with FSK at 6400 bit/s. Since 10 October 2026 version~4's demo image is Hokusai's \emph{Under the Wave off Kanagawa} (the Great Wave, about 1831, public domain; The Metropolitan Museum of Art, image DP130155) instead of \code{bartS.png}, which stays one switch away (\code{DEMO\_PICTURE} in the page): $54 \times 80$, $108 \times 160$ and $216 \times 320$ pixels ($\nz = 4320$, $17\,280$ and $69\,120$, files \code{greatwave\_80x54.png} and so on). A print does not survive a plain threshold: averaging erases its thin dark outline. Its luminance is averaged down to four times the target size, a $3 \times 3$ minimum filter widens the dark lines by about half a target pixel, then it is averaged down to the target size and thresholded at 150 out of 255. Its frames are about $2\,\%$ longer than bartS's (\cref{tab:cohmaps}); the $4\times$ image lasts $3.02$\,s with 256QAM and $22.3$\,s with FSK at 6400 bit/s.
+\item \emph{JPEG file} (version~7.1): the file's $n$ bytes, then their CRC-32, each byte most significant bit first, $\nz = 8(n + 4)$ (\cref{sec:jpeg}).
 \item \emph{Room sounding}: no message bits; a waveform follows the control part (\cref{sec:sounding}).
 \end{itemize}
 The $\nz$ message bits are encoded by the code announced in the header (\cref{sec:codes}), giving $\nc$ coded bits, and then scrambled.
@@ -984,6 +993,26 @@ y = C s + w, \qquad (C s)_i = (1 - w_i)\,(\hat c_j * s)_i + w_i\,(\hat c_{j+1} *
 \end{equation}
 a convolution that changes linearly along the segment, $4833 \times 4322$ for the segments of the $4\times$ image. $C$ is never formed: $Cv$ and $C^H r$ cost a few FFTs of 8192 points. The detectors also use the circulant approximation $C^H C \approx \mathbf F^H \operatorname{diag}\bigl(|C(f)|^2\bigr) \mathbf F$ ($\mathbf F$ the DFT), with $|C(f)|^2$ the mean over the two anchors of the squared DFT of the taps.
 
+\paragraph{6. Learning the room again (version~7.2).}
+\label{sec:screlearn}
+The room of step~4 has at most 1024 taps: $107\ms$ of echo with long training, 512 taps or $53\ms$ with medium. Every echo that arrives later counts as noise, and the training blocks cannot learn more, since a block of $N_T$ symbols fits only a fraction of $N_T$ taps. Sheng's living room at 2 to 4\,m (37 frames, 14 October 2026) echoed for about $0.4$\,s. With rooms fitted on each whole frame from the true symbols, the echo energy still to come after $100\ms$ was $-19\dB$ (near spot, median) and $-15\dB$ (far spot), and after $207\ms$ $-32$ and $-27\dB$. That set the SNR the receiver found, $17.6$ and $12.8\dB$ with long training and $6.4\dB$ with medium, while the background noise was 26 to $41\dB$ down. With 2048 taps the SNR became $26.5$ and $19.0\dB$.
+
+So when the passes of turbo equalization (\cref{sec:scturbo}) end without a codeword, the receiver tries a second time. It fits one room of $L_2 = 2048$ taps ($213\ms$) for the whole part, over every row $i = 0, \dots, N + L_2 - 2$ that the recording holds (rows masked by step~2a left out):
+\begin{equation}
+\hat c = \arg\min_c \sum_i \bigl|y_i - (\bar x * c)_i\bigr|^2 + 10^{-3} P\, \|c\|^2,
+\end{equation}
+with $P$ the rows' mean power. $\bar x$ is the training where it is known and elsewhere the soft symbols: the means of the levels under the decoder's a-posteriori LLRs of the last pass, clipped at $\pm 30$, the padding bits known. As in step~4, 150 steps of conjugate gradients solve it, the products computed by FFTs. Segment $j$'s noise is what the fit leaves on its rows, $e_j$, scaled by $N_{\mathrm{rows}}/(N_{\mathrm{rows}} - L_2)$ for the taps' degrees of freedom, less the share of the soft symbols' own uncertainty:
+\begin{equation}
+N_0^{(j)} = \max\bigl(e_j - \|\hat c\|^2\, \bar v_j,\; 0.3\, e_j\bigr),
+\end{equation}
+$\bar v_j$ the mean variance of segment $j$'s soft symbols. Each segment then sees the training and the other segments' soft symbols removed with this room, the detector starts again from the linear MMSE estimate, and at most 4 more passes follow, the room and the noise fitted again after each.
+
+A frame that decodes in the usual passes never reaches the second try, so it is decoded as before. In the living room, 29 of the 34 single-carrier frames decoded instead of 14, without a wrong bit; the 2048-tap room fitted from the true symbols decoded 30. The five lost had the room change during the frame (someone moved): the change of the room at each block was $-9$ to $+1\dB$ there, against $-13$ to $-21\dB$ in the other frames, and one fixed room, even from the true symbols, does not decode them. On 50 earlier frames (Impasse Carnot, the class of 14 October, the test recordings) it decoded 26 instead of 24 and lost none.
+
+Three variants did worse. Fitting the room this way from the first pass on, for every frame, also gave 29 in the living room but lost a 256QAM frame of Impasse Carnot~8 that the usual passes decode: after one pass its soft symbols are too poor. A 2048-tap room per training block, blended as in step~5, overfits (25 of 34). Choosing between the old and the new room by what each leaves lost 5 of the gains. 3072 taps gave the same as 2048 on the two frames tried. The fit takes $0.06$ to $0.1$\,s in Python; the extra passes cost as before, but only frames that fail the usual passes pay for them: a frame that fails anyway takes about twice as long to fail (median $2.2$ times, from $1.3$ to $3.8$, on 24 earlier frames). OFDM cannot do the same: its guard is $21\ms$, and the echo after $20\ms$ was only 3 to $5\dB$ below the total.
+
+The page shows a tile ``second try'' (decoded or failed) with the taps, the SNR and the passes, and the script prints a line ``second try (v7.2)''. \code{SC\_RELEARN\_PASSES = 0} turns it off.
+
 \subsection{Detectors}
 \label{sec:scdet}
 The detectors work on each segment, \cref{eq:scmodel} with the segment's noise $N_0^{(j)}$ (written $N_0$ below), and take the decoder's beliefs as prior: the extrinsic LLR $\lambda^{\mathrm a}$ of each coded bit from the last pass, 0 on the first. Each axis of a square mapping carries $m/2$ Gray bits, so the beliefs give each coordinate $u_i$ (the real or the imaginary part of a symbol) a probability for each level $A_a$ of the axis, $\pi_{i,a} \propto \prod_k P\bigl(b_k = b_k(a)\bigr)$ with $P(b = 1) = 1/(1 + e^{-\lambda^{\mathrm a}})$.
@@ -1022,6 +1051,9 @@ At the minimum $x$, the Hessian of $f$ is $\tfrac{2}{N_0}\bigl[C^H C\bigr]_{\mat
 \end{equation}
 an extrinsic output in the manner of expectation propagation.
 
+\paragraph{The margin, corrected in version~7.}
+Up to version~6, the margin was set by the lowest curvature, $\delta = \max\bigl(0, 10^{-3} - \min_f \lambda(f) - \min_i D_i\bigr)$, and added to $\lambda(f) + \bar D$ in $\bar q$, so that $\lambda_{x,i} = 1/\bar q - \bar D$ passed it on to every coordinate. On the first pass, $D_i \ge 0$ nearly everywhere and $\delta \approx 0$. From the second pass on, a few coordinates whose beliefs are split between distant levels have $D_i$ of $-1/\tau^2$ to $-14/\tau^2$, and $\delta$ raised every coordinate's precision by as much: on 17 frames of Sheng's recordings with noise added near their thresholds, $\lambda_{x,i}$ was a median $2.4$ times the exact local value $1/[H^{-1}]_{ii} - D_i$, with $H$ the Hessian above (computed by conjugate gradients on a few hundred coordinates per frame), and SMAP's LLRs were best scaled by about $0.6$. Version~7 sets $\delta = \max\bigl(0, 10^{-3} - \min_f \lambda(f) - \bar D\bigr)$, which is what the circulant model with $\bar D$ needs, and takes it out again: $\lambda_{x,i} = \max(1/\bar q - \bar D - \delta, 10^{-3})$. The normalized errors $(m_i - u_i)\sqrt{\lambda_{x,i}}$ at the true coordinates are then Gaussian (kurtosis $3.1$) with a variance of $1.14$ on the second pass (median; $1.92$ before). What remains, $1.1$ to $1.3$ on every pass and for both detectors, comes mostly from a noise estimate about $1.3$ times too low. Against version~6's SMAP, on 23 frames with noise added in $1\dB$ steps, the frame survived more noise on 11 and less on 1 (a 64QAM text, by $2\dB$).
+
 \subsection{Turbo equalization}
 \label{sec:scturbo}
 Each pass runs four steps.
@@ -1031,7 +1063,7 @@ Each pass runs four steps.
 \item If the decisions $[\lambda^{\mathrm{app}} > 0]$ on all $\nc$ coded bits equal the decided message encoded again, they form a codeword, and the receiver stops.
 \item Otherwise the decoder's extrinsic LLR $\lambda^{\mathrm{app}} - \lambda^{\mathrm{det}}$, clipped at $\pm 20$ and scrambled again, is the detector's prior for the next pass.
 \end{enumerate}
-There are at most 4 passes with the fast effort and 8 with the full one. Fast is the page's default: on Sheng's recordings it cost at most $1\dB$ at the threshold, and it takes from a third (a frame that fails) to two thirds of the time. Near the threshold the passes converge abruptly: the coded bits in doubt stay flat, then drop to zero (8687, 8307, 0 on one frame), so progress gives no warning. Of 122 decodes near the threshold, 16 needed 5 to 8 passes, which the cap of 4 gives up, perhaps $0.5$ to $1\dB$ at the very edge (inferred). The codeword test is also what tells the page whether the frame was decoded (\cref{sec:decode}).
+There are at most 4 passes with the fast effort and 8 with the full one. Since version~7.2, a frame whose passes end without a codeword gets a second try, with up to 4 more (\cref{sec:screlearn}). Fast is the page's default: on Sheng's recordings it cost at most $1\dB$ at the threshold, and it takes from a third (a frame that fails) to two thirds of the time. Near the threshold the passes converge abruptly: the coded bits in doubt stay flat, then drop to zero (8687, 8307, 0 on one frame), so progress gives no warning. Of 122 decodes near the threshold, 16 needed 5 to 8 passes, which the cap of 4 gives up, perhaps $0.5$ to $1\dB$ at the very edge (inferred). The codeword test is also what tells the page whether the frame was decoded (\cref{sec:decode}).
 
 \subsection{Cost}
 Per data symbol, each step of the detector costs a few FFTs' worth of operations, each of order $\log_2 8192 = 13$, whatever the length of the echo; a linear equalizer in the time domain would cost 512 multiplications per symbol for a 512-tap room, plus its design, and a trellis equalizer $256^{511}$ states at 256QAM. Measured in Node with the page's code on Sheng's quiet recording (large Great Wave, turbo $1/2$, clean, one pass), 256QAM takes $0.96$\,s with OFDM, $1.34$\,s with the single carrier and linear MMSE, and $2.17$\,s with SMAP at full effort: $1.15$\,s in the detector, $0.55$\,s in the turbo decoder, $0.28$\,s for the rooms of the 5 phases. Fast effort brings SMAP to $1.7$\,s, and the $4\times$ image to $5.4$\,s (two passes near the threshold: $10.9$\,s). A frame that fails runs all its passes: $20.6$\,s for Sheng's failing $4\times$ frame with fast effort, $62.6$\,s with full effort. A phone is likely 2 to 4 times slower (inferred). OFDM spends most of its time in the turbo decoder, the single carrier in the detector.
@@ -1274,6 +1306,102 @@ Impasse Carnot~12, far & 4 & $-50$ to $-46$ & $-50$ to $-45$ & $0$ ($-4$ to $+2$
 
 \paragraph{Compatibility.}
 \code{audiocomm\_v6.py} reads the 30 frames of the four recordings of \cref{sec:scres} with the same bits and channel errors as \code{audiocomm\_v5.py}, and finds no short control part in them. Receivers of version~5 and before look only for the 400 bit/s preamble and do not find frames with the short control part: the sender's Long setting is for them, and for the longest range. The page and the script agree: on the test sound at 48 and $44.1\kHz$, fed to the page in blocks of 128 or 4096 samples, 8 of 8 frames with the same bits and channel errors; on the two recordings, the same 16 frames.
+
+%======================================================================
+\section{Pictures as JPEG files (version~7.1)}
+\label{sec:jpeg}
+Version~7 (\code{acoustic\_modem\_v7.html}, \code{audiocomm\_v7.py}) is version~6 with the LDPC codes of 5G~NR~\cite{ts38212} at rates $1/4$ to $3/4$ in place of the Hamming code, signalled by header type~3 (\cref{sec:header}), and with the correction of SMAP's soft output given at the end of \cref{sec:scdet}. Its LDPC code is not described in this document yet.
+Version~7.1, in the same files, can send the demo image or a photo as a JPEG file~\cite{t81} instead of one bit per pixel.
+The file goes as it is, followed by a CRC-32, and the receiver shows the picture as it arrived and says whether the file is intact. That is what a real link delivers. With a code, a frame is either decoded or wrong almost everywhere (\cref{sec:jpegres}), so the share of intact files is the frame error rate.
+
+\subsection{Message and header}
+\label{sec:jpeghdr}
+A file of $n$ bytes is sent as its bytes, then its CRC-32, most significant byte first, each byte most significant bit first: $\nz = 8(n + 4)$ message bits, with any code and any modulation.
+The CRC-32 is that of Ethernet, zlib and gzip~\cite{rfc1952}: generator $x^{32} + x^{26} + x^{23} + x^{22} + x^{16} + x^{12} + x^{11} + x^{10} + x^8 + x^7 + x^5 + x^4 + x^2 + x + 1$, bits taken least significant first, register started at all ones and inverted at the end (the check value of the nine characters \code{123456789} is \code{cbf43926}).
+It detects every burst of at most 32 wrong bits, and misses a random error pattern with probability $2^{-32}$, so a file whose CRC holds is right, whatever the code did.
+
+The header has no field left for a new kind of message, so a JPEG file is announced as an image too tall to be one: type~1 (type~3 with LDPC), and
+\begin{equation}
+a = 513 + \Bigl\lfloor \frac{n - 1}{512} \Bigr\rfloor, \qquad b = 1 + \bigl((n - 1) \bmod 512\bigr), \qquad n = 512\,(a - 513) + b,
+\end{equation}
+for $1 \le n \le 20\,480$ bytes (\code{JPEG\_MAX}), so $513 \le a \le 552$ and $1 \le b \le 512$.
+A single-carrier frame keeps its training length in the top bits of $a$ and $b$ (\cref{sec:header}), and $a < 1024$ leaves them free.
+Receivers made before version~7.1 accept images of at most 256 rows (versions~0 to~3) or 512 (versions~4 to~7), so they ignore these frames. This was checked in the ten pages and by test: the version~7 core accepted none of 14\,607 headers of JPEG files.
+
+\subsection{Encoder}
+\label{sec:jpegenc}
+The browser's own JPEG encoder (\code{canvas.toBlob}) sets no restart markers, so the page (\code{jpegEncode}) and the script (\code{jpeg\_encode}) carry their own, about 70 lines each, which give the same bytes for the same pixels.
+They write a baseline JFIF file~\cite{t81}:
+\begin{itemize}
+\item in colour, $Y$, $C_{\mathrm b}$ and $C_{\mathrm r}$ with JFIF's matrix, the two chrominances averaged over $2 \times 2$ pixels (4:2:0), so that a minimum coded unit (MCU) of $16 \times 16$ pixels holds four luminance blocks and one block of each chrominance; in grey, the luminance alone, with MCUs of $8 \times 8$ pixels. Past the right and bottom edges, the last column and row are repeated;
+\item the $8 \times 8$ DCT, with its cosines taken from a table of $\cos(k\pi/16)$ so that every browser and the script compute the same bits, and quantization by the example tables of Annex~K of T.81 scaled by the quality $q$ as libjpeg does: $Q = \clip\bigl(\lfloor (Q_{\mathrm K}\, s + 50)/100 \rfloor, 1, 255\bigr)$ with $s = \lfloor 5000/q \rfloor$ for $q < 50$ and $s = 200 - 2q$ otherwise;
+\item the example Huffman tables of Annex~K, with the DC value of each block coded as its difference from that of the previous block of the same component;
+\item a restart interval of one row of MCUs: after every row but the last, the bits are padded with ones to a whole byte, a restart marker $\mathrm{RST}_{r \bmod 8}$ (\code{FF D0} to \code{FF D7}) follows, and the DC differences start again from 0.
+\end{itemize}
+The coded data follow 613 bytes of markers and tables (JFIF, two quantization tables, the frame, four Huffman tables, the restart interval and the scan), two thirds of them the Huffman tables.
+At the same quality, the files are within $1.5\,\%$ of libjpeg-turbo's size, with the same PSNR.
+
+\paragraph{Pictures.}
+The demo image is the Great Wave in colour, from the Metropolitan Museum's image DP130155, reduced by averaging (Pillow's box filter) to $80 \times 54$, $160 \times 108$ and $320 \times 216$ pixels for the normal, large and huge sizes, at qualities 25, 50 and 75.
+The page embeds the nine files (\cref{tab:jpegsize}), and the folder holds them for the script as \code{greatwave\_}$w$\code{x}$h$\code{\_q}$q$\code{.jpg}.
+A photo is scaled to at most 80, 160 or 320 pixels on its longer side; if its file would pass \code{JPEG\_MAX}, the quality goes down by 10 until it fits.
+With the script, \code{tx -{}-image} $P$ \code{-{}-quality} $q$ (with \code{-{}-width} or \code{-{}-grey} if wanted) makes the file and saves it next to the WAV, and \code{tx -{}-jpeg} $F$ sends any JPEG file as it is, with a warning if it has no restart markers.
+
+\begin{table}[ht]
+\centering
+\caption{The demo JPEG files, in bytes, against the same picture at one bit per pixel.}
+\label{tab:jpegsize}
+\begin{tabular}{lrrrr}
+\toprule
+Size & 1 bit per pixel & $q = 25$ & $q = 50$ & $q = 75$\\
+\midrule
+$80 \times 54$ & 540 & 1267 & 1630 & 2145\\
+$160 \times 108$ & 2160 & 2760 & 4014 & 5825\\
+$320 \times 216$ & 8640 & 8536 & 13\,123 & 19\,697\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At quality 25, a file is about as long as the black-and-white picture of the same size, in colour; the small files are longer because of their 613 bytes of tables.
+The longest, $320 \times 216$ at quality 75, takes $2.3$ times the air time of the huge picture at one bit per pixel ($296 \times 228$, 8436 bytes).
+
+\subsection{Wrong bits and restart markers}
+\label{sec:jpegrst}
+A JPEG file does not keep a wrong bit where it fell. Its Huffman codes have variable lengths, so after a wrong bit the decoder parses the stream out of step; and each block's DC value is a difference from the previous one, so even back in step every later block has the wrong brightness.
+Without restart markers, one wrong bit spoils the picture from that block on. With a marker after every row of MCUs, the decoder starts afresh at the next one, and a wrong bit costs one stripe of 16 rows (8 in grey). A wrong bit among the 613 bytes before the data can make the file unreadable.
+
+The markers alone did not keep the damage local in browsers.
+Wrong bits make bytes \code{FF} followed by a byte other than \code{00} (the zero stuffed after a data byte \code{FF}) or a restart marker. libjpeg, and with it Chrome, Firefox and Pillow, takes such a pair for the next marker, stops decoding there, and leaves the rest of the picture grey.
+Before showing a file, the receiver (\code{jpegResync}, \code{jpeg\_resync}) therefore steps through the header's segments up to the scan; then, in the coded data, it sets to \code{00} the byte after every \code{FF} that is followed by anything but \code{00} or \code{D0} to \code{D7}, up to the end-of-image marker.
+The decoder then reads the damaged stripes as garbage and starts again at the next restart marker.
+With $5\,\%$ of the bits wrong over 1000 bytes of a 13\,kB file, the picture as received was grey below that point; after \code{jpegResync}, 2 or 3 stripes were lost and the rest was intact, for 5 bytes changed.
+On the OFDM frames of \cref{sec:jpegres} sent without a code, with 11 and 28 wrong bytes, the picture was the same with and without it.
+
+\subsection{Receiver}
+The receiver takes $n$ from the header, reads the $\nz$ message bits as for any message, and computes the CRC-32 of the $n$ bytes again.
+\begin{itemize}
+\item The page shows the picture decoded by the browser after \code{jpegResync}, with the caption ``intact (its CRC-32 holds)'' or ``corrupted (its CRC-32 fails)'', and a link that saves the file exactly as it arrived. A file the browser cannot open is drawn as a grey box that says so.
+\item The verdict, ``file intact'' or ``file corrupted'', comes from the CRC rather than from the codeword test of \cref{sec:decode}, and so does the report sent to the telemetry server.
+\item A demo file is recognised by its length, since the nine lengths differ. If fewer than a quarter of the message bits differ from that file's, the page counts the wrong bits as for the demo image at one bit per pixel and shows the file sent beside the one received.
+\item The picture without the code (\cref{sec:decode}) is the file with the channel's errors, which usually cannot be opened.
+\item The script saves each file as it arrived, \code{received\_1.jpg}, \code{received\_2.jpg}, \ldots, and a corrupted one also after \code{jpeg\_resync}, as \code{received\_1\_resync.jpg}.
+\end{itemize}
+
+\subsection{Results}
+\label{sec:jpegres}
+Through the script's model room (\cref{sec:roomsim}, $T_{60} = 0.3$\,s and a direct-to-reverberant ratio of $10\dB$), with the large demo file at quality 50 (4014 bytes):
+\begin{itemize}
+\item \emph{Single carrier, 64QAM, LDPC $1/2$} (4 code blocks): intact at a simulated SNR of $10\dB$ and above (the receiver measured $12.0\dB$), corrupted at $9.5\dB$ and below, with three noise draws each. Every frame that failed had all 4 blocks wrong and 60 to $75\,\%$ of its bytes wrong, the 613 bytes of tables included, so the file could not be opened. The interleaver spreads the channel's errors over all the blocks and turbo equalization works on the whole frame, so the blocks fail together: placing the restart markers at the borders of the code blocks would gain nothing, and was left out.
+\item \emph{OFDM QPSK without a code}: 11, 16 and 28 wrong bytes at a simulated SNR of 22, 19 and $16\dB$; the picture survived with a few damaged stripes.
+\item \emph{OFDM QPSK with the convolutional code}: intact down to $7\dB$.
+\end{itemize}
+With a code, a frame is thus all or nothing, as on a real link. The restart markers matter for frames sent without a code or barely damaged.
+
+\paragraph{Tests.}
+The header reads back as sent for every length from 1 to 1100 bytes and every 37th up to 20\,480, in nine kinds of frame (FSK with two or four tones, 6400\,bit/s, OFDM and single carrier; no code, convolutional, turbo and LDPC): 14\,607 headers, none read wrong. $\code{JPEG\_MAX} + 1$ is rejected, and texts and images parse as before.
+The page and the script make the same nine demo files byte for byte. The page's core decodes the script's frames with the same wrong bytes as the script, and the script decodes the page's.
+In Chromium, the large demo file at quality 25, sent by the page in single carrier 64QAM with LDPC $1/2$, was decoded intact by the script and by a receiving page; the same picture at quality 50 in OFDM QPSK without a code, through the model room at $19\dB$, arrived with 7 wrong bits and was shown as corrupted, stripe by stripe.
+Safari's JPEG decoder, which is Apple's and not libjpeg, was not tested.
 
 %======================================================================
 \section{Channel codes}
@@ -2140,6 +2268,15 @@ S.~J. Godsill and P.~J.~W. Rayner, \emph{Digital Audio Restoration: A Statistica
 
 \bibitem{schmidl}
 T.~M. Schmidl and D.~C. Cox, ``Robust frequency and timing synchronization for OFDM,'' \emph{IEEE Trans. Commun.}, vol.~45, no.~12, pp.~1613--1621, Dec. 1997.
+
+\bibitem{ts38212}
+3GPP TS 38.212, \emph{NR; Multiplexing and channel coding}.
+
+\bibitem{t81}
+ITU-T Recommendation T.81 $|$ ISO/IEC 10918-1, \emph{Information technology---Digital compression and coding of continuous-tone still images---Requirements and guidelines}, 1992.
+
+\bibitem{rfc1952}
+P.~Deutsch, ``GZIP file format specification version 4.3,'' RFC~1952, IETF, May 1996.
 
 \end{thebibliography}
 

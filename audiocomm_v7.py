@@ -1,7 +1,8 @@
 """audiocomm_v7.py - acoustic modem (FSK with 2 or 4 tones, OFDM with DQPSK, QPSK, 8PSK, 16, 64 or 256QAM, or v5's single
 carrier with QPSK to 256QAM and turbo equalization) and room sounding, Python version for the labs. v6: a short
 control part (0.19 s instead of 0.65 s) for the OFDM and single-carrier frames. v7: LDPC codes (5G NR) at rates 1/4 to
-3/4; the Hamming code is gone. v7.1: pictures as JPEG files, with a CRC-32.
+3/4; the Hamming code is gone. v7.1: pictures as JPEG files, with a CRC-32. v7.2: the single carrier tries a
+frame a second time when it fails, with a longer room (2048 taps, 213 ms) learned from the frame itself.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -1962,6 +1963,11 @@ SC_PASSES = 8            # turbo equalization: at most this many detector <-> de
 SC_EFFORT = {"fast": ((30, 20), 4), "full": ((150, 100), SC_PASSES)}   # the receiver's choice: SMAP's steps (first pass,
                          # later ones) and the passes; fast costs at most 1 dB at the threshold on our recordings, and
                          # takes a third (a frame that fails) to two thirds of the time
+SC_RELEARN_TAPS = 2048   # v7.2, the second try: when the passes end without a codeword, one room of this many taps
+                         # (213 ms; the training blocks allow 1024 at most) is learned from the whole frame, its data
+                         # as the decoder's soft symbols; in a living room at 2 to 4 m the echo after 107 ms was only
+                         # 15 to 19 dB down, so the training's room capped the SNR there (14 -> 29 of 34 frames)
+SC_RELEARN_PASSES = 4    # v7.2: at most this many more passes, the room learned again after each (0: no second try)
 SC_REL = 1.0             # ridge prior of a training block's room: the one before, give or take its own size (a weak
                          # pull; a tight one, -20 dB, cost 2 to 7 dB on our recordings when people moved)
 SC_MAX_PPM = 500         # clock offset plus a moving phone
@@ -2272,6 +2278,23 @@ def sc_smap(y, op, N0, omap, lprior, x0, iters=150):
     return np.hstack([Lb[:n], Lb[n:]]).ravel(), x[:n] + 1j * x[n:]
 
 
+def sc_soft(lpost, omap):
+    """v7.2: the decoder's beliefs (bit LLRs, > 0 means 1, m per symbol) -> each symbol's mean and variance."""
+    (pI, pQ), amp = sc_priors(lpost, omap)
+    mI, mQ = pI @ amp, pQ @ amp
+    return mI + 1j * mQ, pI @ amp ** 2 - mI ** 2 + pQ @ amp ** 2 - mQ ** 2
+
+
+def sc_relearn(yy, x, w, L):
+    """v7.2: one room of L taps for the whole part, by least squares over the rows where w = 1 of yy ~ x * c (x: every
+    symbol, the data as the decoder's soft symbols, so that what is still unsure counts as noise), with a ridge of 1e-3
+    times the rows' mean power. Returns the room and what it leaves on each row."""
+    R = len(x) + L - 1
+    P = float(np.sum(w * np.abs(yy[:R]) ** 2) / max(float(w.sum()), 1.0))
+    c = sc_fit(x, yy[:R], w, L, np.zeros(L, dtype=complex), 1e-3 * P, it=150)
+    return c, w * (yy[:R] - SCConv([x], [1.0], L).fwd(c))
+
+
 _PRED = [[(s, u) for s in range(8) for u in (0, 1) if TB_NEXT[s, u] == q] for q in range(8)]
 _PS, _PU = np.array([[a[0][0], a[1][0]] for a in _PRED]), np.array([[a[0][1], a[1][1]] for a in _PRED])
 
@@ -2515,7 +2538,12 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
        block's room is instead the most taps the TC allows, by MMSE (sc_mmse_first).
     5. Each data segment's rows, the training's echoes removed; detector (soft SMAP or linear MMSE) on each segment,
        turbo decoder over the whole message, its beliefs back to the detector; stops once the decisions form a
-       codeword or after the passes of the effort chosen (SC_EFFORT)."""
+       codeword or after the passes of the effort chosen (SC_EFFORT).
+    6. v7.2, the second try: if the passes end without a codeword, one room of SC_RELEARN_TAPS taps for the whole part,
+       by least squares over every row the recording holds, the data symbols as the decoder's soft symbols (the mean
+       under its last beliefs); the noise of each segment from what it leaves there, less the soft symbols' variance,
+       the taps' degrees of freedom counted. Each segment then sees every other symbol removed (the other segments'
+       as soft symbols), and at most SC_RELEARN_PASSES more passes follow, the room learned again after each."""
     import time as _time
     t_start = _time.time()
     m = OFDM_BITS[omap]
@@ -2649,9 +2677,10 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     lin = np.polyval(np.polyfit(mk, dcl, 1), mk) if len(mk) > 2 else dcl
     bend = float(np.max(np.abs(dcl - lin)))                 # departure from a steady clock (samples)
     # 3. symbol-rate samples, row i <-> symbol i - SC_PRE at its first strong arrival
-    nrows = ntot + max(SC_TAPS[nt]) - 1
+    nrows = ntot + max(max(SC_TAPS[nt]), SC_RELEARN_TAPS) - 1   # v7.2: as far as the second try's room reaches
     n = -P5 * SC_PRE + np.arange(P5 * (nrows + 2 * SC_SPAN + 2))
-    z = sc_read(y, T0 + rho * (n + D(n.astype(float))))
+    tpos = T0 + rho * (n + D(n.astype(float)))
+    z = sc_read(y, tpos)
     v = math.sqrt(2) * z * np.exp(-2j * np.pi * SC_FC / FS_TX * n)
     mf = np.convolve(v, SC_G)
     phases = [mf[2 * SC_DLY + p::P5][:nrows] for p in range(P5)]
@@ -2736,8 +2765,8 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     key = prbs(ns * m)
     flip = np.where(key == 1, -1.0, 1.0)
     lprior, xs, first, passes, hist = np.zeros(ns * m), [None] * len(segs), None, 0, []
-    cw = None
-    for it in range(npass):
+    cw, relearn = None, None
+    for it in range(npass + SC_RELEARN_PASSES):
         ext, q = [], 0
         for j, (S, E) in enumerate(segs):
             lp = lprior[q * m:(q + E - S) * m]
@@ -2762,10 +2791,34 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
             break
         e = np.clip(app - lin_, -20, 20)
         lprior = flip * np.r_[e, np.zeros(ns * m - nc)]
+        if npass <= it + 1 < npass + SC_RELEARN_PASSES:  # v7.2: the second try (6.)
+            L2 = SC_RELEARN_TAPS
+            xm, xv = sc_soft(flip * np.r_[np.clip(app, -30, 30), np.full(ns * m - nc, -30.0)], omap)
+            xsoft, vs, q = x.copy(), np.zeros(ntot), 0
+            for S, E in segs:
+                xsoft[S:E], vs[S:E] = xm[q:q + E - S], xv[q:q + E - S]
+                q += E - S
+            ins = tpos < len(y) - 8                        # the rows the recording holds
+            w2 = good[:ntot + L2 - 1] * ins[np.minimum(2 * SC_DLY + phase + P5 * np.arange(ntot + L2 - 1), len(ins) - 1)]
+            c2, res2 = sc_relearn(yy, xsoft, w2, L2)
+            P2, nw = float(np.vdot(c2, c2).real), float(w2.sum())
+            obs, ops, N0s = [], [], []
+            for S, E in segs:
+                xo = xsoft.copy()
+                xo[S:E] = 0
+                gw = w2[S:E + L2 - 1]
+                obs.append(gw * (yy[S:E + L2 - 1] - SCConv([xo], [1.0], L2).fwd(c2)[S:E + L2 - 1]))
+                ops.append(SCConv([c2], [1.0], E - S) if gw.all() else SCMask(SCConv([c2], [1.0], E - S), gw))
+                e2 = float(np.sum(np.abs(res2[S:E + L2 - 1]) ** 2)) / max(float(gw.sum()), 1.0) * nw / max(nw - L2, nw / 4)
+                N0s.append(max(e2 - P2 * float(np.mean(vs[S:E])), 0.3 * e2))
+            xs = [None] * len(segs)
+            relearn = dict(taps=L2, snr=float(10 * np.log10(P2 / np.mean(N0s))))
+    if relearn is not None:
+        relearn["passes"] = passes - npass
     out = dict(bits=bits, passes=passes, codeword=bool(np.array_equal((dec > 0).astype(int), cw)),
                chan_errors=int(np.sum(first != (cw > 0))), snr=float(np.median(snrs)), snrs=snrs,
                ppm=ppm, bend=bend, phase=phase, change=change, taps=L, train=nt, effort=effort, est=est, nseg=len(segs), T0=T0,
-               gaps=[(ng / FS_TX, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist)
+               gaps=[(ng / FS_TX, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist, relearn=relearn)
     if gaps and not out["codeword"] and swap is None:     # v5.1: the other size, or the runner-up place, of the least sure gap
         o2 = sc_receive(y, fs, t0, omap, code, n0, nc, det, False, nt, effort, est, swap=max(unsure)[1])
         if o2["codeword"]:
@@ -3103,6 +3156,10 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                 print(f"  {'SMAP' if det == 'smap' else 'linear MMSE'} ({effort}) and the {'LDPC' if hdr['code'] in LDPC_R else 'turbo'} decoder: {o['passes']} pass{'es' if o['passes'] > 1 else ''}, "
                       f"{'a codeword' if o['codeword'] else 'not a codeword (some bits are wrong)'}, {o['sec']:.1f} s"
                       + (f"; the clock wanders by {o['bend']:.1f} samples (samples lost or repeated?)" if o["bend"] > 1 else ""))
+                if o.get("relearn"):
+                    r2 = o["relearn"]
+                    print(f"  second try (v7.2): the room learned again from the frame, {r2['taps']} taps (SNR {r2['snr']:.1f} dB), "
+                          f"{r2['passes']} more pass{'es' if r2['passes'] > 1 else ''}: {'a codeword' if o['codeword'] else 'still not a codeword'}")
                 for tg, sz in o["gaps"]:
                     print(f"  {abs(sz):.0f} samples {'lost' if sz < 0 else 'repeated'} by the microphone {tg:.2f} s into the part, "
                           f"{o['erased']} symbols erased (v5.1: read again after the gap)")
