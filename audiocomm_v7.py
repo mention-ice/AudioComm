@@ -1170,12 +1170,40 @@ def write_wav(path, x, fs):
 
 
 def read_wav(path):
-    """16- or 32-bit PCM WAV -> (first channel as float, fs)."""
-    with wave.open(path, "rb") as w:
-        fs, ch, sw = w.getframerate(), w.getnchannels(), w.getsampwidth()
-        raw = w.readframes(w.getnframes())
-    y = np.frombuffer(raw, dtype={2: "<i2", 4: "<i4"}[sw]).reshape(-1, ch)[:, 0]
-    return y / float(2 ** (8 * sw - 1)), fs
+    """16-, 24- or 32-bit PCM WAV, or 32- or 64-bit float WAV (v7: the page's telemetry uploads) -> (first channel as
+    float, fs). Reads the RIFF chunks itself: the wave module knows integer PCM only."""
+    with open(path, "rb") as f:
+        b = f.read()
+    if b[:4] != b"RIFF" or b[8:12] != b"WAVE":
+        raise ValueError(f"{path}: not a WAV file")
+    u = lambda a, n: int.from_bytes(b[a:a + n], "little")
+    p, fmt, data = 12, None, None
+    while p + 8 <= len(b):
+        cid, n = b[p:p + 4], u(p + 4, 4)
+        if cid == b"fmt ":
+            tag, ch, fs, bits = u(p + 8, 2), u(p + 10, 2), u(p + 12, 4), u(p + 22, 2)
+            if tag == 0xFFFE:                                 # WAVE_FORMAT_EXTENSIBLE: the sub-format's first two bytes
+                tag = u(p + 32, 2)
+            fmt = (tag, ch, fs, bits)
+        elif cid == b"data":
+            data = b[p + 8:p + 8 + n]
+            break
+        p += 8 + n + (n & 1)
+    if fmt is None or data is None:
+        raise ValueError(f"{path}: no fmt or data chunk")
+    tag, ch, fs, bits = fmt
+    sw = bits // 8
+    data = data[:len(data) // (sw * ch) * sw * ch]
+    if tag == 3 and sw in (4, 8):                             # IEEE float
+        return np.frombuffer(data, dtype="<f4" if sw == 4 else "<f8").reshape(-1, ch)[:, 0].astype(float), fs
+    if tag == 1 and sw == 3:                                  # 24-bit PCM: three bytes, little-endian, signed
+        a = np.frombuffer(data, dtype=np.uint8).reshape(-1, ch, 3)[:, 0, :].astype(np.int32)
+        v = a[:, 0] | (a[:, 1] << 8) | (a[:, 2] << 16)
+        return np.where(v >= 1 << 23, v - (1 << 24), v) / float(2 ** 23), fs
+    if tag == 1 and sw in (2, 4):
+        y = np.frombuffer(data, dtype={2: "<i2", 4: "<i4"}[sw]).reshape(-1, ch)[:, 0]
+        return y / float(2 ** (8 * sw - 1)), fs
+    raise ValueError(f"{path}: format {tag}, {bits} bits not supported")
 
 
 # ---------------------------------------------------------------- tone hopping
@@ -2052,7 +2080,7 @@ def sc_sic(y, op, N0, omap, lprior):
 def sc_smap(y, op, N0, omap, lprior, x0, iters=150):
     """Soft SMAP: minimizes |y - c * s|^2 / N0 - sum ln p(s), p a mixture of Gaussians of variance tau^2 around each
     axis's levels, weighted by the decoder's beliefs; then each coordinate's local Gaussian (the data's precision
-    at the minimum, the circulant approximation plus each coordinate's own correction) gives the extrinsic LLRs.
+    at the minimum, from the circulant approximation with the prior's mean curvature) gives the extrinsic LLRs.
     Returns them and the minimum (the next pass starts there)."""
     (pI, pQ), amp = sc_priors(lprior, omap)
     _, g, h = sc_axis(omap)
@@ -2080,10 +2108,9 @@ def sc_smap(y, op, N0, omap, lprior, x0, iters=150):
     D = 1 / tau2 - var / tau2 ** 2                        # the prior's own curvature at the minimum
     lam = op.spectrum() / sz2
     Db = D.mean()
-    delta = max(0.0, 1e-3 - (lam.min() + D.min()))
-    qv = np.mean(1 / (lam + Db + delta))
-    s2 = 1 / np.maximum(1 / qv + D - Db, 1e-3)            # each coordinate's local posterior variance
-    lamx = np.maximum(1 / s2 - D, 1e-3)                   # the data's precision on it, the prior taken out
+    delta = max(0.0, 1e-3 - (lam.min() + Db))             # v7: Db, not D.min() (one symbol between two far levels raised
+    qv = np.mean(1 / (lam + Db + delta))                  # every symbol's precision, ~2.4x from the second pass on)
+    lamx = np.full(2 * n, max(1 / qv - Db - delta, 1e-3))   # the data's precision on each coordinate, the prior taken out
     mloc = x + (x - mu) / tau2 / lamx                     # where the data alone would put it
     d2 = -(mloc[:, None] - amp[None, :]) ** 2 * lamx[:, None] / 2
     Lb = np.empty((2 * n, h))

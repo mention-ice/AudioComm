@@ -2317,7 +2317,7 @@ function scSic(y, op, N0, ax, lprior) {   // linear MMSE with soft interference 
 }
 // Soft SMAP: minimizes |y - c * s|^2 / N0 - sum ln p(s), p a mixture of Gaussians of variance tau^2 around each axis's
 // levels, weighted by the decoder's beliefs; then each coordinate's local Gaussian (the data's precision at the
-// minimum, the circulant approximation plus each coordinate's own correction) gives the extrinsic LLRs.
+// minimum, from the circulant approximation with the prior's mean curvature) gives the extrinsic LLRs.
 // Returns them and the minimum (the next pass starts there).
 function scSmap(y, op, N0, ax, lprior, x0, iters = 150) {
   const n = op.n, { amp } = ax, nl = amp.length, P = scPriors(lprior, ax), lw = P.map(p => Math.log(Math.max(p, 1e-30)));
@@ -2343,16 +2343,13 @@ function scSmap(y, op, N0, ax, lprior, x0, iters = 150) {
   };
   const x = scLBFGS(fg, scFlat(x0), iters);
   prior(x);
-  const D = new Float64Array(2 * n); let Db = 0, Dmin = Infinity;
-  for (let c = 0; c < 2 * n; c++) { D[c] = 1 / tau2 - vr[c] / (tau2 * tau2); Db += D[c] / (2 * n); Dmin = Math.min(Dmin, D[c]); }   // the prior's own curvature at the minimum
+  let Db = 0;
+  for (let c = 0; c < 2 * n; c++) Db += (1 / tau2 - vr[c] / (tau2 * tau2)) / (2 * n);   // the prior's own curvature at the minimum, mean
   const lam = op.spectrum(); let lmin = Infinity; for (const v of lam) lmin = Math.min(lmin, v / sz2);
-  const delta = Math.max(0, 1e-3 - (lmin + Dmin)); let qv = 0; for (const v of lam) qv += 1 / (v / sz2 + Db + delta) / lam.length;
-  const mloc = new Float64Array(2 * n), lamx = new Float64Array(2 * n);
-  for (let c = 0; c < 2 * n; c++) {
-    const s2 = 1 / Math.max(1 / qv + D[c] - Db, 1e-3);      // each coordinate's local posterior variance
-    lamx[c] = Math.max(1 / s2 - D[c], 1e-3);                 // the data's precision on it, the prior taken out
-    mloc[c] = x[c] + (x[c] - mu[c]) / tau2 / lamx[c];        // where the data alone would put it
-  }
+  const delta = Math.max(0, 1e-3 - (lmin + Db)); let qv = 0; for (const v of lam) qv += 1 / (v / sz2 + Db + delta) / lam.length;   // v7: Db, not
+  // the lowest curvature (one symbol between two far levels raised every symbol's precision, ~2.4x from the second pass on)
+  const lx = Math.max(1 / qv - Db - delta, 1e-3), mloc = new Float64Array(2 * n), lamx = new Float64Array(2 * n).fill(lx);   // the data's precision on each coordinate, the prior taken out
+  for (let c = 0; c < 2 * n; c++) mloc[c] = x[c] + (x[c] - mu[c]) / tau2 / lx;   // where the data alone would put it
   return { llr: scAxisLLR(mloc, lamx, ax), x: { r: x.slice(0, n), i: x.slice(n) } };
 }
 function scBcjrApp(ls, la, lp, lq) {   // as bcjr, but the a-posteriori LLRs (ln P0/P1) of the input and of both parity bits at every step
