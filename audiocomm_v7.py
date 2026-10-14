@@ -1,7 +1,7 @@
 """audiocomm_v7.py - acoustic modem (FSK with 2 or 4 tones, OFDM with DQPSK, QPSK, 8PSK, 16, 64 or 256QAM, or v5's single
 carrier with QPSK to 256QAM and turbo equalization) and room sounding, Python version for the labs. v6: a short
 control part (0.19 s instead of 0.65 s) for the OFDM and single-carrier frames. v7: LDPC codes (5G NR) at rates 1/4 to
-3/4; the Hamming code is gone.
+3/4; the Hamming code is gone. v7.1: pictures as JPEG files, with a CRC-32.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -43,13 +43,16 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            v7: type 3 = a message coded with an LDPC code (5G NR, LDPC_CODES): a text if b = 0 (a = number of
            characters), else an image (a rows, b columns); the code field (+ 4 with the CRC inverted, as for codes 4
            to 6) gives the rate: 0 1/4, 1 1/3, 2 1/2, 3 2/3, 4 3/4; receivers older than v7 ignore it
+           v7.1: an image with a > 512 is a JPEG file of n = 512 (a - 513) + b bytes (b from 1 to 512, n at most
+           JPEG_MAX), with any code (type 1, or type 3 with LDPC); receivers older than v7.1 reject images over 512 rows
   code   : 0 none, 1 Hamming (7,4) + interleaver (until v6; v7 neither sends nor reads it), 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
            codes 4, 5, 6 are sent as 0, 1, 2 with the CRC inverted (as 4G masks a CRC), so receivers that predate
            them ignore them
   data   : text = 8 bits per character (Latin-1, MSB first);
-           image = pixels in column-major order (MATLAB img(:)), 1 = white
+           image = pixels in column-major order (MATLAB img(:)), 1 = white;
+           JPEG (v7.1) = the file's bytes, then its CRC-32 (as zlib.crc32, 4 bytes), each byte MSB first
   scrambling: XOR with the LFSR x^15 + x^14 + 1 sequence, all-ones seed
   bit 0 -> sin(2 pi F0 t), bit 1 -> sin(2 pi F1 t), one symbol = 1/rate seconds
   4 tones (v2): 2 bits per symbol, one symbol = 2/rate seconds; bits (b0, b1) -> the tone m whose Gray code
@@ -92,6 +95,8 @@ Usage
   python audiocomm_v7.py tx --image greatwave_80x54.png -o img.wav   # the page's demo image (Hokusai's Great Wave); greatwave_160x108.png: the large one
   python audiocomm_v7.py tx --image greatwave_320x216.png --mod ofdm --map 256qam --code turbo -o big.wav   # the 4x one
   (the earlier demo image: --image ../../Lab/bartS.png --step 2, without --step, or with --up 2 for the large and 4x ones)
+  python audiocomm_v7.py tx --jpeg greatwave_160x108_q50.jpg --mod sc --code ldpc -o jpg.wav   # a JPEG file as it is (v7.1)
+  python audiocomm_v7.py tx --image photo.jpg --quality 50 --width 160 --mod sc --code ldpc -o photo.wav   # a picture made into a JPEG (v7.1)
   python audiocomm_v7.py tx --text "Hello" --code conv -o coded.wav   # codes: none conv turbo turbo3 turbo4 ldpc4 ldpc3 ldpc ldpc23 ldpc34
   python audiocomm_v7.py rx recording.wav                    # decode a recording
   python audiocomm_v7.py rx recording.wav --soft ratio       # soft output ln(E1/E0) instead of the calibrated LLR
@@ -121,7 +126,9 @@ Usage
 """
 import argparse
 import math
+import os
 import wave
+import zlib
 import numpy as np
 
 PILOT = np.array([int(c) for c in
@@ -1059,13 +1066,153 @@ def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=F
     return encode_fec("conv", np.array(v + [x ^ k for x, k in zip(crc8(v), mask)]))
 
 
+# ---------------------------------------------------------------- v7.1: JPEG pictures
+# A JPEG travels as its file, then a CRC-32 of the file (as in Ethernet or Wi-Fi), so that every receiver can tell an
+# intact file from a corrupted one whatever the code; the file is shown as it arrives. The header marks it as an image
+# taller than 512 rows, which receivers before v7.1 reject: a = 513 + (n - 1) // 512, b = 1 + (n - 1) % 512 for a file
+# of n bytes (at most JPEG_MAX). jpeg_encode makes the same files as the page: baseline, with the example tables of the
+# standard scaled by the quality as libjpeg does, and a restart marker after every row of blocks. Huffman codes have
+# variable lengths and the DC values are sent as differences, so a wrong bit garbles the picture up to the next restart
+# marker; with a marker on every row, a wrong bit costs one stripe of 16 (grey: 8) rows instead of the rest of the picture.
+JPEG_MAX = 20480
+
+
+def jpeg_fields(n):
+    """The header's a and b for a JPEG file of n bytes."""
+    return 513 + (n - 1) // 512, 1 + (n - 1) % 512
+
+
+def jpeg_payload(f):
+    """The message bits: the file, then its CRC-32, each byte most significant bit first."""
+    f = bytes(f)
+    return np.unpackbits(np.frombuffer(f + zlib.crc32(f).to_bytes(4, "big"), dtype=np.uint8)).astype(int)
+
+
+def jpeg_unpack(bits, n):
+    """The received file (as it is, errors included) and whether its CRC-32 matches."""
+    u = np.packbits(np.asarray(bits[:8 * (n + 4)], dtype=np.uint8)).tobytes()
+    return u[:n], zlib.crc32(u[:n]) == int.from_bytes(u[n:n + 4], "big")
+
+
+
+def jpeg_resync(f):
+    """The file with every marker that cannot stand in the coded data (0xFF followed by anything but 0 or a restart
+    marker) turned into data. Wrong bits make such markers; a decoder (libjpeg, so Chrome, Firefox and Pillow) stops at
+    the first one and leaves the rest of the picture grey. Without them it reads the corrupted stripes as garbage, then
+    starts again at the next restart marker: only the stripes that held wrong bits are lost."""
+    f, i = bytearray(f), 2
+    while i + 4 <= len(f) and f[i] == 0xFF and f[i + 1] not in (0xDA, 0xD9):   # the header's segments, up to the scan
+        i += 2 + (f[i + 2] << 8 | f[i + 3])
+    if i + 4 > len(f) or f[i] != 0xFF or f[i + 1] != 0xDA:
+        return bytes(f)
+    for j in range(i + 2 + (f[i + 2] << 8 | f[i + 3]), len(f) - 3):   # the coded data, up to the end of image marker
+        if f[j] == 0xFF and f[j + 1] and not 0xD0 <= f[j + 1] <= 0xD7:
+            f[j + 1] = 0
+    return bytes(f)
+
+# The example tables of the JPEG standard (ITU-T T.81, Annex K): quantization (row by row) and Huffman codes (number of
+# codes of each length 1 to 16, then the symbols): DC luminance, AC luminance, DC chrominance, AC chrominance
+JPEG_QL = [16, 11, 10, 16, 24, 40, 51, 61, 12, 12, 14, 19, 26, 58, 60, 55, 14, 13, 16, 24, 40, 57, 69, 56, 14, 17, 22, 29, 51, 87, 80, 62,
+           18, 22, 37, 56, 68, 109, 103, 77, 24, 35, 55, 64, 81, 104, 113, 92, 49, 64, 78, 87, 103, 121, 120, 101, 72, 92, 95, 98, 112, 100, 103, 99]
+JPEG_QC = [17, 18, 24, 47, 99, 99, 99, 99, 18, 21, 26, 66, 99, 99, 99, 99, 24, 26, 56, 99, 99, 99, 99, 99, 47, 66, 99, 99, 99, 99, 99, 99] + [99] * 32
+JPEG_HUFF = [bytes.fromhex(s) for s in (
+    "00010501010101010100000000000000000102030405060708090a0b",
+    "0002010303020403050504040000017d01020300041105122131410613516107227114328191a1082342b1c11552d1f02433627282090a161718191a25262728292a3435363738393a434445464748494a535455565758595a636465666768696a737475767778797a838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9fa",
+    "00030101010101010101010000000000000102030405060708090a0b",
+    "00020102040403040705040400010277000102031104052131061241510761711322328108144291a1b1c109233352f0156272d10a162434e125f11718191a262728292a35363738393a434445464748494a535455565758595a636465666768696a737475767778797a82838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae2e3e4e5e6e7e8e9eaf2f3f4f5f6f7f8f9fa")]
+JPEG_ZZ = [0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13, 6, 7, 14, 21, 28,
+           35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63]
+JPEG_C16 = [1, 0.9807852804032304, 0.9238795325112867, 0.8314696123025452, 0.7071067811865476, 0.5555702330196022, 0.3826834323650898, 0.19509032201612825, 0]   # cos(k pi / 16)
+JPEG_COS = np.array([[(0.5 if u else 0.7071067811865476 / 2) * (lambda a: JPEG_C16[a] if a <= 8 else -JPEG_C16[16 - a] if a <= 16 else -JPEG_C16[a - 16] if a <= 24
+                      else JPEG_C16[32 - a])((2 * x + 1) * u % 32) for x in range(8)] for u in range(8)])   # C(u) / 2 cos((2x + 1) u pi / 16): the page's numbers
+
+
+def jpeg_codes(t):
+    """The code of each symbol, as a string of bits (T.81, Annex C)."""
+    code, c, k = {}, 0, 16
+    for n in range(1, 17):
+        for _ in range(t[n - 1]):
+            code[t[k]] = format(c, f"0{n}b")
+            c, k = c + 1, k + 1
+        c <<= 1
+    return code
+
+
+def jpeg_encode(rgb, q=50, grey=False):
+    """A baseline JPEG (bytes) of the picture rgb (rows x columns x 3, 0 to 255) at quality q (1 to 100): colour with
+    the chrominance at half the width and height (4:2:0), or grey (luminance only)."""
+    q = int(min(100, max(1, round(q))))
+    s = 5000 // q if q < 50 else 200 - 2 * q
+    QT = [np.clip((np.array(T) * s + 50) // 100, 1, 255) for T in ([JPEG_QL] if grey else [JPEG_QL, JPEG_QC])]
+    h, w = rgb.shape[:2]
+    m = 8 if grey else 16
+    mx, my = -(-w // m), -(-h // m)
+    P = np.asarray(rgb, dtype=float)[np.minimum(np.arange(my * m), h - 1)][:, np.minimum(np.arange(mx * m), w - 1)]   # the last row and column repeated
+    r, g, b = P[..., 0], P[..., 1], P[..., 2]
+    planes = [0.299 * r + 0.587 * g + 0.114 * b - 128]
+    if not grey:
+        planes += [-0.168736 * r - 0.331264 * g + 0.5 * b, 0.5 * r - 0.418688 * g - 0.081312 * b]
+        planes[1:] = [0.25 * (C[0::2, 0::2] + C[0::2, 1::2] + C[1::2, 0::2] + C[1::2, 1::2]) for C in planes[1:]]
+
+    def coefs(X, T):                                               # the quantized DCT of each 8 x 8 block, in zigzag order
+        B = X.reshape(X.shape[0] // 8, 8, X.shape[1] // 8, 8).transpose(0, 2, 1, 3)
+        R = sum((B[..., x:x + 1] * JPEG_COS[:, x] for x in range(1, 8)), B[..., 0:1] * JPEG_COS[:, 0])   # rows, then columns, the
+        F = sum((JPEG_COS[:, y:y + 1] * R[..., y:y + 1, :] for y in range(1, 8)), JPEG_COS[:, 0:1] * R[..., 0:1, :])   # terms added in the page's order
+        return np.floor(F / T.reshape(8, 8) + 0.5).astype(int).reshape(B.shape[0], B.shape[1], 64)[:, :, JPEG_ZZ]
+    Z = [coefs(X, QT[min(i, 1)]) for i, X in enumerate(planes)]
+    seg = lambda mk, body: bytes([0xFF, mk, (len(body) + 2) >> 8, (len(body) + 2) & 255]) + bytes(body)
+    out = b"\xff\xd8" + seg(0xE0, [0x4A, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0])
+    out += seg(0xDB, [v for k, T in enumerate(QT) for v in [k] + [int(T[z]) for z in JPEG_ZZ]])
+    out += seg(0xC0, [8, h >> 8, h & 255, w >> 8, w & 255] + ([1, 1, 0x11, 0] if grey else [3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]))
+    out += seg(0xC4, [v for k in ((0, 1) if grey else (0, 1, 2, 3)) for v in [((k & 1) << 4) | (k >> 1)] + list(JPEG_HUFF[k])])
+    out += seg(0xDD, [mx >> 8, mx & 255])                        # a restart interval of one row of blocks
+    out += seg(0xDA, [1, 1, 0, 0, 63, 0] if grey else [3, 1, 0, 2, 0x11, 3, 0x11, 0, 63, 0])
+    DC, AC = [jpeg_codes(JPEG_HUFF[0]), jpeg_codes(JPEG_HUFF[2])], [jpeg_codes(JPEG_HUFF[1]), jpeg_codes(JPEG_HUFF[3])]
+    val = lambda v: format((v - 1 if v < 0 else v) & ((1 << abs(v).bit_length()) - 1), f"0{abs(v).bit_length()}b") if v else ""
+    for row in range(my):
+        bits, pred = [], [0, 0, 0]
+        for k in range(mx):
+            blocks = [(0, Z[0][row, k])] if grey else [(0, Z[0][2 * row + i, 2 * k + j]) for i in (0, 1) for j in (0, 1)] + [(1, Z[1][row, k]), (2, Z[2][row, k])]
+            for c, z in blocks:
+                t, d = min(c, 1), int(z[0]) - pred[c]
+                pred[c] = int(z[0])
+                bits += [DC[t][abs(d).bit_length()], val(d)]
+                run = 0
+                for v in z[1:].tolist():
+                    if not v:
+                        run += 1
+                        continue
+                    while run > 15:
+                        bits.append(AC[t][0xF0])
+                        run -= 16
+                    bits += [AC[t][(run << 4) | abs(v).bit_length()], val(v)]
+                    run = 0
+                if run:
+                    bits.append(AC[t][0])
+        s = "".join(bits)
+        s += "1" * (-len(s) % 8)                                  # the row's last byte filled with 1s
+        out += int(s, 2).to_bytes(len(s) // 8, "big").replace(b"\xff", b"\xff\x00") if s else b""
+        if row < my - 1:
+            out += bytes([0xFF, 0xD0 + (row & 7)])                # restart marker RSTr mod 8
+    return out + b"\xff\xd9"
+
+
+def load_rgb(path, width=None):
+    """The picture's colours (rows x columns x 3), scaled down (pixels averaged) to the given width if it is wider."""
+    from PIL import Image
+    im = Image.open(path).convert("RGB")
+    if width and im.width > width:
+        im = im.resize((width, max(1, round(im.height * width / im.width))), Image.BOX)
+    return np.asarray(im)
+
+
 def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127, sound=None, mod=2, guard="long", omap="dqpsk",
-                train="medium", control="short"):
+                train="medium", control="short", jpeg=None):
     """Return (segments, data): a list of (bits, tones, rate[, index of the first hop[, M]]), then the message bits;
     with 4 tones (mod=4) the message segment holds tones 0..3 instead of bits, and M = 4. With mod="ofdm" the message
     segment is the OFDM part (samples at 48 kHz, None, None), guard "long" or "short" (see OFDM_MODES), omap one of OFDM_MAPS.
     With mod="sc" (v5) it is the single-carrier part, omap one of SC_MAPS, code one of SC_CODES, train one of SC_TRAIN.
-    img: 2-D boolean array (True = white). code: none, conv, turbo, turbo3, turbo4 or an LDPC code (LDPC_R).
+    img: 2-D boolean array (True = white). jpeg (v7.1): the bytes of a JPEG file, sent as they are. code: none, conv, turbo, turbo3, turbo4 or an LDPC code (LDPC_R).
     sound = (order, periods): room sounding frame; its MLS segment is (samples at 48 kHz, None, None).
     control (v6), OFDM and single carrier only: "short" (the short control part, c6_wave; receivers older than v6 do
     not read it) or "long" (the 400 bit/s one, with the preamble pre; it reaches farther)."""
@@ -1081,6 +1228,11 @@ def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127
         codes = [ord(c) if ord(c) < 256 else 63 for c in text[:1023]]
         typ, a, b = 0, len(codes), 0
         data = np.array([x for c in codes for x in msb(c, 8)], dtype=int)
+    elif jpeg is not None:                                 # v7.1: a JPEG file, then its CRC-32
+        if not 1 <= len(jpeg) <= JPEG_MAX:
+            raise ValueError(f"a JPEG file of {len(jpeg)} bytes: at most {JPEG_MAX}")
+        typ, (a, b) = 1, jpeg_fields(len(jpeg))
+        data = jpeg_payload(jpeg)
     else:
         typ, (a, b) = 1, img.shape
         data = img.astype(int).flatten(order="F")
@@ -2808,6 +2960,9 @@ def parse_header(hb):
         h = dict(type="text", n0=8 * a, len=a)
     if typ == 1 and 1 <= a <= 512 and 1 <= b <= 512 and a * b <= 70000:   # v4: up to 4x images (the demo: 216 x 320, 69120 pixels; before: 20000 pixels)
         h = dict(type="image", n0=a * b, h=a, w=b)
+    if typ == 1 and a >= 513 and 1 <= b <= 512 and 512 * (a - 513) + b <= JPEG_MAX:   # v7.1: a JPEG file of n bytes
+        n = 512 * (a - 513) + b
+        h = dict(type="jpeg", n0=8 * (n + 4), len=n)
     if typ == 2 and not four and a in SOUND_TAPS and 1 <= b <= 8:
         h = dict(type="sound", n0=0, order=a, periods=b)
     if h and sc:                                 # ns: data symbols
@@ -2821,6 +2976,25 @@ def parse_header(hb):
         nc, K = coded_length(code, h["n0"]), int(math.log2(M))
         h.update(code=code, nc=nc, rate=rate, tones=TONE_SETS[tones], M=M, baud=rate // K, ns=-(-nc // K))   # ns: message symbols
     return h
+
+
+def message(hdr, bits):
+    """The message of a frame: its text, its image (rows x columns, True = white) or its JPEG file (v7.1: as it
+    arrived, and whether its CRC-32 holds)."""
+    if hdr["type"] == "text":
+        return dict(text=bytes(np.packbits(bits).tolist()).decode("latin-1"))
+    if hdr["type"] == "jpeg":
+        f, ok = jpeg_unpack(bits, hdr["len"])
+        return dict(file=f, crc_ok=ok)
+    return dict(img=bits.reshape(hdr["w"], hdr["h"]).T.astype(bool))
+
+
+def frame_what(res):
+    if res["type"] == "text":
+        return repr(res["text"])
+    if res["type"] == "jpeg":
+        return f"JPEG file of {res['len']} bytes, {'intact (its CRC-32 holds)' if res['crc_ok'] else 'corrupted (its CRC-32 fails)'}"
+    return f"{res['w']}x{res['h']} image"
 
 
 def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls"):
@@ -2915,13 +3089,10 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
             bits = o["bits"]
             res = dict(hdr, pre=n_p, hop=hop, bits=bits, chan_errors=o["chan_errors"], rs_fails=None, t=p1 / fs,
                        ppm=o["ppm"], sc_rx=o, corr=score, p1=p1)
-            if hdr["type"] == "text":
-                res["text"] = bytes(np.packbits(bits).tolist()).decode("latin-1")
-            else:
-                res["img"] = bits.reshape(hdr["w"], hdr["h"]).T.astype(bool)
+            res.update(message(hdr, bits))
             frames.append(res)
             if verbose:
-                what = repr(res["text"]) if hdr["type"] == "text" else f"{hdr['w']}x{hdr['h']} image"
+                what = frame_what(res)
                 print(f"frame at {res['t']:.2f} s: {what}, clock offset {o['ppm']:+.0f} ppm (from the training blocks), "
                       f"code {hdr['code']} corrected {o['chan_errors']} of {hdr['nc']} channel bits")
                 print(f"  from the header: {sc_desc(hdr['map'], hdr['train'])}, {hdr['ns']} data symbols in {o['nseg']} segment{'s' if o['nseg'] > 1 else ''}, {ctl}")
@@ -2950,13 +3121,10 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
             chan_errors = int(np.sum((llr > 0).astype(int) != sent))
             res = dict(hdr, pre=n_p, hop=hop, bits=bits, llr=llr, chan_errors=chan_errors, rs_fails=rs_fails, t=p1 / fs,
                        ppm=o["eps"], ofdm_rx=o, corr=score, p1=p1)
-            if hdr["type"] == "text":
-                res["text"] = bytes(np.packbits(bits).tolist()).decode("latin-1")
-            else:
-                res["img"] = bits.reshape(hdr["w"], hdr["h"]).T.astype(bool)
+            res.update(message(hdr, bits))
             frames.append(res)
             if verbose:
-                what = repr(res["text"]) if hdr["type"] == "text" else f"{hdr['w']}x{hdr['h']} image"
+                what = frame_what(res)
                 coded = "" if hdr["code"] == "none" else f", code {hdr['code']} corrected {chan_errors} of {hdr['nc']} channel bits"
                 print(f"frame at {res['t']:.2f} s: {what}, clock offset {o['eps']:+.0f} ppm (from the data){coded}")
                 print(f"  from the header: {ofdm_desc(mode, hdr['map'])}, {hdr['ns']} data symbol{'s' if hdr['ns'] > 1 else ''}, {ctl}")
@@ -3021,14 +3189,11 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                    ppm=(rho - 1) * 1e6 if found else None, spread=spread,
                    pilot_errors=post_errors(pE, S) if found else None,
                    corr=score, p1=p1, p2=p2, timing=(int(shift[0]), int(shift[-1])) if shift.any() else None)
-        if hdr["type"] == "text":
-            res["text"] = bytes(np.packbits(bits).tolist()).decode("latin-1")
-        else:
-            res["img"] = bits.reshape(hdr["w"], hdr["h"]).T.astype(bool)
+        res.update(message(hdr, bits))
         frames.append(res)
         if verbose:
             ppm = "postamble not found (soft output calibrated on the message)" if res["ppm"] is None else f"clock offset {res['ppm']:+.0f} ppm"
-            what = repr(res["text"]) if hdr["type"] == "text" else f"{hdr['w']}x{hdr['h']} image"
+            what = frame_what(res)
             coded = "" if hdr["code"] == "none" else f", code {hdr['code']} corrected {chan_errors} of {nc} channel bits"
             if rs_fails:
                 coded += f" ({rs_fails} Reed-Solomon blocks failed)"
@@ -3335,6 +3500,11 @@ def main():
             p.add_argument("--image")
             p.add_argument("--step", type=int, default=1, help="image: every step-th pixel")
             p.add_argument("--up", type=int, choices=(1, 2, 4), default=1, help="image: up times the width and height (smooth edges)")
+            p.add_argument("--jpeg", help="v7.1: a JPEG file, sent as it is (see --quality to make one with restart markers)")
+            p.add_argument("--quality", type=int, help="v7.1: send the --image as a JPEG of this quality (1 to 100), in colour, "
+                           "a restart marker on every row of blocks, saved next to the WAV")
+            p.add_argument("--width", type=int, help="with --quality: scale the picture down to this width")
+            p.add_argument("--grey", action="store_true", help="with --quality: a grey JPEG")
             p.add_argument("--code", choices=[c for c in CODES if c not in (None, "rs")] + LDPC_CODES, default="none",
                            help="turbo, turbo3, turbo4: turbo code of rate 1/2, 1/3, 1/4; ldpc4, ldpc3, ldpc, ldpc23, ldpc34: "
                                 "LDPC code (v7) of rate 1/4, 1/3, 1/2, 2/3, 3/4; Reed-Solomon (v0) is still decoded but no longer sent")
@@ -3365,6 +3535,7 @@ def main():
                            help="single carrier: the room estimate, least squares or MMSE (prior power per tap from a pilot)")
             p.add_argument("--ir", default="room_ir.wav", help="where to save the impulse response of a room sounding")
             p.add_argument("--plot", action="store_true", help="plot the room sounding (needs matplotlib)")
+            p.add_argument("--jpg", default="received", help="v7.1: JPEG files received are saved as JPG_1.jpg, JPG_2.jpg...")
     a = ap.parse_args()
     if a.cmd == "sim":
         x, fs_x = read_wav(a.wav)
@@ -3378,13 +3549,22 @@ def main():
         print(f"{a.wav} through {room}, SNR {a.snr:.0f} dB, {a.ppm:+.0f} ppm, {a.fs} Hz -> {a.out}")
         return
     if a.cmd == "tx":
-        img = load_image(a.image, a.step, a.up) if a.image else None
+        jpeg = None
+        if a.jpeg:                                             # v7.1: a JPEG file as it is
+            jpeg = open(a.jpeg, "rb").read()
+            if b"\xff\xdd" not in jpeg[:jpeg.find(b"\xff\xda") + 1]:
+                print("note: this JPEG has no restart markers, so a wrong bit garbles the rest of the picture (see --quality)")
+        elif a.image and a.quality:                            # v7.1: the picture made into a JPEG
+            jpeg = jpeg_encode(load_rgb(a.image, a.width), a.quality, a.grey)
+            with open(os.path.splitext(a.out)[0] + ".jpg", "wb") as f:
+                f.write(jpeg)
+        img = load_image(a.image, a.step, a.up) if a.image and jpeg is None else None
         sound = (a.order, a.periods) if a.sound else None
         mod = a.mod if a.mod in ("ofdm", "sc") else int(a.mod)
         omap = a.map or ("256qam" if mod == "sc" else "dqpsk")
         code = "turbo" if mod == "sc" and a.code == "none" else a.code   # single carrier: turbo or LDPC codes only
-        segs, data = build_frame(text=a.text if img is None else None, img=img, code=code, rate=a.rate, tones=a.tones, pre=a.pre, sound=sound,
-                                 mod=mod, guard=a.guard, omap=omap, train=a.train, control=a.control)
+        segs, data = build_frame(text=a.text if img is None and jpeg is None else None, img=img, code=code, rate=a.rate, tones=a.tones, pre=a.pre, sound=sound,
+                                 mod=mod, guard=a.guard, omap=omap, train=a.train, control=a.control, jpeg=jpeg)
         x = modulate(segs)
         write_wav(a.out, x, FS_TX)
         if sound:
@@ -3393,7 +3573,8 @@ def main():
             how = ofdm_desc(ofdm_mode(a.guard), omap) if mod == "ofdm" else sc_desc(omap, SC_TRAIN[a.train]) if mod == "sc" else f"{mod} tones"
             if mod in ("ofdm", "sc"):
                 how += ", the short control part (v6)" if a.control == "short" else f", preamble {a.pre}"
-            print(f"{len(data)} message bits, code {code}, {how}, {len(x) / FS_TX:.1f} s -> {a.out}")
+            what = f"a JPEG file of {len(jpeg)} bytes ({os.path.splitext(a.out)[0]}.jpg) and its CRC-32: " if jpeg is not None and not a.jpeg else ""
+            print(f"{what}{len(data)} message bits, code {code}, {how}, {len(x) / FS_TX:.1f} s -> {a.out}")
         if a.play:
             import sounddevice as sd
             sd.play(x, FS_TX, blocking=True)
@@ -3418,6 +3599,16 @@ def main():
                     plot_room(f)
             elif f["type"] == "text":
                 print("decoded:", f["text"])
+            elif f["type"] == "jpeg":                          # v7.1: the file as it arrived; corrupted, also read again stripe by stripe
+                k = sum(g["type"] == "jpeg" for g in frames[:frames.index(f) + 1])
+                with open(f"{a.jpg}_{k}.jpg", "wb") as out:
+                    out.write(f["file"])
+                more = ""
+                if not f["crc_ok"]:
+                    with open(f"{a.jpg}_{k}_resync.jpg", "wb") as out:
+                        out.write(jpeg_resync(f["file"]))
+                    more = f"; {a.jpg}_{k}_resync.jpg: the same without the markers that wrong bits made (see jpeg_resync)"
+                print(f"JPEG file {'intact' if f['crc_ok'] else 'CORRUPTED'} -> {a.jpg}_{k}.jpg{more}")
             else:
                 for row in f["img"][::2]:
                     print("".join(" " if p else "#" for p in row))
