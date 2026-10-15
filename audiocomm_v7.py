@@ -2,7 +2,8 @@
 carrier with QPSK to 256QAM and turbo equalization) and room sounding, Python version for the labs. v6: a short
 control part (0.19 s instead of 0.65 s) for the OFDM and single-carrier frames. v7: LDPC codes (5G NR) at rates 1/4 to
 3/4; the Hamming code is gone. v7.1: pictures as JPEG files, with a CRC-32. v7.2: the single carrier tries a
-frame a second time when it fails, with a longer room (2048 taps, 213 ms) learned from the frame itself.
+frame a second time when it fails, with a longer room (2048 taps, 213 ms) learned from the frame itself. v7.4: the
+single carrier's wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (43% more than 3.2 to 16 kHz).
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -17,7 +18,8 @@ decoded by the other. The receiver needs no settings: they travel in the header.
     reference symbol | data symbols (coded, scrambled data) | reference symbol, each preceded by its guard interval
   or, with a single carrier (v5; its control part always hops):
     0.1 s silence | TA (1280 QPSK symbols) TC | data | TC | data | ... | TC, the training TC of 640, 1280 or 2560
-    symbols (short, medium or long: the longest echo it lets the receiver learn, 20, 47 or 100 ms after the first strong arrival)
+    symbols (short, medium or long: the longest echo it lets the receiver learn, 20, 47 or 100 ms after the first strong arrival;
+    v7.4, the wide band: TA 1792, TC 896, 1792 or 3584, about the same durations)
   v6, the short control part of the OFDM and single-carrier frames (their default; the 400 bit/s one remains, for range
     and for v5 receivers, which do not read the short one):
     P P P | H, 0.192 s: three periods of P, 2048 samples at 48 kHz (OFDM's reference symbol for N = 2048 with its
@@ -48,6 +50,8 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            JPEG_MAX), with any code (type 1, or type 3 with LDPC); receivers older than v7.1 reject images over 512 rows
            v7.3: type 3 with the code field 5, 6 or 7 (1, 2, 3 with the CRC inverted) = a polar code (5G NR, POLAR_CODES)
            of rate 1/3, 1/2, 2/3; receivers older than v7.3 ignore it
+           v7.4: type 2 on the single carrier = the wide band (SC_BANDS), read as type 3 (an LDPC or a polar code, a
+           text if b = 0, else an image); receivers older than v7.4 ignore it
   code   : 0 none, 1 Hamming (7,4) + interleaver (until v6; v7 neither sends nor reads it), 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
@@ -86,6 +90,8 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            sequence goes on), then the reference symbol ends the part. The receiver estimates each subcarrier's gain
            and phase from the reference symbols and the pilots (see ofdm_receive).
   single carrier (v5): 9600 symbols/s at 9.6 kHz, root-raised-cosine pulses of roll-off 1/3 (3.2 to 16 kHz), rms 0.45;
+           v7.4, the wide band: 96000 / 7 = 13 714 symbols/s at 11.4 kHz (2.3 to 20.5 kHz), 7 samples per symbol at 96 kHz,
+           sent as every other sample (3.5 samples per symbol at 48 kHz); training 10/7 longer in symbols;
            points as OFDM's coherent mappings; the training blocks are QPSK exp(j pi/2 (q + 1/2)), q the top 2 bits of
            xorshift32 (seeds 0x5C0A for TA, 0x5C0C for TC); the first block is TA TC, every later one TC, after at most
            4800 data symbols; channel bits: the code's output padded with 0, scrambled. The receiver
@@ -97,6 +103,7 @@ Usage
   python audiocomm_v7.py tx --text "Hello" -o hello.wav     # write a WAV (add --play to play it)
   python audiocomm_v7.py tx --image greatwave_80x54.png -o img.wav   # the page's demo image (Hokusai's Great Wave); greatwave_160x108.png: the large one
   python audiocomm_v7.py tx --image greatwave_320x216.png --mod ofdm --map 256qam --code turbo -o big.wav   # the 4x one
+  python audiocomm_v7.py tx --text "Hello" --mod sc --map 64qam --code ldpc --wide -o wide.wav   # v7.4: 2.3 to 20.5 kHz
   (the earlier demo image: --image ../../Lab/bartS.png --step 2, without --step, or with --up 2 for the large and 4x ones)
   python audiocomm_v7.py tx --jpeg greatwave_160x108_q50.jpg --mod sc --code ldpc -o jpg.wav   # a JPEG file as it is (v7.1)
   python audiocomm_v7.py tx --image photo.jpg --quality 50 --width 160 --mod sc --code ldpc -o photo.wav   # a picture made into a JPEG (v7.1)
@@ -1319,7 +1326,7 @@ def crc8(bits):
     return msb(r, 8)
 
 
-def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=False, nt=None):
+def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=False, nt=None, wide=False):
     if code in TYPE3_CODES:                      # v7: type 3, the LDPC (v7.3: or polar) code's index in the code field (b = 0: a text)
         typ, c = 3, TYPE3_CODES.index(code)
     else:
@@ -1327,6 +1334,10 @@ def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=F
     if sc:                                       # v5, single carrier: tone set 3, rate field 2, the training in a's and b's top bits
         t, four, r, T = 3, True, SC_FIELD, SC_TCODE[nt or SC_NC]
         a, b = a | (T >> 1) << 10, b | (T & 1) << 10
+        if wide:                                 # v7.4: type 2, read as type 3
+            if typ != 3:
+                raise ValueError(f"the wide band takes an LDPC or a polar code: one of {TYPE3_CODES}")
+            typ = 2
     elif ofdm is not None:                         # OFDM: tones 3, tone set 3, rate field = the mode (0 long guard, 1 short)
         t, four, r = 3, True, OFDM_MODES.index(ofdm)
     else:
@@ -1481,11 +1492,12 @@ def load_rgb(path, width=None):
 
 
 def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127, sound=None, mod=2, guard="long", omap="dqpsk",
-                train="medium", control="short", jpeg=None):
+                train="medium", control="short", jpeg=None, wide=False):
     """Return (segments, data): a list of (bits, tones, rate[, index of the first hop[, M]]), then the message bits;
     with 4 tones (mod=4) the message segment holds tones 0..3 instead of bits, and M = 4. With mod="ofdm" the message
     segment is the OFDM part (samples at 48 kHz, None, None), guard "long" or "short" (see OFDM_MODES), omap one of OFDM_MAPS.
-    With mod="sc" (v5) it is the single-carrier part, omap one of SC_MAPS, code one of SC_CODES, train one of SC_TRAIN.
+    With mod="sc" (v5) it is the single-carrier part, omap one of SC_MAPS, code one of SC_CODES, train one of SC_TRAIN;
+    wide (v7.4): in the wide band, 2.3 to 20.5 kHz (an LDPC or a polar code).
     img: 2-D boolean array (True = white). jpeg (v7.1): the bytes of a JPEG file, sent as they are. code: none, conv, turbo, turbo3, turbo4, an LDPC code (LDPC_R) or a polar code (POLAR_R).
     sound = (order, periods): room sounding frame; its MLS segment is (samples at 48 kHz, None, None).
     control (v6), OFDM and single carrier only: "short" (the short control part, c6_wave; receivers older than v6 do
@@ -1514,8 +1526,9 @@ def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127
     if mod == "sc":                                        # v5: a hopping control part, then the single carrier
         if omap not in SC_MAPS or code not in SC_CODES:
             raise ValueError(f"single carrier: mapping one of {SC_MAPS}, code one of {SC_CODES} (turbo equalization)")
+        sc_set_band(wide)                                  # v7.4: the usual band or the wide one
         nt = SC_TRAIN[train]
-        hdr = header_bits(typ, a, b, code, None, None, omap=omap, sc=True, nt=nt)
+        hdr = header_bits(typ, a, b, code, None, None, omap=omap, sc=True, nt=nt, wide=wide)
         part = (sc_part(sc_channel_bits(code, data, omap)[0], omap, nt), None, None)
         if control == "short":                             # v6
             return [(c6_wave(hdr), None, None), part], data
@@ -2217,6 +2230,13 @@ def ofdm_desc(mode, omap="dqpsk"):
 # 256QAM by 0.5 to 2 dB (one pass, no feedback), made turbo equalization worse here: in simulation 0 of 4 frames at
 # the level where 4 of 4 decode without it (256QAM, turbo 1/2), so there is none.
 SC_RS, SC_SPS, SC_FC, SC_BETA, SC_SPAN = 9600, 5, 9600, 1 / 3, 12   # baud, samples per symbol, carrier, roll-off, pulse half length (symbols)
+SC_FS = FS_TX            # v7.4: the single carrier's own sampling rate (its pulses, carrier and time map)
+SC_BANDS = {False: (9600, 5, 9600, 1), True: (96000 / 7, 7, 11400, 2)}   # v7.4: (baud, samples per symbol, carrier,
+                         # SC_FS / FS_TX) of the usual band (3.2 to 16 kHz) and of the wide one (2.3 to 20.5 kHz), the
+                         # latter on a 96 kHz grid whose every other sample is sent: room soundings in Impasse Carnot heard
+                         # 16 to 20.5 kHz as clearly as the usual band (the phone's speaker 6 to 10 dB weaker there, the
+                         # noise as much lower), its echo die out fastest, and 2.3 to 3.2 kHz 3 to 5 dB less clearly; the
+                         # iPhone's microphone stops at 21 kHz
 SC_RMS = 0.45            # rms at the speaker, as OFDM's; the peaks above 0.9 are clipped (about 1 % of the samples
                          # at 256QAM, the distortion about 35 dB below the symbols)
 SC_NA = 1280             # TA: the first block's own training, before its TC
@@ -2274,6 +2294,25 @@ def sc_rrc(beta=SC_BETA, sps=SC_SPS, span=SC_SPAN):
 
 SC_G = sc_rrc()
 SC_DLY = SC_SPAN * SC_SPS          # 60 samples: the pulse's peak after its start
+SC_GS = {w: sc_rrc(sps=v[1]) for w, v in SC_BANDS.items()}
+# v7.4: TA, the training blocks, the rooms fitted, the data between blocks and the second try's room, in symbols, then
+# the gap search's reach and margin in samples of SC_FS, for each band; the wide band's last about as long as the usual
+# ones (10/7 the symbols, rooms in multiples of 64 taps): with 3.2 to 19.2 kHz in Impasse Carnot's echo (rooms measured
+# by sounding), the same symbols lost 1.7 to 3.3 dB of SNR, the same durations gained 0.9 to 2.9 dB over the usual band
+SC_SIZES = {False: (SC_NA, SC_NC, SC_TRAIN, SC_TCODE, SC_TAPS, SC_D, SC_RELEARN_TAPS, SC_GAP_MAX, SC_GAP_EDGE),
+            True: (1792, 1792, {"short": 896, "medium": 1792, "long": 3584}, {1792: 0, 896: 1, 3584: 2},
+                   {896: (352,), 1792: (704,), 3584: (704, 1408)}, 6720, 2944, 2048, 1200)}
+
+
+def sc_set_band(wide):
+    """v7.4: the band of the single-carrier frame about to be built or read (wide: 13 714 symbols/s at 11.4 kHz, on
+    a 96 kHz grid), and its sizes (SC_SIZES)."""
+    global SC_RS, SC_SPS, SC_FC, SC_FS, SC_G, SC_DLY, SC_GAP_SPAN, SC_NA, SC_NC, SC_TRAIN, SC_TCODE, SC_TAPS, SC_D, \
+        SC_RELEARN_TAPS, SC_GAP_MAX, SC_GAP_EDGE
+    wide = bool(wide)
+    SC_RS, SC_SPS, SC_FC, u = SC_BANDS[wide]
+    SC_FS, SC_G, SC_DLY, SC_GAP_SPAN = FS_TX * u, SC_GS[wide], SC_SPAN * SC_SPS, SC_SPAN * SC_SPS + 8
+    SC_NA, SC_NC, SC_TRAIN, SC_TCODE, SC_TAPS, SC_D, SC_RELEARN_TAPS, SC_GAP_MAX, SC_GAP_EDGE = SC_SIZES[wide]
 
 
 def xorshift32(seed, n):
@@ -2315,13 +2354,14 @@ def sc_layout(ns, nt=SC_NC):
     return blocks, segs, t
 
 
-def sc_rate(omap, nt=SC_NC):
+def sc_rate(omap, nt=SC_NC, wide=False):
     """Channel bits per second over the data and the training blocks between them."""
-    return OFDM_BITS[omap] * SC_RS * SC_D / (SC_D + nt)
+    d = SC_SIZES[wide][5]
+    return OFDM_BITS[omap] * SC_BANDS[wide][0] * d / (d + nt)
 
 
 def sc_seconds(ns, nt=SC_NC):
-    return SC_GAP + (sc_layout(ns, nt)[2] * SC_SPS + len(SC_G) - 1) / FS_TX
+    return SC_GAP + (sc_layout(ns, nt)[2] * SC_SPS + len(SC_G) - 1) / SC_FS
 
 
 def sc_symbols(bits, omap, nt=SC_NC):
@@ -2346,12 +2386,14 @@ def sc_passband(x):
     u[::SC_SPS] = x
     b = np.convolve(u, SC_G)
     k = np.arange(len(b))
-    return np.sqrt(2) * np.real(b * np.exp(2j * np.pi * SC_FC / FS_TX * k)) * SC_RMS * math.sqrt(SC_SPS)
+    return np.sqrt(2) * np.real(b * np.exp(2j * np.pi * SC_FC / SC_FS * k)) * SC_RMS * math.sqrt(SC_SPS)
 
 
 def sc_part(bits, omap, nt=SC_NC):
-    """The single-carrier part at 48 kHz: the silence, then the symbols."""
-    return np.clip(np.r_[np.zeros(round(SC_GAP * FS_TX)), sc_passband(sc_symbols(bits, omap, nt))], -0.9, 0.9)
+    """The single-carrier part at 48 kHz: the silence, then the symbols (v7.4, the wide band: every other sample of
+    SC_FS; the pulses leave nothing above 20.5 kHz to fold back)."""
+    p = sc_passband(sc_symbols(bits, omap, nt))[::SC_FS // FS_TX]
+    return np.clip(np.r_[np.zeros(round(SC_GAP * FS_TX)), p], -0.9, 0.9)
 
 
 def sc_channel_bits(code, data, omap):
@@ -2708,12 +2750,12 @@ def sc_clock0(y, fs, T0, nt, L):
     phases, predicts the other half; the delay between that prediction and the recording (cross-spectrum phase, as
     the time map) is the clock's drift between the halves, the room cancels. Its error on Sheng's recordings: 0.5 to
     5 ppm, up to 20 ppm when the phone or the speaker moved (sc_receive then tries the other size)."""
-    rho, P5 = fs / FS_TX, SC_SPS
+    rho, P5 = fs / SC_FS, SC_SPS
     x0 = np.concatenate(sc_training(nt))
     nA = len(x0)
     nrows = nA + L - 1
     n = -P5 * SC_PRE + np.arange(P5 * (nrows + 2 * SC_SPAN + 2))
-    v = math.sqrt(2) * sc_read(y, T0 + rho * n) * np.exp(-2j * np.pi * SC_FC / FS_TX * n)
+    v = math.sqrt(2) * sc_read(y, T0 + rho * n) * np.exp(-2j * np.pi * SC_FC / SC_FS * n)
     mf = np.convolve(v, SC_G)
     mid = (L + nA) // 2
     hal = [(L, mid), (mid, nA)]
@@ -2725,15 +2767,16 @@ def sc_clock0(y, fs, T0, nt, L):
             w[a:b] = 1
             M[h][:, p] = SCConv([x0], [1.0], L).fwd(sc_fit(x0, Y[:, p], w, L, np.zeros(L, dtype=complex), 0.0))
     nf = nfft(P5 * (mid - L))
-    f = np.fft.fftfreq(nf, 1 / FS_TX)
-    band = np.abs(f) < 6000
+    f = np.fft.fftfreq(nf, 1 / SC_FS)
+    band = np.abs(f) < round(SC_RS * (1 + SC_BETA) / 2) - 400
 
     def delay(ys, ms):                                     # ys late on ms by this many samples
         X = (np.fft.fft(ys, nf) * np.conj(np.fft.fft(ms, nf)))[band]
-        ph = lambda d: abs(np.sum(X * np.exp(2j * np.pi * f[band] * d / FS_TX)))
-        grid = np.linspace(-1.5, 1.5, 301)
+        ph = lambda d: abs(np.sum(X * np.exp(2j * np.pi * f[band] * d / SC_FS)))
+        u = SC_FS // FS_TX                                 # v7.4: as much time on the wide band's grid
+        grid = np.linspace(-1.5, 1.5, 301) * u
         best = grid[int(np.argmax([ph(d) for d in grid]))]
-        grid = np.linspace(best - 0.01, best + 0.01, 41)
+        grid = np.linspace(best - 0.01 * u, best + 0.01 * u, 41)
         return grid[int(np.argmax([ph(d) for d in grid]))]
     (a0, b0), (a1, b1) = hal
     d10 = delay(Y[a1:b1].ravel(), M[0][a1:b1].ravel())
@@ -2746,7 +2789,7 @@ def sc_split(y, rho, t, p, u):
     the correlation of the recording with p's part before u, against that of its part after (cross-correlated, so
     the room cancels): the jump in samples of the recording; and the first strong arrival of the part before."""
     G = SC_GAP_MAX
-    lo, n = t - rho * (round(SC_T0_BACK * FS_TX) + G), round(2 * SC_T0_BACK * FS_TX) + 2 * G
+    lo, n = t - rho * (round(SC_T0_BACK * SC_FS) + G), round(2 * SC_T0_BACK * SC_FS) + 2 * G
     pb, pq = p[:u - SC_GAP_SPAN], p[u + SC_GAP_SPAN:]
     cb = _env_xcorr(sc_read(y, lo + rho * np.arange(n + len(pb))), pb)
     cq = _env_xcorr(sc_read(y, lo + rho * (u + SC_GAP_SPAN + np.arange(n + len(pq)))), pq)
@@ -2762,7 +2805,7 @@ def sc_first_arrival(env):
     of the strongest, within SC_T0_BACK seconds before it. Where a later echo is as strong as the direct sound, the
     strongest peak would put the early paths before the room's SC_PRE taps, where nothing is fitted."""
     i = int(np.argmax(env))
-    for j in range(max(1, i - round(SC_T0_BACK * FS_TX)), i):
+    for j in range(max(1, i - round(SC_T0_BACK * SC_FS)), i):
         if env[j] >= SC_T0_FRAC * env[i] and env[j] >= env[j - 1] and env[j] > env[j + 1]:
             return j
     return i
@@ -2827,7 +2870,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     m = OFDM_BITS[omap]
     ns = -(-nc // m)
     blocks, segs, ntot = sc_layout(ns, nt)
-    rho, L, P5 = fs / FS_TX, SC_TAPS[nt][0], SC_SPS
+    rho, L, P5 = fs / SC_FS, SC_TAPS[nt][0], SC_SPS
     ta, tc = sc_training(nt)
     x = sc_symbols(np.zeros(ns * m, dtype=int), omap, nt)
     steps, npass = SC_EFFORT[effort]
@@ -2838,7 +2881,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     pa = sc_passband(np.r_[ta, tc])
     g0 = t0 + SC_GAP * fs
     lo = g0 - 0.03 * fs
-    nz = len(pa) + round(0.09 * FS_TX)
+    nz = len(pa) + round(0.09 * SC_FS)
     env = _env_xcorr(sc_read(y, lo + np.arange(nz) * rho), pa)
     T0 = lo + _peak(env, sc_first_arrival(env)) * rho
     # v5.1: a jump inside the first block (its TC is every later block's reference): the arrival of the block's part
@@ -2862,17 +2905,18 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     w0 = SC_DLY * 2 + P5 * (L - SC_PRE)                    # clean stretch of a TC, in samples after its start
     w1 = P5 * (nt - SC_PRE)
     win = lambda k: P5 * starts[k] + np.arange(w0, w1)
-    f = np.fft.rfftfreq(nfft(w1 - w0), 1 / FS_TX)
-    band = (f > 3400) & (f < 15800)
+    f = np.fft.rfftfreq(nfft(w1 - w0), 1 / SC_FS)
+    band = (f > round(SC_FC - SC_RS * (1 + SC_BETA) / 2) + 200) & (f < round(SC_FC + SC_RS * (1 + SC_BETA) / 2) - 200)
     W0 = sc_read(y, T0 + rho * (win(0) + J0(win(0))))
     F0 = np.conj(np.fft.rfft(W0, nfft(w1 - w0))[band])
     def fine(k, at):                                       # sub-sample delay of block k near at, and the coherence
         Wk = sc_read(y, T0 + rho * (win(k) + at))
         X = np.fft.rfft(Wk, nfft(w1 - w0))[band] * F0
-        ph = lambda d: abs(np.sum(X * np.exp(2j * np.pi * f[band] * d / FS_TX)))
-        grid = np.linspace(-1, 1, 201)
+        ph = lambda d: abs(np.sum(X * np.exp(2j * np.pi * f[band] * d / SC_FS)))
+        u = SC_FS // FS_TX                                 # v7.4: as much time on the wide band's grid
+        grid = np.linspace(-1, 1, 201) * u
         best = grid[int(np.argmax([ph(d) for d in grid]))]
-        grid = np.linspace(best - 0.01, best + 0.01, 41)
+        grid = np.linspace(best - 0.01 * u, best + 0.01 * u, 41)
         v = [ph(d) for d in grid]
         i = int(np.argmax(v))
         return grid[i], v[i] / max(float(np.sum(np.abs(X))), 1e-30)
@@ -2959,7 +3003,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     n = -P5 * SC_PRE + np.arange(P5 * (nrows + 2 * SC_SPAN + 2))
     tpos = T0 + rho * (n + D(n.astype(float)))
     z = sc_read(y, tpos)
-    v = math.sqrt(2) * z * np.exp(-2j * np.pi * SC_FC / FS_TX * n)
+    v = math.sqrt(2) * z * np.exp(-2j * np.pi * SC_FC / SC_FS * n)
     mf = np.convolve(v, SC_G)
     phases = [mf[2 * SC_DLY + p::P5][:nrows] for p in range(P5)]
     good = np.ones(nrows)                                  # v5.1: 0 on the rows a gap smears (row r: sample 5 (r - 64) + 60)
@@ -3096,7 +3140,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     out = dict(bits=bits, passes=passes, codeword=bool(np.array_equal((dec > 0).astype(int), cw)),
                chan_errors=int(np.sum(first != (cw > 0))), snr=float(np.median(snrs)), snrs=snrs,
                ppm=ppm, bend=bend, phase=phase, change=change, taps=L, train=nt, effort=effort, est=est, nseg=len(segs), T0=T0,
-               gaps=[(ng / FS_TX, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist, relearn=relearn)
+               gaps=[(ng / SC_FS, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist, relearn=relearn)
     if gaps and not out["codeword"] and swap is None:     # v5.1: the other size, or the runner-up place, of the least sure gap
         o2 = sc_receive(y, fs, t0, omap, code, n0, nc, det, False, nt, effort, est, swap=max(unsure)[1])
         if o2["codeword"]:
@@ -3106,12 +3150,14 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     return out
 
 
-def sc_desc(omap, nt=SC_NC):
-    name = [k for k, v in SC_TRAIN.items() if v == nt][0]
-    return (f"single carrier at {SC_FC / 1000:g} kHz, {SC_RS} symbols/s (roll-off {SC_BETA:.2f}, {SC_FC - SC_RS * (1 + SC_BETA) / 2:.0f} to "
-            f"{SC_FC + SC_RS * (1 + SC_BETA) / 2:.0f} Hz), {OFDM_NAMES[omap]}, {name} training ({nt} symbols, rooms up to "
-            f"{max(SC_TAPS[nt]) - SC_PRE} taps after the first strong arrival, {(max(SC_TAPS[nt]) - SC_PRE) / SC_RS * 1000:.0f} ms) every "
-            f"{SC_D / SC_RS:.1f} s, {sc_rate(omap, nt):.0f} bit/s before the code")
+def sc_desc(omap, nt=SC_NC, wide=False):
+    rs, _, fc, _ = SC_BANDS[wide]
+    train, taps, d = (SC_SIZES[wide][k] for k in (2, 4, 5))
+    name = [k for k, v in train.items() if v == nt][0]
+    return (f"single carrier at {fc / 1000:g} kHz, {rs:.0f} symbols/s (roll-off {SC_BETA:.2f}, {fc - rs * (1 + SC_BETA) / 2:.0f} to "
+            f"{fc + rs * (1 + SC_BETA) / 2:.0f} Hz), {OFDM_NAMES[omap]}, {name} training ({nt} symbols, rooms up to "
+            f"{max(taps[nt]) - SC_PRE} taps after the first strong arrival, {(max(taps[nt]) - SC_PRE) / rs * 1000:.0f} ms) every "
+            f"{d / rs:.1f} s, {sc_rate(omap, nt, wide):.0f} bit/s before the code")
 
 
 # ---------------------------------------------------------------- receiver
@@ -3272,7 +3318,8 @@ def parse_header(hb):
             return None
     if mi and not (ofdm or sc):                  # a mapping mask on anything but OFDM or the single carrier
         return None
-    codes = TYPE3_CODES if typ == 3 else CODES    # v7: type 3, an LDPC code (v7.3: or a polar code)
+    wide = sc and typ == 2                       # v7.4: the wide band, read as type 3
+    codes = TYPE3_CODES if typ == 3 or wide else CODES    # v7: type 3, an LDPC code (v7.3: or a polar code)
     code = codes[c] if c < len(codes) else None
     if code is None or (sc and (OFDM_MAPS[mi] not in SC_MAPS or code not in SC_CODES)):
         return None
@@ -3280,11 +3327,12 @@ def parse_header(hb):
         return None
     nt = SC_NC
     if sc:                                       # v5: the training length in the top bits of a and b
+        sc_set_band(wide)                        # v7.4: in symbols of the frame's band
         T, a, b = 2 * (a >> 10) + (b >> 10), a & 1023, b & 1023
         if T == 3:
             return None
         nt = [k for k, v in SC_TCODE.items() if v == T][0]
-    if typ == 3:                                 # v7: a text if b = 0, else an image
+    if typ == 3 or wide:                         # v7: a text if b = 0, else an image
         typ = 0 if b == 0 else 1
     h = None
     if typ == 0 and a >= 1 and b == 0:
@@ -3298,7 +3346,8 @@ def parse_header(hb):
         h = dict(type="sound", n0=0, order=a, periods=b)
     if h and sc:                                 # ns: data symbols
         nc, omap = coded_length(code, h["n0"]), OFDM_MAPS[mi]
-        h.update(code=code, nc=nc, rate=sc_rate(omap, nt), tones="sc", M=None, sc=True, map=omap, ns=-(-nc // OFDM_BITS[omap]), train=nt)
+        h.update(code=code, nc=nc, rate=sc_rate(omap, nt, wide), tones="sc", M=None, sc=True, map=omap, ns=-(-nc // OFDM_BITS[omap]), train=nt,
+                 wide=wide)
     elif h and ofdm:                             # ns: data symbols after the reference symbol
         nc, omap = coded_length(code, h["n0"]), OFDM_MAPS[mi]
         h.update(code=code, nc=nc, rate=ofdm_rate(ofdm, omap), tones="ofdm", M=None, ofdm=ofdm["name"], map=omap,
@@ -3413,6 +3462,7 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
             start6 = max(start6, round(start * r48))
             continue
         if hdr.get("sc"):                                     # v5, single carrier: after the control part and a silence
+            sc_set_band(hdr["wide"])                          # v7.4: the usual band or the wide one
             t0, dur = t0c, sc_seconds(hdr["ns"], hdr["train"]) * fs
             if t0 + dur * (1 + 1e-3) + 0.05 * fs > len(y):
                 break
@@ -3426,7 +3476,7 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                 what = frame_what(res)
                 print(f"frame at {res['t']:.2f} s: {what}, clock offset {o['ppm']:+.0f} ppm (from the training blocks), "
                       f"code {hdr['code']} corrected {o['chan_errors']} of {hdr['nc']} channel bits")
-                print(f"  from the header: {sc_desc(hdr['map'], hdr['train'])}, {hdr['ns']} data symbols in {o['nseg']} segment{'s' if o['nseg'] > 1 else ''}, {ctl}")
+                print(f"  from the header: {sc_desc(hdr['map'], hdr['train'], hdr['wide'])}, {hdr['ns']} data symbols in {o['nseg']} segment{'s' if o['nseg'] > 1 else ''}, {ctl}")
                 ch = ", ".join(f"{c:.0f}" for c in o["change"])
                 print(f"  SNR {o['snr']:.1f} dB, the median of the training blocks ({' / '.join(f'{v:.1f}' for v in o['snrs'])} dB: each block's room, {o['taps']} taps, against what it leaves"
                       f"{', MMSE' if est == 'mmse' else ''}), "
@@ -3827,7 +3877,9 @@ def main():
                                 "single carrier: QPSK, 16QAM, 64QAM or 256QAM (the default)")
             p.add_argument("--tones", choices=TONE_SETS, default="low", help="hop: tone hopping, for reverberant rooms")
             p.add_argument("--train", choices=list(SC_TRAIN), default="medium",
-                           help="single carrier: training of 640, 1280 or 2560 symbols, echoes up to 20, 47 or 100 ms (as OFDM's guard)")
+                           help="single carrier: training of 640, 1280 or 2560 symbols (wide band: 896, 1792, 3584), echoes up to 20, 47 or 100 ms (as OFDM's guard)")
+            p.add_argument("--wide", action="store_true",
+                           help="v7.4, single carrier: the wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (an LDPC or a polar code; receivers before v7.4 ignore it)")
             p.add_argument("--pre", type=int, choices=sorted(PILOTS), default=127, help="preamble length, longer reaches farther")
             p.add_argument("--control", choices=("short", "long"), default="short",
                            help="OFDM and single carrier: the short control part (v6, 0.19 s; v5 receivers do not read it) "
@@ -3898,15 +3950,15 @@ def main():
         sound = (a.order, a.periods) if a.sound else None
         mod = a.mod if a.mod in ("ofdm", "sc") else int(a.mod)
         omap = a.map or ("256qam" if mod == "sc" else "dqpsk")
-        code = "turbo" if mod == "sc" and a.code == "none" else a.code   # single carrier: turbo or LDPC codes only
+        code = ("ldpc" if a.wide else "turbo") if mod == "sc" and a.code == "none" else a.code   # single carrier: turbo, LDPC or polar codes (wide: LDPC or polar)
         segs, data = build_frame(text=a.text if img is None and jpeg is None else None, img=img, code=code, rate=a.rate, tones=a.tones, pre=a.pre, sound=sound,
-                                 mod=mod, guard=a.guard, omap=omap, train=a.train, control=a.control, jpeg=jpeg)
+                                 mod=mod, guard=a.guard, omap=omap, train=a.train, control=a.control, jpeg=jpeg, wide=a.wide and mod == "sc")
         x = modulate(segs)
         write_wav(a.out, x, FS_TX)
         if sound:
             print(f"room sounding: MLS of {2 ** a.order - 1} samples x {a.periods + 1}, preamble {a.pre}, {len(x) / FS_TX:.1f} s -> {a.out}")
         else:
-            how = ofdm_desc(ofdm_mode(a.guard), omap) if mod == "ofdm" else sc_desc(omap, SC_TRAIN[a.train]) if mod == "sc" else f"{mod} tones"
+            how = ofdm_desc(ofdm_mode(a.guard), omap) if mod == "ofdm" else sc_desc(omap, SC_SIZES[a.wide][2][a.train], a.wide) if mod == "sc" else f"{mod} tones"
             if mod in ("ofdm", "sc"):
                 how += ", the short control part (v6)" if a.control == "short" else f", preamble {a.pre}"
             what = f"a JPEG file of {len(jpeg)} bytes ({os.path.splitext(a.out)[0]}.jpg) and its CRC-32: " if jpeg is not None and not a.jpeg else ""

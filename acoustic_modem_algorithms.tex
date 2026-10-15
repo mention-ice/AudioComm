@@ -50,7 +50,7 @@
 \title{\color{icemagenta}\textbf{An acoustic modem for the classroom}\\[4pt]
 \large Algorithms, equations and parameter choices of the demo, version~6}
 \author{Communication Theory (2A), CentraleSup\'elec\,---\,Mention ICE}
-\date{15 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py},\\ the SMAP correction and JPEG pictures of version~7.1 and the second try of version~7.2 and the polar codes of version~7.3 (\code{acoustic\_modem\_v7.html}, \code{audiocomm\_v7.py}),\\ and versions $N = 1$ to 5, \code{acoustic\_modem\_v}$N$\code{.html} and \code{audiocomm\_v}$N$\code{.py} (version~5 is also served as \code{acoustic\_modem.html})}
+\date{15 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py},\\ the SMAP correction and JPEG pictures of version~7.1, the second try of version~7.2, the polar codes of version~7.3 and the wide band of version~7.4 (\code{acoustic\_modem\_v7.html}, \code{audiocomm\_v7.py}),\\ and versions $N = 1$ to 5, \code{acoustic\_modem\_v}$N$\code{.html} and \code{audiocomm\_v}$N$\code{.py} (version~5 is also served as \code{acoustic\_modem.html})}
 
 \begin{document}
 \maketitle
@@ -78,7 +78,7 @@ Version~4 adds coherent detection for OFDM (\cref{sec:coh}): a channel estimate 
 Version~4.1 changes only the OFDM receiver: it finds samples that the microphone loses or repeats in the middle of a frame, reads the symbols after the gap again, and erases the symbol that holds it (\cref{sec:gaps}).
 Version~5 adds the single carrier (\cref{sec:sc}): a time map from its training blocks, a room of up to 1024 taps learnt by least squares, and turbo equalization with soft SMAP or a linear MMSE detector. Its page no longer offers the plain ratio $\ln(E_1/E_0)$ as soft output (\cref{sec:soft}), and tells for every turbo frame whether the decoding succeeded (\cref{sec:decode}).
 Version~6 adds the short control part (\cref{sec:c6}): the receiver finds it with a matched filter normalized to the share of the energy that the room's strongest path carries, learns the room, the clock and the noise from its last two periods, and reads the header against them.
-Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft output (\cref{sec:scdet}). Version~7.1 can send a picture as a JPEG file followed by a CRC-32, so that a receiver shows the file as it arrived and tells whether it is intact (\cref{sec:jpeg}). Version~7.2 gives a single-carrier frame that fails a second try, with a room of 2048 taps learned from the whole frame (\cref{sec:screlearn}). Version~7.3 adds the polar codes of 5G~NR at rates $1/3$, $1/2$ and $2/3$, decoded by CRC-aided list decoding, with soft cancellation for the single carrier's passes (\cref{sec:polar}).
+Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft output (\cref{sec:scdet}). Version~7.1 can send a picture as a JPEG file followed by a CRC-32, so that a receiver shows the file as it arrived and tells whether it is intact (\cref{sec:jpeg}). Version~7.2 gives a single-carrier frame that fails a second try, with a room of 2048 taps learned from the whole frame (\cref{sec:screlearn}). Version~7.3 adds the polar codes of 5G~NR at rates $1/3$, $1/2$ and $2/3$, decoded by CRC-aided list decoding, with soft cancellation for the single carrier's passes (\cref{sec:polar}). Version~7.4 can widen the single carrier's band from $3.2$--$16\kHz$ to $2.3$--$20.5\kHz$, $43\,\%$ more symbols per second (\cref{sec:scwide}).
 \end{abstract}
 
 \tableofcontents
@@ -90,7 +90,7 @@ Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft
 
 \subsection{Files and scope}
 \begin{itemize}
-\item \code{acoustic\_modem\_v7.html} and \code{audiocomm\_v7.py} are version~7: version~6 with the LDPC codes of 5G~NR at rates $1/4$ to $3/4$ in place of the Hamming code, and SMAP's soft output corrected (\cref{sec:scdet}). Since 14 October 2026 (version~7.1) they can also send a picture as a JPEG file (\cref{sec:jpeg}). Version~7.2, the same day, adds the single carrier's second try (\cref{sec:screlearn}); the frames did not change. Version~7.3 (15 October 2026) adds polar codes (\cref{sec:polar}), which earlier pages and scripts ignore. Pages and scripts made before version~7 ignore LDPC frames, and those made before version~7.1 JPEG frames. The LDPC code is not described in this document yet.
+\item \code{acoustic\_modem\_v7.html} and \code{audiocomm\_v7.py} are version~7: version~6 with the LDPC codes of 5G~NR at rates $1/4$ to $3/4$ in place of the Hamming code, and SMAP's soft output corrected (\cref{sec:scdet}). Since 14 October 2026 (version~7.1) they can also send a picture as a JPEG file (\cref{sec:jpeg}). Version~7.2, the same day, adds the single carrier's second try (\cref{sec:screlearn}); the frames did not change. Version~7.3 (15 October 2026) adds polar codes (\cref{sec:polar}), which earlier pages and scripts ignore. Version~7.4, the same day, adds the single carrier's wide band (\cref{sec:scwide}), which earlier pages and scripts ignore too. Pages and scripts made before version~7 ignore LDPC frames, and those made before version~7.1 JPEG frames. The LDPC code is not described in this document yet.
 \item \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py} are version~6: version~5.1 plus a short control part for OFDM and single-carrier frames, their default (\cref{sec:c6}). They read every frame of version~5 with the same bits. Version~5 and earlier pages and scripts do not find frames with the short control part, so the sender can still choose the 400 bit/s one for them. \code{acoustic\_modem.html} is still a copy of \code{acoustic\_modem\_v5.html}.
 \item \code{acoustic\_modem\_v5.html} and \code{audiocomm\_v5.py} are version~5: version~4.1 plus a single carrier with QPSK, 16QAM, 64QAM or 256QAM, received by turbo equalization with soft SMAP (\cref{sec:sc}). Since 13 October 2026 \code{acoustic\_modem.html} is a copy of \code{acoustic\_modem\_v5.html}, whose receiver no longer offers the plain ratio $\ln(E_1/E_0)$ (\cref{sec:soft}) and checks every turbo frame for a codeword (\cref{sec:decode}). They send and read every frame of version~4; earlier pages and scripts ignore the single-carrier frames. Since 13 October 2026 (version~5.1) their single-carrier receiver also survives samples lost or repeated by the microphone, and offers an MMSE estimate of the room (\cref{sec:scrx}); the frames did not change.
 \item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK, 16QAM, 64QAM or 256QAM, DQPSK that follows a moving phone (\cref{sec:coh}), and images at four times the size. From 9 to 13 October 2026 \code{acoustic\_modem.html} was a copy of \code{acoustic\_modem\_v4.html}. Since 11 October 2026 (version~4.1) their OFDM receiver also survives samples lost by the microphone (\cref{sec:gaps}); the frames did not change. They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
@@ -281,6 +281,9 @@ Type~3, which no earlier receiver accepts, is a frame coded by LDPC: a text of $
 
 \paragraph{Signalling polar codes (version~7.3).}
 In type~3, the code field plus 4 equal to 5, 6 and 7 are the polar codes of rates $1/3$, $1/2$ and $2/3$ (\cref{sec:polar}). Receivers made before version~7.3 find no code there and ignore the frame.
+
+\paragraph{Signalling the wide band (version~7.4).}
+On the single carrier, type~2 is the wide band (\cref{sec:scwide}), read as type~3: an LDPC or a polar code, a text if $b = 0$, otherwise an image. Receivers made before version~7.4 take type~2 for a room sounding, which they accept with two tones only, and ignore the frame.
 
 \paragraph{Signalling a JPEG file (version~7.1).}
 An image (type 1, or 3 with LDPC) with $a > 512$ is a JPEG file of $512(a - 513) + b$ bytes (\cref{sec:jpeghdr}). Receivers made before version~7.1 reject it.
@@ -1114,6 +1117,47 @@ In another room, the page on Sheng's phone saved a $4\times$ 256QAM frame sent w
 Two recordings (``Impasse Carnot'' 8 and 9) of an eight-frame test sound, with the phone lying still on the table next to the laptop and a background SNR of 37 to $38\dB$, show both the strength and the limit of the single carrier. OFDM failed at 256QAM and at 64QAM (median $5\dB$ per subcarrier, about $20\,\%$ of the energy arriving after the long guard), as did short and medium training: the echo lasts beyond $100\ms$, and 1024 taps leave $23\dB$ where 512 leave 12. With long training, recording~8 decoded the 256QAM frame, and recording~9 the 64QAM frame and the $4\times$ 256QAM frame. The other long-training frames failed because the room changed within the frame: by $-6$ to $-9\dB$ from one training block to the next, against $-14$ to $-25\dB$ in steady frames, and the SNR on the data rows slid from 15 to $9\dB$ along a segment. Following the arrivals with every symbol known, the direct sound and the main echoes stayed within $1\dB$, while one reflection $1.25\ms$ after the direct sound fell by $4.5\dB$ and turned by $55^\circ$, about $5$\,mm of path at $10\kHz$. One path changing while the others stay means that the geometry changed (likely a person at the table, inferred): a filter in either device would change every path alike, and a vibration of the table moves micrometres. Tracking the room from the receiver's own decisions failed on all three frames, because the first pass had about $25\,\%$ of the coded bits wrong and each refit learnt a worse room.
 
 Another receiver would hardly do better (inferred from a bound). A least-squares room of $L$ taps learnt from $N$ rows adds about $L/N$ of the noise (\cref{eq:scls}); keeping that to $1\dB$ needs $N \ge 4L$, about 4100 symbols ($0.43$\,s) of a steady room for 1024 taps, and recording~9's frame needed a fresh room about every $0.1$\,s even with every symbol known. So 256QAM with long training needs a still room; 16QAM or 64QAM is the choice when people move.
+
+\subsection{Wide band (version~7.4)}
+\label{sec:scwide}
+Version~7.4 can send the single-carrier part over $2.3$ to $20.5\kHz$ instead of $3.2$ to $16\kHz$: $96000/7 \approx 13\,714$ symbols per second on a carrier at $11.4\kHz$, with the same roll-off $1/3$, so $43\,\%$ more symbols per second for the same share of training. The sender chooses it (on the page, the \emph{Band} row; in the script, \code{-{}-wide}), with an LDPC or a polar code only.
+
+\paragraph{Why these edges.}
+Sheng sounded a reverberant room (Impasse Carnot, recordings 18 to 20, four soundings at DRR $-2.4$ to $-7.5\dB$) with the page's MLS (\cref{sec:sounding}), played by one phone. Against $6$ to $12\kHz$, its speaker gave 6 to $10\dB$ less at 17 to $21\kHz$, but the background was 4 to $9\dB$ lower there too: the sounding's SNR at 16 to $20.5\kHz$ stayed within about $2\dB$ of its average over $3.2$ to $16\kHz$. The iPhone's microphone drops by $15\dB$ above $21\kHz$. Below $3.2\kHz$ the speaker gives more but the background rises faster: $2.4$ to $3.2\kHz$ was 3 to $5\dB$ below the average, like $4$ to $6\kHz$ in the usual band, $2.0$ to $2.4\kHz$ 5 to $7\dB$ below, and lower bands worse still. The echo is shortest at the top (air absorption): the energy after $53\ms$ was $-11$ to $-15\dB$ of the total at 16 to $20\kHz$ (reverberation time $0.21$ to $0.30$\,s), against $-8$ to $-11\dB$ ($0.35$ to $0.47$\,s) at $6.4$ to $12.8\kHz$ (recordings 19 and 20). Only one sending phone was measured.
+
+\paragraph{Signal.}
+At $48\kHz$ a symbol would last $3.5$ samples, so the pulses and the carrier of \cref{eq:scsig} are made on a grid of $96\kHz$, $P = 7$ samples per symbol, and every other sample is played. The pulse leaves nothing above $20.5\kHz$, below the $24\kHz$ of a $48\kHz$ output, so nothing folds back. The carrier repeats every 160 grid samples ($11\,400/96\,000 = 19/160$). The receiver reads the recording on the same grid by interpolation, as it reads any microphone's rate, so a $44.1$ or $48\kHz$ microphone serves; it tries 7 sampling phases instead of 5, and the delay searches of the clock (\cref{sec:scrx}) span as much time as in the usual band, twice the grid samples.
+
+\paragraph{Frame.}
+The training keeps its duration rather than its symbols: $T_A$ has 1792 symbols, $T_C$ 896, 1792 or 3584 (short, medium, long), the rooms fitted 352, 704, or 704 and 1408 taps, a data segment at most 6720 symbols and the second try's room 2944 taps (\cref{sec:screlearn}): $10/7$ of the usual numbers, the taps rounded to multiples of 64, so the echoes the receiver can learn stay at 21, 47 and $98\ms$ after the first strong arrival. The gap search's reach and margin double in grid samples. A first design at $3.2$ to $19.2\kHz$ (12\,000 symbols per second) settled this: through the rooms measured in Impasse Carnot, keeping the usual symbol counts lost $1.7$ to $3.3\dB$ of SNR on the training, keeping the durations gained $0.9$ to $2.9\dB$ over the usual band. At 64QAM with medium training the rate before the code is $65.0$ instead of $45.5$\,kbit/s, and a frame of the large Great Wave with long training lasts $1.77$\,s instead of $2.23$\,s.
+
+\paragraph{Header.}
+On the single carrier, header type~2 is the wide band, read as type~3 (\cref{sec:header}). The training field keeps its values, in the symbols of the frame's band.
+
+\paragraph{Results (simulation).}
+\Cref{tab:scwide} sends the same frames in both bands through two of the room responses measured in Impasse Carnot (recording 19 and the second sounding of 20), with Gaussian noise shaped like the recorded background and 6 to $18\dB$ louder, three draws each. Up to $6\dB$ more noise than the room had, the wide band decoded every frame the usual band decoded; beyond, it failed more often: 1 of 18 at $+10\dB$ (the usual band none), 5 of 15 at $+14\dB$, 6 of 9 at $+18\dB$. The same loudness spread over $43\,\%$ more band gives each symbol $1.55\dB$ less SNR, and the band below $3.2\kHz$ is noisier: the wide band is for frames with some margin. The page's core and the script make the same waveforms (to the float32 rounding of the page), read each other's frames, and give usual-band frames exactly as version~7.3 did; decoding a large Great Wave in the page's core took $1.97$\,s instead of $1.63$\,s (Node, one core).
+
+\begin{table}[ht]
+\centering
+\caption{Frames decoded of 3 noise draws, usual band\,/\,wide band, through rooms measured in Impasse Carnot, with noise shaped like the recorded background and this much louder; LDPC $1/2$, a random $160 \times 108$ image.}
+\label{tab:scwide}
+\small
+\begin{tabular}{llcccc}
+\toprule
+Room & Frame & $+6\dB$ & $+10\dB$ & $+14\dB$ & $+18\dB$\\
+\midrule
+19 & 16QAM, medium training & 3\,/\,3 & 3\,/\,3 & 3\,/\,1 & 0\,/\,0\\
+19 & 16QAM, long training & 3\,/\,3 & 3\,/\,3 & 3\,/\,3 & 3\,/\,0\\
+19 & 64QAM, long training & 3\,/\,3 & 3\,/\,2 & 0\,/\,0 & 0\,/\,0\\
+20 (second) & 16QAM, medium training & 3\,/\,3 & 3\,/\,3 & 3\,/\,3 & 3\,/\,0\\
+20 (second) & 16QAM, long training & 3\,/\,3 & 3\,/\,3 & 3\,/\,3 & 3\,/\,3\\
+20 (second) & 64QAM, long training & 3\,/\,3 & 3\,/\,3 & 3\,/\,0 & 0\,/\,0\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Limits.}
+These are simulations with the rooms held still; no wide-band frame has been recorded yet. A clock offset above about 200\,ppm (a phone carried at walking speed, not two phones at rest) can make the first block report a gap that is not there (\cref{sec:scrx}), because the drift across it reaches the 4 samples that mark one; the usual band failed the same way at 500\,ppm.
 
 %======================================================================
 \section{Short control part (version~6)}
