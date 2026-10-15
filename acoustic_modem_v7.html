@@ -51,7 +51,7 @@ header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,
 .opts>.muted:nth-child(odd){max-width:8.5em}
 .opts>.seg{justify-self:start}
 .opts .seg button{padding:7px 10px}
-.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ldpc) .lr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk,.opts.sc .nsc,.opts:not(.sc) .sco{display:none}
+.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ldpc) .lr,.opts:not(.polar) .pr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk,.opts.sc .nsc,.opts:not(.sc) .sco{display:none}
 .opts.sc .xsc{opacity:.35;pointer-events:none}
 .opts.ofdm.short:not(.sounding) .pre{display:none}
 @media (max-width:520px){.opts{grid-template-columns:1fr;gap:4px}.opts>.seg{margin-bottom:6px}}
@@ -169,9 +169,10 @@ details .row{margin:8px 0}
     </div>
   </div>
   <div class="opts" id="txOpts">
-    <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button class="xsc" data-v="none">None</button><button class="xsc" data-v="conv">Convolutional</button><button data-v="turbo">Turbo</button><button data-v="ldpc">LDPC</button></span>
+    <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button class="xsc" data-v="none">None</button><button class="xsc" data-v="conv">Convolutional</button><button data-v="turbo">Turbo</button><button data-v="ldpc">LDPC</button><button data-v="polar">Polar</button></span>
     <span class="muted mo tr">Turbo code rate</span><span class="seg mo tr" id="trSeg"><button data-v="turbo">1/2</button><button data-v="turbo3">1/3</button><button data-v="turbo4">1/4</button></span>
     <span class="muted mo lr">LDPC code rate</span><span class="seg mo lr" id="lrSeg"><button data-v="ldpc4">1/4</button><button data-v="ldpc3">1/3</button><button data-v="ldpc">1/2</button><button data-v="ldpc23">2/3</button><button data-v="ldpc34">3/4</button></span>
+    <span class="muted mo pr">Polar code rate</span><span class="seg mo pr" id="prSeg"><button data-v="polar3">1/3</button><button data-v="polar">1/2</button><button data-v="polar23">2/3</button></span>
     <span class="muted mo">Modulation</span><span class="seg mo" id="modSeg"><button data-v="2">2 tones, 1 bit</button><button data-v="4">4 tones, 2 bits</button><button data-v="ofdm">OFDM</button><button data-v="sc">Single carrier</button></span>
     <span class="muted fk">Tones</span><span class="seg fk" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
     <span class="muted mo fk">Rate, bit/s</span><span class="seg mo fk" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button><button data-v="3200">3200</button><button data-v="6400">6400</button></span>
@@ -206,7 +207,8 @@ details .row{margin:8px 0}
     <b>Convolutional</b>: rate 1/2, constraint length 7 (generators 171, 133 octal), decoded by the Viterbi algorithm on the soft outputs.
     <b>Turbo</b>: rate 1/2 as in 4G: two small recursive convolutional codes, the second fed with the message shuffled, decoded by two soft decoders that exchange what they learnt, up to 8 times. It needs about 1.3 dB less signal than the convolutional code for the same frame error rate.
     <b>LDPC</b> (v7): the low-density parity-check codes of 5G (3GPP TS 38.212, base graphs 1 and 2), at rates 1/4, 1/3, 1/2, 2/3 and 3/4. Each coded bit takes part in a few parity checks; the decoder passes beliefs between the bits and the checks (layered belief propagation), up to 25 times, and stops as soon as every check holds, which also tells the receiver that the message is almost surely right. In simulation, in plain noise, it needs the same signal as turbo at the same rate, or up to 0.15 dB less, and shows no error floor where turbo 1/2 has one on short messages. With the single carrier, through a measured room, it needed 0.5 to 1.1 dB more than turbo at the same rate: until it converges it tells the detector little (see below), so turbo stays the single carrier's default. Its rates 2/3 and 3/4 carry more when the signal is strong: 64QAM with LDPC 2/3 carries 4 bits per symbol at the SNR that 256QAM with turbo 1/2 needs. Receivers older than v7 ignore LDPC frames.
-    Convolutional, turbo and LDPC bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.
+    <b>Polar</b> (v7.3): the polar codes of 5G (3GPP TS 38.212, those of its short control messages), at rates 1/3, 1/2 and 2/3. Combining the bits two by two, again and again, splits the channel into nearly perfect copies and nearly useless ones: the message goes on the best, the others carry known zeros. Each block of at most 1024 coded bits carries an 11-bit CRC; the decoder decides the bits one after the other, keeps the 8 likeliest guesses (list decoding), then takes the first whose CRC holds, which also tells the receiver that the block is right. In simulation, in plain noise, it needs the same signal as LDPC on a short text (within 0.1 dB at 10 % frame errors); on longer messages, cut into blocks of at most 1024 bits, LDPC does better: 0.35 dB at 1000 bits, 1.1 dB on the large picture, which is why 5G keeps polar codes for short messages. Through a measured room, with the single carrier, the two codes decoded the same frames. With the single carrier, a soft version of the decoder (soft cancellation) tells the detector what it learnt. Receivers older than v7.3 ignore polar frames.
+    Convolutional, turbo, LDPC and polar bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.
     v0 also offered <b>Reed–Solomon (255,223)</b>, which corrects up to 16 wrong bytes in each block of 255. In a room it fails early, as did the Hamming (7,4) code of v1 to v6, since both decide each bit before decoding, so this page sends neither; it still decodes Reed–Solomon.</p>
     <p class="muted"><b>JPEG pictures (v7.1).</b> The demo image or a photo can also go as a JPEG file, in colour, at quality 25, 50 or 75: the file itself, then a CRC-32 of it (as Ethernet and Wi-Fi do), so that every receiver tells an intact file from a corrupted one, whatever the code. At quality 25 the file is about as long as the black-and-white picture of the same size.
     JPEG does not let a wrong bit stay local: its Huffman codes have variable lengths and each block's DC value is sent as a difference from the previous one, so after a wrong bit the decoder reads garbage, and a wrong bit among the first 630 bytes (the tables and the size) can make the whole file unreadable. This page's JPEGs carry a restart marker after every row of 16 × 16 pixels, where the decoder starts afresh, so a few scattered wrong bits cost only the stripes that hold them. The receiver also clears the markers that wrong bits create, which would otherwise stop the decoder and leave the rest of the picture grey ("save" keeps the file as it arrived).
@@ -286,8 +288,8 @@ details .row{margin:8px 0}
     <p class="muted"><b>FSK: the calibrated LLR</b> measures, on the known bits of the postamble (sent at the message's tones and rate), the level A and the noise σ² of each tone, then uses the log-likelihood ratio of non-coherent FSK, ln I₀(A₁E₁/σ₁²) − A₁²/2σ₁² − ln I₀(A₀E₀/σ₀²) + A₀²/2σ₀². If the postamble is not found (for example when the end of the sound was cut off), A and σ² are estimated on the message itself: its bits are guessed from the energies, then the guesses and the estimates are refined in turn (EM). With the postamble, the LLR is then multiplied by the factor α ≤ 1 that best predicts the postamble's own bits: the echoes of short symbols have heavier tails than Gaussian noise, which makes the model too sure of itself (α ≈ 0.3 at 1600 bit/s in a real room). It corrects an imbalance between the tones (speaker, microphone, room) and gives the decoder reliabilities on the right scale. With 4 tones, each tone m gets its own λ<sub>m</sub> = ln I₀(A<sub>m</sub>E<sub>m</sub>/σ<sub>m</sub>²) − A<sub>m</sub>²/2σ<sub>m</sub>², the log-likelihood that it was the tone sent, and the LLR of each of the symbol's two bits is ln Σ e<sup>λ</sup> over the two tones where that bit is 1, minus the same over the two where it is 0. The energies are first divided by the local signal level (averaged over ±24 symbols), because in a room the main disturbance, the echo, rises and falls with the signal.</p>
     <p class="muted">Earlier versions also offered the plain ratio ln(E₁/E₀) of the two tones' energies. Its sign is the right decision when both tones arrive equally strong, but its size says little about reliability: a bit drowned in noise can look as sure as a clean one. Since v1 also calibrates when the postamble is lost, the calibrated LLR has done better (on the 1600 bit/s recording where the ratio once won: 0 against 256 wrong pixels), so the page no longer offers the ratio.</p>
     <p class="muted"><b>OFDM</b> uses the LLR of its detector. DQPSK: for each subcarrier, z = Y<sub>i</sub> Y<sub>i−1</sub><sup>*</sup> compares the symbol with the one before, the LLR of the first bit is −√2 Re z / N<sub>0</sub> and that of the second −√2 Im z / N<sub>0</sub>, and N<sub>0</sub> (noise plus the echo that arrives after the guard) is measured on the decisions, per group of 32 subcarriers. QPSK to 256QAM (v4): that of the estimated channel, for each bit ln Σ<sub>s: bit 1</sub> exp(−|Y − H s|² / N<sub>0</sub>) − ln Σ<sub>s: bit 0</sub> exp(−|Y − H s|² / N<sub>0</sub>) over the points s of the mapping, with N<sub>0</sub> measured on the pilots and the reference symbols.</p>
-    <p class="muted"><b>Single carrier</b> (v5): the detector (soft SMAP or linear MMSE) gives the LLRs; the turbo or LDPC decoder returns what it learnt about every coded bit (its extrinsic LLRs), and the detector starts again with that as prior, pass after pass (turbo equalization). The histogram shows the detector's first pass.</p>
-    <p class="muted"><b>Did the decoding succeed?</b> With a turbo code, the receiver checks whether the decoder's decisions on every coded bit, message and parity alike, agree with the re-encoded message, that is, whether they form a codeword. If they do, the message is almost surely right (✓ decoded); if not, some bits are wrong (✗). An LDPC decoder says it by itself: every parity check holds (✓ decoded), or after 25 iterations some still fail (✗). With the demo image, which every receiver knows, it also counts the wrong bits. The convolutional code gives no such check.</p>
+    <p class="muted"><b>Single carrier</b> (v5): the detector (soft SMAP or linear MMSE) gives the LLRs; the turbo, LDPC or polar decoder returns what it learnt about every coded bit (its extrinsic LLRs), and the detector starts again with that as prior, pass after pass (turbo equalization). The histogram shows the detector's first pass.</p>
+    <p class="muted"><b>Did the decoding succeed?</b> With a turbo code, the receiver checks whether the decoder's decisions on every coded bit, message and parity alike, agree with the re-encoded message, that is, whether they form a codeword. If they do, the message is almost surely right (✓ decoded); if not, some bits are wrong (✗). An LDPC decoder says it by itself: every parity check holds (✓ decoded), or after 25 iterations some still fail (✗). A polar code carries a CRC in every block: ✓ when every block's CRC holds. With the demo image, which every receiver knows, it also counts the wrong bits. The convolutional code gives no such check.</p>
   </details>
   <details>
     <summary>Room sounding</summary>
@@ -362,7 +364,10 @@ const CODE_INFO = {
   ldpc3:   { name: 'LDPC (5G NR), layered belief propagation + interleaver', short: 'LDPC code', rate: '1/3' },
   ldpc:    { name: 'LDPC (5G NR), layered belief propagation + interleaver', short: 'LDPC code', rate: '1/2' },
   ldpc23:  { name: 'LDPC (5G NR), layered belief propagation + interleaver', short: 'LDPC code', rate: '2/3' },
-  ldpc34:  { name: 'LDPC (5G NR), layered belief propagation + interleaver', short: 'LDPC code', rate: '3/4' }
+  ldpc34:  { name: 'LDPC (5G NR), layered belief propagation + interleaver', short: 'LDPC code', rate: '3/4' },
+  polar3:  { name: 'polar (5G NR), 11-bit CRC per block, list decoding (8 paths) + interleaver', short: 'polar code', rate: '1/3' },
+  polar:   { name: 'polar (5G NR), 11-bit CRC per block, list decoding (8 paths) + interleaver', short: 'polar code', rate: '1/2' },
+  polar23: { name: 'polar (5G NR), 11-bit CRC per block, list decoding (8 paths) + interleaver', short: 'polar code', rate: '2/3' }
 };
 const TURBO_R = { turbo: 2, turbo3: 3, turbo4: 4 };   // turbo codes: rate 1/r
 
@@ -661,11 +666,221 @@ function ldpcDecode(llr, nbits, rate, iters = LDPC_ITERS) {   // as ldpc_decode:
   }
   return { bits, app, iters: Math.min(it, iters), ok, post };
 }
+// ---- v7.3: polar codes of 5G NR (3GPP TS 38.212: 5.3.1 code construction and encoding, 5.4.1 rate matching, the CRC
+// of the uplink control channel, 6.3.1.2.1), rates 1/3, 1/2, 2/3, decoded by CRC-aided list decoding; as audiocomm_v7.py
+// (polar_*), bit for bit. Differences from NR: the message is split into as many blocks as needed for at most 1024 sent
+// bits each (NR: at most two blocks), every block carries an 11-bit CRC (NR: 6 bits and 3 parity-check bits under 20
+// message bits), no bit interleaving of NR's own (the modem's channel interleaver follows). The rate counts the CRC as
+// part of the block: E = (a + 11) / R.
+const POLAR_R = { polar3: [1, 3], polar: [1, 2], polar23: [2, 3] };   // code -> rate num/den
+const POLAR_Q = ('0 1 2 4 8 16 32 3 5 64 9 6 17 10 18 128 12 33 65 20 256 34 24 36 7 129 66 512 11 40 68 130 19 13 48 14 72 257 '
+  + '21 132 35 258 26 513 80 37 25 22 136 260 264 38 514 96 67 41 144 28 69 42 516 49 74 272 160 520 288 528 192 544 '
+  + '70 44 131 81 50 73 15 320 133 52 23 134 384 76 137 82 56 27 97 39 259 84 138 145 261 29 43 98 515 88 140 30 146 '
+  + '71 262 265 161 576 45 100 640 51 148 46 75 266 273 517 104 162 53 193 152 77 164 768 268 274 518 54 83 57 521 '
+  + '112 135 78 289 194 85 276 522 58 168 139 99 86 60 280 89 290 529 524 196 141 101 147 176 142 530 321 31 200 90 '
+  + '545 292 322 532 263 149 102 105 304 296 163 92 47 267 385 546 324 208 386 150 153 165 106 55 328 536 577 548 '
+  + '113 154 79 269 108 578 224 166 519 552 195 270 641 523 275 580 291 59 169 560 114 277 156 87 197 116 170 61 531 '
+  + '525 642 281 278 526 177 293 388 91 584 769 198 172 120 201 336 62 282 143 103 178 294 93 644 202 592 323 392 '
+  + '297 770 107 180 151 209 284 648 94 204 298 400 608 352 325 533 155 210 305 547 300 109 184 534 537 115 167 225 '
+  + '326 306 772 157 656 329 110 117 212 171 776 330 226 549 538 387 308 216 416 271 279 158 337 550 672 118 332 579 '
+  + '540 389 173 121 553 199 784 179 228 338 312 704 390 174 554 581 393 283 122 448 353 561 203 63 340 394 527 582 '
+  + '556 181 295 285 232 124 205 182 643 562 286 585 299 354 211 401 185 396 344 586 645 593 535 240 206 95 327 564 '
+  + '800 402 356 307 301 417 213 568 832 588 186 646 404 227 896 594 418 302 649 771 360 539 111 331 214 309 188 449 '
+  + '217 408 609 596 551 650 229 159 420 310 541 773 610 657 333 119 600 339 218 368 652 230 391 313 450 542 334 233 '
+  + '555 774 175 123 658 612 341 777 220 314 424 395 673 583 355 287 183 234 125 557 660 616 342 316 241 778 563 345 '
+  + '452 397 403 207 674 558 785 432 357 187 236 664 624 587 780 705 126 242 565 398 346 456 358 405 303 569 244 595 '
+  + '189 566 676 361 706 589 215 786 647 348 419 406 464 680 801 362 590 409 570 788 597 572 219 311 708 598 601 651 '
+  + '421 792 802 611 602 410 231 688 653 248 369 190 364 654 659 335 480 315 221 370 613 422 425 451 614 543 235 412 '
+  + '343 372 775 317 222 426 453 237 559 833 804 712 834 661 808 779 617 604 433 720 816 836 347 897 243 662 454 318 '
+  + '675 618 898 781 376 428 665 736 567 840 625 238 359 457 399 787 591 678 434 677 349 245 458 666 620 363 127 191 '
+  + '782 407 436 626 571 465 681 246 707 350 599 668 790 460 249 682 573 411 803 789 709 365 440 628 689 374 423 466 '
+  + '793 250 371 481 574 413 603 366 468 655 900 805 615 684 710 429 794 252 373 605 848 690 713 632 482 806 427 904 '
+  + '414 223 663 692 835 619 472 455 796 809 714 721 837 716 864 810 606 912 722 696 377 435 817 319 621 812 484 430 '
+  + '838 667 488 239 378 459 622 627 437 380 818 461 496 669 679 724 841 629 351 467 438 737 251 462 442 441 469 247 '
+  + '683 842 738 899 670 783 849 820 728 928 791 367 901 630 685 844 633 711 253 691 824 902 686 740 850 375 444 470 '
+  + '483 415 485 905 795 473 634 744 852 960 865 693 797 906 715 807 474 636 694 254 717 575 913 798 811 379 697 431 '
+  + '607 489 866 723 486 908 718 813 476 856 839 725 698 914 752 868 819 814 439 929 490 623 671 739 916 463 843 381 '
+  + '497 930 821 726 961 872 492 631 729 700 443 741 845 920 382 822 851 730 498 880 742 445 471 635 932 687 903 825 '
+  + '500 846 745 826 732 446 962 936 475 853 867 637 907 487 695 746 828 753 854 857 504 799 255 964 909 719 477 915 '
+  + '638 748 944 869 491 699 754 858 478 968 383 910 815 976 870 917 727 493 873 701 931 756 860 499 731 823 922 874 '
+  + '918 502 933 743 760 881 494 702 921 501 876 847 992 447 733 827 934 882 937 963 747 505 855 924 734 829 965 938 '
+  + '884 506 749 945 966 755 859 940 830 911 871 639 888 479 946 750 969 508 861 757 970 919 875 862 758 948 977 923 '
+  + '972 761 877 952 495 703 935 978 883 762 503 925 878 735 993 885 939 994 980 926 764 941 967 886 831 947 507 889 '
+  + '984 751 942 996 971 890 509 949 973 1000 892 950 863 759 1008 510 979 953 763 974 954 879 981 982 927 995 765 '
+  + '956 887 985 997 986 943 891 998 766 511 988 1001 951 1002 893 975 894 1009 955 1004 1010 957 983 958 987 1012 '
+  + '999 1016 767 989 1003 990 1005 959 1011 1013 895 1006 1014 1017 1018 991 1020 1007 1015 1019 1021 1022 1023').split(' ').map(Number);   // Table 5.3.1.2-1: Q_0 .. Q_1023, least reliable first
+const POLAR_P = [0, 1, 2, 4, 3, 5, 6, 7, 8, 16, 9, 17, 10, 18, 11, 19, 12, 20, 13, 21, 14, 22, 15, 23, 24, 25, 26, 28, 27, 29, 30, 31];   // Table 5.4.1.1-1
+const POLAR_CRC = [1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1];   // CRC11: D^11 + D^10 + D^9 + D^5 + 1
+const POLAR_NCRC = 11, POLAR_EMAX = 1024;
+const POLAR_LIST = 8;    // list decoding: the 8 likeliest paths are kept; the first whose CRC holds wins
+const POLAR_SCAN = 2;    // soft cancellation iterations: the soft output that the single carrier's passes need
+const POLAR_CLIP = 30, POLAR_BIG = 1000, POLAR_SURE = 100;   // input LLRs clipped (as LDPC); known bits; a block whose CRC holds
+function polarCrc(bits, from = 0, n = bits.length - from) {   // the 11 CRC bits (shift register from zero, MSB first)
+  const r = new Array(POLAR_NCRC).fill(0);
+  for (let i = from; i < from + n; i++) {
+    const fb = r[0] ^ bits[i];
+    for (let j = 0; j < POLAR_NCRC - 1; j++) r[j] = r[j + 1] ^ (fb & POLAR_CRC[j + 1]);
+    r[POLAR_NCRC - 1] = fb & POLAR_CRC[POLAR_NCRC];
+  }
+  return r;
+}
+const POLAR_B = new Map();
+function polarBlock(K, E) {   // as polar_block: mother code length N, information positions, each sent bit's codeword position
+  const key = K + ',' + E;
+  if (!POLAR_B.has(key)) {
+    const lg = Math.ceil(Math.log2(E)), n1 = 8 * E <= 9 * 2 ** (lg - 1) && 16 * K < 9 * E ? lg - 1 : lg;
+    const n = Math.max(Math.min(n1, Math.ceil(Math.log2(8 * K)), 10), 5), N = 1 << n;
+    const J = Array.from({ length: N }, (_, k) => POLAR_P[Math.floor(32 * k / N)] * (N / 32) + k % (N / 32));
+    const mode = E >= N ? 'repeat' : 16 * K <= 7 * E ? 'puncture' : 'shorten', frozen = new Set();
+    if (mode === 'puncture') {
+      for (let k = 0; k < N - E; k++) frozen.add(J[k]);
+      const T = 4 * E >= 3 * N ? Math.ceil((3 * N - 2 * E) / 4) : Math.ceil((9 * N - 4 * E) / 16);
+      for (let k = 0; k < T; k++) frozen.add(k);
+    } else if (mode === 'shorten') for (let k = E; k < N; k++) frozen.add(J[k]);
+    const free = POLAR_Q.filter(q => q < N && !frozen.has(q)), isinfo = new Uint8Array(N);
+    for (const q of free.slice(free.length - K)) isinfo[q] = 1;
+    const info = [], ninfo = new Int32Array(N + 1);
+    for (let i = 0; i < N; i++) { if (isinfo[i]) info.push(i); ninfo[i + 1] = ninfo[i] + isinfo[i]; }
+    const sent = Int32Array.from({ length: E }, (_, k) => mode === 'puncture' ? J[k + N - E] : J[k % N]);
+    POLAR_B.set(key, { K, E, N, n, mode, isinfo, info, ninfo, sent, known: mode === 'shorten' ? J.slice(E) : [] });
+  }
+  return POLAR_B.get(key);
+}
+function polarParams(nbits, rate) {   // as polar_params: the fewest blocks that send at most 1024 bits each
+  const [num, den] = rate;
+  let C = 1;
+  while (Math.ceil((nbits + POLAR_NCRC * C) * den / num) > POLAR_EMAX * C) C++;
+  const G = Math.ceil((nbits + POLAR_NCRC * C) * den / num);
+  const a = Array.from({ length: C }, (_, i) => Math.floor(nbits / C) + (i < nbits % C ? 1 : 0));
+  const E = Array.from({ length: C }, (_, i) => Math.floor(G / C) + (i < G % C ? 1 : 0));
+  return { C, a, E, G, blocks: a.map((ai, i) => polarBlock(ai + POLAR_NCRC, E[i])) };
+}
+function polarCodeword(m, from, b) {   // block b's sent bits for the message bits m[from ..]: u, d = u G_N, then rate matching
+  const a = b.K - POLAR_NCRC, x = new Uint8Array(b.N), crc = polarCrc(m, from, a);
+  b.info.forEach((p, k) => { x[p] = k < a ? m[from + k] : crc[k - a]; });
+  for (let s = 1; s < b.N; s *= 2) for (let i = 0; i < b.N; i += 2 * s) for (let j = i; j < i + s; j++) x[j] ^= x[j + s];
+  return Array.from(b.sent, j => x[j]);
+}
+function polarEncode(bits, rate) {
+  const p = polarParams(bits.length, rate), out = [];
+  let q = 0;
+  p.blocks.forEach((b, i) => { for (const v of polarCodeword(bits, q, b)) out.push(v); q += p.a[i]; });
+  return out;
+}
+const bplus = (a, b) => Math.sign(a) * Math.sign(b) * Math.min(Math.abs(a), Math.abs(b)) + Math.log1p(Math.exp(-Math.abs(a + b))) - Math.log1p(Math.exp(-Math.abs(a - b)));
+const lae0 = x => x > 0 ? x + Math.log1p(Math.exp(-x)) : Math.log1p(Math.exp(x));   // ln(1 + e^x)
+// Decoding works on the tree of the code: a node of size s holds bits (v1 xor v2, v2), v1 and v2 being the codewords of
+// its two halves; from the LLRs a = (a1, a2) of its bits (ln P(0)/P(1)), v1's are a1 [+] a2, then, v1 known, v2's are
+// a2 + (1 - 2 v1) a1 (successive cancellation). The leaves are the bits u_i, decided in order.
+function polarScl(lam, b, L = POLAR_LIST) {   // as polar_scl, one block: the K bits of the L paths, likeliest first (L x K)
+  const { N, n, ninfo } = b, alpha = [], beta = [], perm = [];
+  for (let d = 0; d <= n; d++) { alpha.push(new Float64Array(L * (N >> d))); beta.push(new Uint8Array(L * (N >> d))); }
+  for (let d = 0; d < 2 * (n + 1); d++) perm.push(Int32Array.from({ length: L }, (_, l) => l));   // perm[d]: alpha[d]'s row of each path; perm[n + 1 + d]: beta[d]'s
+  for (let l = 0; l < L; l++) alpha[0].set(lam, l * N);
+  let PM = new Float64Array(L).fill(Infinity);
+  PM[0] = 0;
+  const hist = [], cand = new Float64Array(2 * L), ord = Array.from({ length: 2 * L }, (_, k) => k);
+  const reset = d => { for (let l = 0; l < L; l++) perm[d][l] = l; };
+  function fork(lr) {   // an information bit: each path tries 0 and 1, the L likeliest stay
+    for (let l = 0; l < L; l++) { cand[l] = PM[l] + lae0(-lr[l]); cand[L + l] = PM[l] + lae0(lr[l]); }
+    for (let k = 0; k < 2 * L; k++) ord[k] = k;
+    ord.sort((x, y) => cand[x] - cand[y]);   // stable; inf - inf (paths not started) counts as a tie
+    const par = new Int32Array(L), bit = new Uint8Array(L), PM2 = new Float64Array(L);
+    for (let l = 0; l < L; l++) { par[l] = ord[l] % L; bit[l] = ord[l] >= L ? 1 : 0; PM2[l] = cand[ord[l]]; }
+    PM = PM2;
+    for (const p of perm) { const old = Int32Array.from(p); for (let l = 0; l < L; l++) p[l] = old[par[l]]; }
+    hist.push([par, bit]);
+    return bit;
+  }
+  function frozen(a, s) {   // the leaves' LLRs under a node with no information bit (a: L x s), level by level
+    let x = Float64Array.from(a);
+    for (let h = s / 2; h >= 1; h /= 2) {
+      const y = new Float64Array(x.length);
+      for (let o = 0; o < x.length; o += 2 * h) for (let j = 0; j < h; j++) { const a1 = x[o + j], a2 = x[o + h + j]; y[o + j] = bplus(a1, a2); y[o + h + j] = a1 + a2; }
+      x = y;
+    }
+    return x;
+  }
+  function get(d) {   // alpha[d] as the paths now see it (L x s)
+    const s = N >> d, out = new Float64Array(L * s);
+    for (let l = 0; l < L; l++) out.set(alpha[d].subarray(perm[d][l] * s, (perm[d][l] + 1) * s), l * s);
+    return out;
+  }
+  function node(d, off) {   // returns the node's bits for each path (L x s)
+    const s = N >> d;
+    let a = get(d);
+    if (ninfo[off + s] === ninfo[off]) {   // no information bit below: all zeros; the paths pay for their LLRs
+      const x = frozen(a, s);
+      for (let l = 0; l < L; l++) { let t = 0; for (let j = 0; j < s; j++) t += lae0(-x[l * s + j]); PM[l] += t; }
+      return new Uint8Array(L * s);
+    }
+    if (s === 1) return fork(a);
+    const h = s / 2, A = alpha[d + 1];
+    for (let l = 0; l < L; l++) for (let j = 0; j < h; j++) A[l * h + j] = bplus(a[l * s + j], a[l * s + h + j]);
+    reset(d + 1);
+    const b1 = node(d + 1, off);
+    if (ninfo[off + h] > ninfo[off]) a = get(d);   // the paths have moved
+    for (let l = 0; l < L; l++) for (let j = 0; j < h; j++) A[l * h + j] = a[l * s + h + j] + (1 - 2 * b1[l * h + j]) * a[l * s + j];
+    reset(d + 1);
+    beta[d].set(b1.subarray(0, L * h)); reset(n + 1 + d);
+    const b2 = node(d + 1, off + h), out = new Uint8Array(L * s), pb = perm[n + 1 + d];
+    for (let l = 0; l < L; l++) for (let j = 0; j < h; j++) { const v2 = b2[l * h + j]; out[l * s + j] = beta[d][pb[l] * h + j] ^ v2; out[l * s + h + j] = v2; }
+    return out;
+  }
+  node(0, 0);
+  const idx = Array.from({ length: L }, (_, k) => k).sort((x, y) => PM[x] - PM[y]), K = hist.length, u = new Uint8Array(L * K);
+  for (let k = K - 1; k >= 0; k--) { const [par, bit] = hist[k]; for (let l = 0; l < L; l++) { u[l * K + k] = bit[idx[l]]; idx[l] = par[idx[l]]; } }   // back through the parents
+  return u;
+}
+function polarScan(lam, b, iters = POLAR_SCAN) {   // as polar_scan: soft cancellation; the codeword's extrinsic LLRs
+  const { N, ninfo } = b, right = new Map();
+  function node(a, off, s) {
+    const k = ninfo[off + s] - ninfo[off];
+    if (k === 0) return new Float64Array(s).fill(POLAR_BIG);   // all frozen: known zeros
+    if (k === s) return new Float64Array(s);                   // all free: the code says nothing
+    const h = s / 2, br = right.get(off * 2048 + s), x = new Float64Array(h);
+    for (let j = 0; j < h; j++) x[j] = bplus(a[j], a[h + j] + (br ? br[j] : 0));
+    const b1 = node(x, off, h);
+    for (let j = 0; j < h; j++) x[j] = a[h + j] + bplus(a[j], b1[j]);
+    const b2 = node(x, off + h, h), out = new Float64Array(s);
+    right.set(off * 2048 + s, b2);
+    for (let j = 0; j < h; j++) { out[j] = bplus(b1[j], a[h + j] + b2[j]); out[h + j] = b2[j] + bplus(a[j], b1[j]); }
+    return out;
+  }
+  let ext;
+  for (let i = 0; i < iters; i++) ext = node(lam, 0, N);
+  return ext;
+}
+function polarDecode(llr, nbits, rate, soft = false) {   // as polar_decode: { bits, oks, ok, post }
+  const p = polarParams(nbits, rate), bits = new Uint8Array(nbits), oks = [], post = new Float64Array(p.G);
+  let q = 0, m = 0;
+  p.blocks.forEach((b, i) => {
+    const a = p.a[i], E = p.E[i], lam = new Float64Array(b.N);   // the codeword's LLRs: repeated bits add up, punctured ones 0
+    for (let k = 0; k < E; k++) lam[b.sent[k]] -= Math.max(-POLAR_CLIP, Math.min(POLAR_CLIP, llr[q + k]));
+    for (const j of b.known) lam[j] = POLAR_BIG;   // shortened bits: known zeros
+    const u = polarScl(lam, b), K = b.K;
+    let best = 0, ok = false;
+    for (let l = 0; l < POLAR_LIST && !ok; l++) {   // the first path whose CRC holds
+      const crc = polarCrc(u, l * K, a);
+      if (crc.every((v, j) => v === u[l * K + a + j])) { best = l; ok = true; }
+    }
+    for (let k = 0; k < a; k++) bits[m + k] = u[best * K + k];
+    if (soft) {
+      if (ok) { const c = polarCodeword(bits, m, b); for (let k = 0; k < E; k++) post[q + k] = c[k] ? POLAR_SURE : -POLAR_SURE; }
+      else { const ext = polarScan(lam, b); for (let k = 0; k < E; k++) post[q + k] = -(lam[b.sent[k]] + ext[b.sent[k]]); }
+    }
+    oks.push(ok); q += E; m += a;
+  });
+  return { bits, oks, ok: oks.every(x => x), post };
+}
 const LDPC_CODES = ['ldpc4', 'ldpc3', 'ldpc', 'ldpc23', 'ldpc34'];   // v7, header type 3: the code field (+ 4 with the CRC inverted)
-const SC_CODES = [...Object.keys(TURBO_R), ...LDPC_CODES];   // the codes with soft output, which turbo equalization needs
+const POLAR_CODES = ['polar3', 'polar', 'polar23'];   // v7.3: header type 3, the code field 5 to 7
+const TYPE3_CODES = [...LDPC_CODES, ...POLAR_CODES];
+const SC_CODES = [...Object.keys(TURBO_R), ...LDPC_CODES, ...POLAR_CODES];   // the codes with soft output, which turbo equalization needs
 const RS_K = 223, RS_P = 32;
 
 function codedLength(code, n0) {
+  if (POLAR_R[code]) return polarParams(n0, POLAR_R[code]).G;
   if (LDPC_R[code]) { const [num, den] = LDPC_R[code]; return Math.ceil(n0 * den / num); }
   if (code === 'conv' || code === 'turbo') return 2 * (n0 + 6);
   if (code === 'turbo3') return 3 * n0 + 12;
@@ -865,6 +1080,7 @@ function rsDecode(c, n0) {
 }
 
 function encodeFEC(code, d) {
+  if (POLAR_R[code]) return interleave(polarEncode(d, POLAR_R[code]));
   if (LDPC_R[code]) return interleave(ldpcEncode(d, LDPC_R[code]));
   if (code === 'conv') return interleave(convEncode(d));
   if (TURBO_R[code]) return interleave(turboEncode(d, TURBO_R[code]));
@@ -874,6 +1090,7 @@ function encodeFEC(code, d) {
 // llr: channel LLRs after descrambling (> 0 means 1). Returns the n0 message bits.
 function decodeFEC(code, n0, llr, lim = 4) {   // lim: clipping of the soft values in the Viterbi decoder
   const hard = a => a.map(r => r > 0 ? 1 : 0);
+  if (POLAR_R[code]) { const d = polarDecode(deinterleave(llr), n0, POLAR_R[code]); return { bits: Array.from(d.bits), ok: d.ok, oks: d.oks }; }   // v7.3: ok, every block's CRC holds
   if (LDPC_R[code]) { const d = ldpcDecode(deinterleave(llr), n0, LDPC_R[code]); return { bits: Array.from(d.bits), iters: d.iters, ok: d.ok }; }   // ok: every parity check holds
   if (code === 'conv') return { bits: convDecode(deinterleave(llr), n0, lim) };
   if (TURBO_R[code]) return turboDecode(deinterleave(llr), n0, lim, 8, TURBO_R[code]);
@@ -976,7 +1193,7 @@ function decodeFrame(res, soft) {
   const dec = decodeFEC(hdr.code, hdr.n0, llr.map((r, j) => key[j] ? -r : r), soft === 'ratio' ? 4 : Infinity);
   const bits = Uint8Array.from(dec.bits), sent = Uint8Array.from(encodeFEC(hdr.code, bits), (x, j) => x ^ key[j]);
   const chErr = llr.reduce((e, r, j) => e + ((r > 0 ? 1 : 0) !== sent[j]), 0);    // channel errors the code corrected
-  return { soft, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks, iters: dec.iters, codeword: dec.ok };   // v7: LDPC, whether every parity check holds
+  return { soft, bits, llr, sent, chErr, rsFails: dec.fails, rsBlocks: dec.blocks, iters: dec.iters, codeword: dec.ok, oks: dec.oks };   // v7: LDPC, whether every parity check holds
 }
 
 // v5 page: whether the turbo decoder's decisions on all the coded bits, message and parity, agree with the decoded message encoded
@@ -1106,8 +1323,9 @@ function drawQR(cv, text, px = 8) {
 // v4: an OFDM frame with a coherent mapping (QPSK, 8PSK, 16QAM, 64QAM or 256QAM, see OFDM_MAPS) xors its CRC with 0x33,
 // 0x55, 0x66, 0x3C or 0x0F, on top of the 0xFF of codes 4 to 6; receivers that predate the mapping ignore the frame.
 // Types: 0 text (a = characters), 1 image (a = height, b = width), 2 room sounding (a = MLS order, b = periods).
-// v7: type 3 is a message coded with an LDPC code: the code field (+ 4 with the CRC inverted) indexes LDPC_CODES (rates
-// 1/4, 1/3, 1/2, 2/3, 3/4; 5 to 7 spare); a text if b = 0 (a = characters), else an image. Receivers older than v7 ignore it.
+// v7: type 3 is a message coded with an LDPC code: the code field (+ 4 with the CRC inverted) indexes TYPE3_CODES, the LDPC
+// rates 1/4, 1/3, 1/2, 2/3, 3/4 (0 to 4); a text if b = 0 (a = characters), else an image. Receivers older than v7 ignore it.
+// v7.3: 5 to 7, polar codes of rate 1/3, 1/2, 2/3. Receivers older than v7.3 ignore them.
 const CTRL = { tones: 'low', rate: 400 };
 const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high', 'hop'], RATES4 = [400, 800, 1600, 3200];
 // 6400 bit/s, 4 tones only: one group of 4 tones spaced 3.2 kHz fills the band 3.2-12.8 kHz, so there is nothing left to
@@ -1120,7 +1338,7 @@ function crc8(bits) {   // CRC-8, generator x^8 + x^2 + x + 1
 }
 let lastHb = null;   // telemetry: the 40 header bits of the last frame built
 function headerBits(h) {   // 6400 bit/s: tone set 3, rate field 3; OFDM: tone set 3, rate field = its mode; single carrier (v5): tone set 3, rate field 2
-  const ld = LDPC_CODES.indexOf(h.code), c = ld >= 0 ? ld : CODES.indexOf(h.code), type = ld >= 0 ? 3 : h.type, om = h.ofdm ? OFDM_MODES.findIndex(m => m.name === h.ofdm) : -1, wide = h.rate === RATE_WIDE, coh = om >= 0 || !!h.sc;
+  const ld = TYPE3_CODES.indexOf(h.code), c = ld >= 0 ? ld : CODES.indexOf(h.code), type = ld >= 0 ? 3 : h.type, om = h.ofdm ? OFDM_MODES.findIndex(m => m.name === h.ofdm) : -1, wide = h.rate === RATE_WIDE, coh = om >= 0 || !!h.sc;
   const t = wide || coh ? 3 : TONE_SETS.indexOf(h.tones), four = h.mod === 4 || coh;
   const T = h.sc ? SC_TCODE[h.train || SC_NC] : 0;   // v5, single carrier: the training length, 0 medium, 1 short, 2 long
   const v = [...msb(type, 2), ...msb(h.a | (T >> 1) << 10, 11), ...msb(h.b | (T & 1) << 10, 11), ...msb(c & 3, 2),
@@ -1313,12 +1531,12 @@ function parseHeader(hb) {   // hb: the 40 decoded header bits; null unless the 
   const tf = val(28, 2), four = tf === 3, M = four ? 4 : 2;   // tones 3: 4-FSK, its tone set in the last two bits
   // tone set 3: 6400 bit/s, one hopping group over the whole band (rate field 3), or OFDM (v3, rate field 0 or 1)
   const set3 = four && val(30, 2) === 3, ofdm = set3 ? OFDM_MODES[val(26, 2)] : null, sc = set3 && val(26, 2) === SC_FIELD;   // v5: rate field 2, the single carrier
-  const t3 = val(0, 2) === 3, T = sc ? 2 * val(2, 1) + val(13, 1) : 0, a = sc ? val(3, 10) : val(2, 11), b = sc ? val(14, 10) : val(13, 11), code = (t3 ? LDPC_CODES : CODES)[val(24, 2) + 4 * ext];   // v5: T, the single carrier's training
-  const type = t3 ? (b === 0 ? 0 : 1) : val(0, 2);   // v7: type 3, an LDPC code; a text if b = 0, else an image
+  const t3 = val(0, 2) === 3, T = sc ? 2 * val(2, 1) + val(13, 1) : 0, a = sc ? val(3, 10) : val(2, 11), b = sc ? val(14, 10) : val(13, 11), code = (t3 ? TYPE3_CODES : CODES)[val(24, 2) + 4 * ext];   // v5: T, the single carrier's training
+  const type = t3 ? (b === 0 ? 0 : 1) : val(0, 2);   // v7: type 3, an LDPC (v7.3: or polar) code; a text if b = 0, else an image
   const rate = ofdm ? ofdmRate(ofdm) : sc ? 1 : set3 ? (val(26, 2) === 3 ? RATE_WIDE : 0) : (four ? RATES4 : RATES)[val(26, 2)];
   const tones = ofdm ? 'ofdm' : sc ? 'sc' : set3 ? 'hop' : TONE_SETS[four ? val(30, 2) : tf];
   if (!tones || !rate || !code || (!four && val(30, 2)) || (mi && !ofdm && !sc)) return null;   // a mapping mask on anything but OFDM or the single carrier: not ours
-  if (sc && (T === 3 || !SC_MAPS.includes(OFDM_MAPS[mi]) || !SC_CODES.includes(code))) return null;   // the single carrier: QPSK to 256QAM, turbo or LDPC codes
+  if (sc && (T === 3 || !SC_MAPS.includes(OFDM_MAPS[mi]) || !SC_CODES.includes(code))) return null;   // the single carrier: QPSK to 256QAM, turbo, LDPC or polar codes
   let h = null;
   if (type === 0 && a >= 1 && b === 0) h = { type: 'text', len: a, n0: 8 * a };
   if (type === 1 && a >= 1 && b >= 1 && a <= 512 && b <= 512 && a * b <= 70000) h = { type: 'image', h: a, w: b, n0: a * b };
@@ -2540,7 +2758,11 @@ function scRelearn(yy, x, w, L) {   // v7.2: one room of L taps for the whole pa
   for (let j = 0; j < R; j++) { res.r[j] = w[j] * (y.r[j] - f.r[j]); res.i[j] = w[j] * (y.i[j] - f.i[j]); }
   return { c, res };
 }
-function fecSiso(code, llr, n0) {   // v7: scTurboSiso, or the LDPC decoder's decisions and a-posteriori LLRs (in the order encodeFEC sends them)
+function fecSiso(code, llr, n0) {   // v7: scTurboSiso, or the LDPC (v7.3: polar) decoder's decisions and a-posteriori LLRs (in the order encodeFEC sends them)
+  if (POLAR_R[code]) {
+    const x = deinterleave(Array.from(llr)), d = polarDecode(x, n0, POLAR_R[code], true);
+    return { bits: Array.from(d.bits), app: interleave(Array.from(d.post, (v, i) => v + x[i] - Math.max(-POLAR_CLIP, Math.min(POLAR_CLIP, x[i])))), post: interleave(Array.from(d.post)) };
+  }
   if (!LDPC_R[code]) return scTurboSiso(llr, n0, TURBO_R[code]);
   const d = ldpcDecode(deinterleave(Array.from(llr)), n0, LDPC_R[code]);
   return { bits: Array.from(d.bits), app: interleave(Array.from(d.app)), post: interleave(Array.from(d.post)) };   // post: the decoder's own decisions (app adds back what its input clipping took off)
@@ -2949,7 +3171,7 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
     const d = fecSiso(code, lin, n0);
     bits = d.bits; passes = it + 1;
     const cw = encodeFEC(code, bits); let bad = 0;
-    const dec = d.post || d.app;   // v7: the LDPC decoder's own decisions
+    const dec = d.post || d.app;   // v7: the LDPC (v7.3: polar) decoder's own decisions
     for (let i = 0; i < nc; i++) bad += (dec[i] > 0 ? 1 : 0) !== cw[i];   // coded bits that disagree with the decided message
     hist.push(bad);
     if (onPass) onPass({ pass: passes, bad, nc, npass: relearn ? npass + SC_RELEARN_PASSES : npass, relearn: !!relearn });
@@ -3420,7 +3642,7 @@ const demoJpegs = {};
 function demoJpeg(s = 1, q = 50) { const k = `${s}_${q}`; return demoJpegs[k] || (demoJpegs[k] = Uint8Array.from(atob(DEMO_JPEG[s][q]), c => c.charCodeAt(0))); }
 if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, RATES4, RATE_WIDE, TONES4, toneSet, symbolBits, toSymbols, bitSets, symbolMetrics, postErrors, contrast, knownContrast, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, JPEG_MAX, jpegFields, jpegBytes, crc32, jpegPayload, jpegUnpack, jpegResync, jpegEncode, DEMO_JPEG, demoJpeg, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
   SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
-  turboPerm, turboEncode, turboDecode, bcjr, TURBO_R, LDPC_R, LDPC_CODES, SC_CODES, ldpcParams, ldpcEncode, ldpcDecode, fecSiso,
+  turboPerm, turboEncode, turboDecode, bcjr, TURBO_R, LDPC_R, LDPC_CODES, SC_CODES, ldpcParams, ldpcEncode, ldpcDecode, fecSiso, POLAR_R, POLAR_CODES, TYPE3_CODES, polarParams, polarBlock, polarEncode, polarDecode, polarScl, polarScan,
   OFDM_MODES, OFDM_F0, OFDM_F1, ofdmMode, ofdmCarriers, ofdmRate, ofdmReference, ofdmSymbols, fracRead, ofdmReceive, ofdmDesc,
   C6_N, C6_CP, C6_REP, C6_LEN, C6_THR, C6_BAL, C6_K, c6Symbol, c6Index, c6Wave, c6Read, c6Filter,
   OFDM_MAPS, OFDM_MASKS, OFDM_BITS, OFDM_NAMES, OFDM_PSTEP, ofdmPoints, ofdmPilot, ofdmLayout, ofdmSmooth, levinson, ofdmCoherent,
@@ -3435,7 +3657,7 @@ const params = new URLSearchParams(location.search);
 $('demoCredit').innerHTML = DEMOS[DEMO_PICTURE].credit;
 const MOD0 = params.get('mod') === '4' ? 4 : ['ofdm', 'sc'].includes(params.get('mod')) ? params.get('mod') : 2, rateList = M => M === 4 ? [...RATES4, RATE_WIDE] : RATES;   // tones per symbol: 2 (binary) or 4, or OFDM
 const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: rateList(MOD0).includes(+params.get('rate')) ? +params.get('rate') : 400,
-              code: [...CODES, ...LDPC_CODES].filter(c => c && c !== 'rs').includes(params.get('code')) ? params.get('code') : 'none', soft: 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127,
+              code: [...CODES, ...TYPE3_CODES].filter(c => c && c !== 'rs').includes(params.get('code')) ? params.get('code') : 'none', soft: 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127,
               guard: params.get('guard') === 'short' ? 'short' : 'long',   // OFDM: the long (21 ms) or the short (5 ms) guard interval
               map: OFDM_MAPS.includes(params.get('map')) ? params.get('map') : 'dqpsk',
               det: params.get('det') === 'lmmse' ? 'lmmse' : 'smap',   // v5: the single carrier's detector (receiver)
@@ -3483,7 +3705,7 @@ function showMod() {   // the rates and tone labels of binary or 4-tone FSK; OFD
 }
 seg($('modSeg'), cfg.mod, v => {
   cfg.mod = v === 'ofdm' || v === 'sc' ? v : +v;
-  if (cfg.mod === 'sc') {   // turbo or LDPC codes only, QPSK to 256QAM
+  if (cfg.mod === 'sc') {   // turbo, LDPC or polar codes only, QPSK to 256QAM
     if (!SC_CODES.includes(cfg.code)) $('codeSeg').querySelector('[data-v="turbo"]').click();
     if (!SC_MAPS.includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();
   }
@@ -3571,7 +3793,7 @@ function txRateLine(f) {   // v7: the information rate, the message part's bit r
   const el = $('txRate'); el.classList.toggle('hidden', !!f.sound); if (f.sound) return;
   const code = f.sc && !SC_CODES.includes(cfg.code) ? 'turbo' : cfg.code, T = f.dur + 0.4;
   const air = f.sc ? scRate(f.map, f.train) : f.ofdm ? ofdmRate(ofdmMode(f.ofdm), f.map) : f.rate || cfg.rate;
-  const how = code === 'none' ? 'no code' : `${TURBO_R[code] ? 'turbo' : LDPC_R[code] ? 'LDPC' : 'convolutional'} code of rate ${CODE_INFO[code].rate}`;
+  const how = code === 'none' ? 'no code' : `${TURBO_R[code] ? 'turbo' : LDPC_R[code] ? 'LDPC' : POLAR_R[code] ? 'polar' : 'convolutional'} code of rate ${CODE_INFO[code].rate}`;
   el.innerHTML = `<span class="muted">Information rate</span> <b>${fmtRate(air * f.n0 / (f.nc || f.n0))}</b> <span class="muted">= ${fmtRate(air)} on the air × ${how}</span>`
     + ` <span class="muted whole">Over the whole ${T.toFixed(1)} s of sound, control part included: ${f.n0} message bits, ${fmtRate(f.n0 / T)}</span>`;
 }
@@ -3595,11 +3817,12 @@ function txInfo() {
   $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, message at ${cfg.rate} bit/s` + (cfg.mod === 4 ? `, 4 tones (${cfg.rate / 2} symbols/s)` : '') + (cfg.tones === 'hop' ? `, ${toneDesc('hop', cfg.rate, cfg.mod)}` : '') + long;
 }
 seg($('msgSeg'), msgMode, v => { msgMode = v; showTx(); });
-let turboCode = TURBO_R[cfg.code] ? cfg.code : 'turbo', ldpcCode = LDPC_R[cfg.code] ? cfg.code : 'ldpc';   // the turbo and LDPC rates last chosen
-const showTurbo = () => { $('txOpts').classList.toggle('turbo', !!TURBO_R[cfg.code]); $('txOpts').classList.toggle('ldpc', !!LDPC_R[cfg.code]); };
-seg($('codeSeg'), TURBO_R[cfg.code] ? 'turbo' : LDPC_R[cfg.code] ? 'ldpc' : cfg.code, v => { cfg.code = v === 'turbo' ? turboCode : v === 'ldpc' ? ldpcCode : v; showTurbo(); syncUrl(); txInfo(); });
+let turboCode = TURBO_R[cfg.code] ? cfg.code : 'turbo', ldpcCode = LDPC_R[cfg.code] ? cfg.code : 'ldpc', polarCode = POLAR_R[cfg.code] ? cfg.code : 'polar';   // the turbo, LDPC and polar rates last chosen
+const showTurbo = () => { $('txOpts').classList.toggle('turbo', !!TURBO_R[cfg.code]); $('txOpts').classList.toggle('ldpc', !!LDPC_R[cfg.code]); $('txOpts').classList.toggle('polar', !!POLAR_R[cfg.code]); };
+seg($('codeSeg'), TURBO_R[cfg.code] ? 'turbo' : LDPC_R[cfg.code] ? 'ldpc' : POLAR_R[cfg.code] ? 'polar' : cfg.code, v => { cfg.code = v === 'turbo' ? turboCode : v === 'ldpc' ? ldpcCode : v === 'polar' ? polarCode : v; showTurbo(); syncUrl(); txInfo(); });
 seg($('trSeg'), turboCode, v => { cfg.code = turboCode = v; syncUrl(); txInfo(); });
 seg($('lrSeg'), ldpcCode, v => { cfg.code = ldpcCode = v; syncUrl(); txInfo(); });   // v7
+seg($('prSeg'), polarCode, v => { cfg.code = polarCode = v; syncUrl(); txInfo(); });   // v7.3
 showTurbo();
 seg($('ordSeg'), snd.order, v => { snd.order = +v; txInfo(); });
 seg($('perSeg'), snd.periods, v => { snd.periods = +v; txInfo(); });
@@ -3704,7 +3927,7 @@ function frameWhat(h) {   // the message and how it was sent, in words
   if (h.type === 'sound') return `Room sounding, ${h.periods} × ${(((1 << h.order) - 1) / FS_TX).toFixed(2)} s`;
   const how = h.sc ? `single carrier ${OFDM_NAMES[h.map]}, ${scTrainName(h.train)} training` : h.ofdm ? `OFDM ${OFDM_NAMES[h.map]}, ${h.ofdm} guard`
     : `${h.M === 4 ? 4 : 2} tones, ${h.rate} bit/s${h.tones === 'hop' ? (h.rate === RATE_WIDE ? ', whole band' : ', hopping') : ''}`;
-  return `${h.type === 'text' ? `Text, ${h.len} characters` : h.type === 'jpeg' ? `JPEG, ${h.len} bytes` : `Image ${h.w}×${h.h}`} · ${how} · ${h.code === 'none' ? 'no code' : TURBO_R[h.code] ? `turbo ${CODE_INFO[h.code].rate}` : LDPC_R[h.code] ? `LDPC ${CODE_INFO[h.code].rate}` : CODE_INFO[h.code].short}`;
+  return `${h.type === 'text' ? `Text, ${h.len} characters` : h.type === 'jpeg' ? `JPEG, ${h.len} bytes` : `Image ${h.w}×${h.h}`} · ${how} · ${h.code === 'none' ? 'no code' : TURBO_R[h.code] ? `turbo ${CODE_INFO[h.code].rate}` : LDPC_R[h.code] ? `LDPC ${CODE_INFO[h.code].rate}` : POLAR_R[h.code] ? `polar ${CODE_INFO[h.code].rate}` : CODE_INFO[h.code].short}`;
 }
 function frameSnr(res) {   // one figure for the row: the SNR the receiver measured
   try {
@@ -3766,7 +3989,7 @@ function makeRx() {
       }
       if (s === 'decoding') {   // v5: the single carrier is decoded in the background, listening goes on
         const f = find(info); if (live === f) live = null;
-        if (f) { f.state = 'decoding…'; showLog(); fpill(f, `Decoding · ${detName(rx.cfg.det)} (${rx.cfg.effort || 'fast'}) and the ${LDPC_R[info.code] ? 'LDPC' : 'turbo'} decoder`); }
+        if (f) { f.state = 'decoding…'; showLog(); fpill(f, `Decoding · ${detName(rx.cfg.det)} (${rx.cfg.effort || 'fast'}) and the ${LDPC_R[info.code] ? 'LDPC' : POLAR_R[info.code] ? 'polar' : 'turbo'} decoder`); }
       }
       if (s === 'lost') {
         const f = /^single carrier/.test(info.reason) ? frames.filter(q => !q.res && !q.lost && (q.state || '').startsWith('decoding')).pop() : null;
@@ -3951,7 +4174,7 @@ function showStats(res) {
   showRaw(res);
   // first, were the bits right?
   if (res.truth) st.push([`${res.errs}`, code === 'none' ? 'wrong bits' : 'wrong bits after decoding', `against the demo image, which every receiver knows: bit error rate ${(res.errs / res.truth.pixels.length).toExponential(1)}`]);
-  if (res.codeword === true || res.codeword === false) st.push([res.codeword ? '✓ yes' : '✗ no', 'a codeword?', LDPC_R[code] ? 'whether the LDPC decoder\'s decisions on all the coded bits satisfy every parity check of the code: if they do, the message is almost surely right' : 'whether the turbo decoder\'s decisions on all the coded bits, message and parity alike, agree with the message encoded again: if they do, the message is almost surely right']);
+  if (res.codeword === true || res.codeword === false) st.push([res.codeword ? '✓ yes' : '✗ no', 'a codeword?', POLAR_R[code] ? 'whether the CRC of every block holds for the guess that the list decoder kept: if it does, the message is almost surely right' : LDPC_R[code] ? 'whether the LDPC decoder\'s decisions on all the coded bits satisfy every parity check of the code: if they do, the message is almost surely right' : 'whether the turbo decoder\'s decisions on all the coded bits, message and parity alike, agree with the message encoded again: if they do, the message is almost surely right']);
   if (h.sc) st.push([`${(h.rate / 1000).toFixed(1)} kbit/s`, 'before the code', `${scDesc(h.map, h.train)}; ${h.ns} data symbols in ${res.sc.nseg} segment${res.sc.nseg > 1 ? 's' : ''}; ${ctlDesc(res.NP)}. All read from the header.`]);
   else if (h.ofdm) st.push([`${(h.rate / 1000).toFixed(1)} kbit/s`, 'before the code', `${ofdmDesc(ofdmMode(h.ofdm), h.map)}; ${h.ns} data symbol${h.ns > 1 ? 's' : ''}; ${ctlDesc(res.NP)}. All read from the header.`]);
   else st.push([`${h.rate} bit/s`, h.M === 4 ? '4 tones' : '2 tones', `${h.M === 4 ? `2 bits per symbol, ${h.baud} symbols/s, ` : ''}${toneDesc(h.tones, h.rate, h.M)}; ${ctlDesc(res.NP)}. All read from the header.`]);
@@ -3963,6 +4186,7 @@ function showStats(res) {
     st.push([res.chErr, 'channel bits wrong', `of the ${h.nc} coded bits: the receiver's hard decisions${h.sc ? ' at the detector\'s first pass' : ''} compared with the decoded message, encoded again. If the decoding succeeded, these are the errors the code corrected.`]);
     if (code === 'rs') st.push([`${res.rsFails} / ${res.rsBlocks}`, 'Reed–Solomon blocks failed', 'blocks with more than 16 wrong bytes']);
     if (TURBO_R[code] && !h.sc) st.push([res.iters, 'turbo iterations', 'iterations of the turbo decoder: at most 8, it stops when its decisions no longer change']);
+    if (POLAR_R[code] && !h.sc && res.oks) st.push([`${res.oks.filter(x => x).length} / ${res.oks.length}`, 'polar blocks decoded', 'blocks of at most 1024 coded bits whose 11-bit CRC holds after list decoding (v7.3)']);
     if (LDPC_R[code] && !h.sc) st.push([res.iters, 'LDPC iterations', 'iterations of the LDPC decoder (layered belief propagation): at most 25, it stops when every parity check holds']);
   }
   if (h.sc) {   // v5, single carrier
@@ -3970,7 +4194,7 @@ function showStats(res) {
     st.push([`${o.snr.toFixed(1)} dB`, 'SNR of the symbols', `the median over the training blocks (${o.snrs.map(v => v.toFixed(1)).join(' / ')} dB), each with its own room: the noise, plus the echo beyond the ${o.taps} taps (${Math.round((o.taps - SC_PRE) / SC_RS * 1000)} ms after the first strong arrival) and the room's drift`]);
     st.push([o.taps, 'taps of the room', o.est === 'mmse' ? `by MMSE, the most the ${scTrainName(o.train)} training allows: each tap weighed by the room's power at its delay` : SC_TAPS[o.train].length > 1 ? `the ${scTrainName(o.train)} training allows ${SC_TAPS[o.train].join(' or ')}: the receiver keeps the one that fits better` : `what the ${scTrainName(o.train)} training allows`]);
     if (o.relearn) st.push([res.codeword ? '✓ decoded' : '✗ failed', 'second try', `the ${o.npass} passes ended without a codeword, so the room was learned again from the whole frame, its data as the decoder's soft symbols: ${o.relearn.taps} taps (${Math.round((o.relearn.taps - SC_PRE) / SC_RS * 1000)} ms of echo) instead of ${o.taps}, SNR ${o.relearn.snr.toFixed(1)} dB; then ${o.relearn.passes} more pass${o.relearn.passes > 1 ? 'es' : ''} (v7.2)`]);
-    st.push([o.passes, `pass${o.passes > 1 ? 'es' : ''}, ${dn} ↔ ${LDPC_R[code] ? 'LDPC' : 'turbo'}`, `turbo equalization, at most ${o.npass} passes (${o.effort} effort)${SC_RELEARN_PASSES ? `, then up to ${SC_RELEARN_PASSES} more for the second try` : ''}; it stops once the decisions form a codeword. Coded bits in doubt after each pass: ${o.hist.join(' → ')}`]);
+    st.push([o.passes, `pass${o.passes > 1 ? 'es' : ''}, ${dn} ↔ ${LDPC_R[code] ? 'LDPC' : POLAR_R[code] ? 'polar' : 'turbo'}`, `turbo equalization, at most ${o.npass} passes (${o.effort} effort)${SC_RELEARN_PASSES ? `, then up to ${SC_RELEARN_PASSES} more for the second try` : ''}; it stops once the decisions form a codeword. Coded bits in doubt after each pass: ${o.hist.join(' → ')}`]);
     st.push([`${o.sec.toFixed(1)} s`, 'to decode', `${dn}, ${o.effort} effort, in the background: listening went on`]);
     st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset', `time scale Rx vs Tx (clock offset, or a moving phone), from the ${o.nseg + 1} training blocks`]);
     if (o.change.length) st.push([`${Math.max(...o.change).toFixed(0)} dB`, 'room change', 'the largest change of the room from one training block to the next (0.5 s apart), relative to the room. In our recordings: −14 to −20 dB in a still room, −6 to −9 dB when people moved.']);

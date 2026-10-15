@@ -46,6 +46,8 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            to 6) gives the rate: 0 1/4, 1 1/3, 2 1/2, 3 2/3, 4 3/4; receivers older than v7 ignore it
            v7.1: an image with a > 512 is a JPEG file of n = 512 (a - 513) + b bytes (b from 1 to 512, n at most
            JPEG_MAX), with any code (type 1, or type 3 with LDPC); receivers older than v7.1 reject images over 512 rows
+           v7.3: type 3 with the code field 5, 6 or 7 (1, 2, 3 with the CRC inverted) = a polar code (5G NR, POLAR_CODES)
+           of rate 1/3, 1/2, 2/3; receivers older than v7.3 ignore it
   code   : 0 none, 1 Hamming (7,4) + interleaver (until v6; v7 neither sends nor reads it), 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
@@ -98,7 +100,7 @@ Usage
   (the earlier demo image: --image ../../Lab/bartS.png --step 2, without --step, or with --up 2 for the large and 4x ones)
   python audiocomm_v7.py tx --jpeg greatwave_160x108_q50.jpg --mod sc --code ldpc -o jpg.wav   # a JPEG file as it is (v7.1)
   python audiocomm_v7.py tx --image photo.jpg --quality 50 --width 160 --mod sc --code ldpc -o photo.wav   # a picture made into a JPEG (v7.1)
-  python audiocomm_v7.py tx --text "Hello" --code conv -o coded.wav   # codes: none conv turbo turbo3 turbo4 ldpc4 ldpc3 ldpc ldpc23 ldpc34
+  python audiocomm_v7.py tx --text "Hello" --code conv -o coded.wav   # codes: none conv turbo turbo3 turbo4 ldpc4 ldpc3 ldpc ldpc23 ldpc34 polar3 polar polar23
   python audiocomm_v7.py rx recording.wav                    # decode a recording
   python audiocomm_v7.py rx recording.wav --soft ratio       # soft output ln(E1/E0) instead of the calibrated LLR
   python audiocomm_v7.py tx --text "Hello" --code conv --rate 200 --pre 511 -o far.wav   # long range
@@ -106,6 +108,7 @@ Usage
   python audiocomm_v7.py tx --text "Hello" --tones hop --code conv -o hop.wav   # tone hopping, for reverberant rooms
   python audiocomm_v7.py tx --text "Hello" --tones hop --code turbo -o turbo.wav   # turbo code (turbo3, turbo4: rates 1/3, 1/4)
   python audiocomm_v7.py tx --text "Hello" --tones hop --code ldpc -o ldpc.wav   # LDPC code (v7; ldpc4 ldpc3 ldpc23 ldpc34: 1/4 1/3 2/3 3/4)
+  python audiocomm_v7.py tx --text "Hello" --mod sc --code polar -o polar.wav   # polar code (v7.3; polar3 polar23: 1/3 2/3)
   python audiocomm_v7.py tx --text "Hello" --mod 4 --tones hop --rate 3200 --code turbo -o fast4.wav   # 4 tones, 2 bits per symbol
   python audiocomm_v7.py tx --text "Hello" --mod 4 --tones hop --rate 6400 --code turbo -o fast6.wav   # the whole band, no hopping
   python audiocomm_v7.py tx --image greatwave_160x108.png --mod ofdm --code turbo -o ofdm.wav   # OFDM, 17 kbit/s before the code
@@ -227,6 +230,8 @@ RS_K, RS_P = 223, 32
 
 
 def coded_length(code, n0):
+    if code in POLAR_R:
+        return polar_params(n0, POLAR_R[code])["G"]
     if code in LDPC_R:
         num, den = LDPC_R[code]
         return -(-n0 * den // num)
@@ -849,11 +854,277 @@ def ldpc_decode(llr, nbits, rate, iters=LDPC_ITERS):
     return bits, post + llr - np.clip(llr, -cl, cl), it, ok, post
 
 
+# ---- v7.3: polar codes of 5G NR (3GPP TS 38.212: 5.3.1 code construction and encoding, 5.4.1 rate matching, the
+# CRC of the uplink control channel, 6.3.1.2.1), rates 1/3, 1/2, 2/3, decoded by CRC-aided list decoding. Differences
+# from NR: the message is split into as many blocks as needed for at most 1024 sent bits each (NR: at most two blocks),
+# every block carries an 11-bit CRC (NR: 6 bits and 3 parity-check bits under 20 message bits), no bit interleaving of
+# NR's own (the modem's channel interleaver follows). The rate counts the CRC as part of the block: E = (a + 11) / R.
+POLAR_R = {"polar3": (1, 3), "polar": (1, 2), "polar23": (2, 3)}   # code -> rate num/den
+POLAR_Q = [int(v) for v in (
+    '0 1 2 4 8 16 32 3 5 64 9 6 17 10 18 128 12 33 65 20 256 34 24 36 7 129 66 512 11 40 68 130 19 13 48 14 72 257 '
+    '21 132 35 258 26 513 80 37 25 22 136 260 264 38 514 96 67 41 144 28 69 42 516 49 74 272 160 520 288 528 192 544 '
+    '70 44 131 81 50 73 15 320 133 52 23 134 384 76 137 82 56 27 97 39 259 84 138 145 261 29 43 98 515 88 140 30 146 '
+    '71 262 265 161 576 45 100 640 51 148 46 75 266 273 517 104 162 53 193 152 77 164 768 268 274 518 54 83 57 521 '
+    '112 135 78 289 194 85 276 522 58 168 139 99 86 60 280 89 290 529 524 196 141 101 147 176 142 530 321 31 200 90 '
+    '545 292 322 532 263 149 102 105 304 296 163 92 47 267 385 546 324 208 386 150 153 165 106 55 328 536 577 548 '
+    '113 154 79 269 108 578 224 166 519 552 195 270 641 523 275 580 291 59 169 560 114 277 156 87 197 116 170 61 531 '
+    '525 642 281 278 526 177 293 388 91 584 769 198 172 120 201 336 62 282 143 103 178 294 93 644 202 592 323 392 '
+    '297 770 107 180 151 209 284 648 94 204 298 400 608 352 325 533 155 210 305 547 300 109 184 534 537 115 167 225 '
+    '326 306 772 157 656 329 110 117 212 171 776 330 226 549 538 387 308 216 416 271 279 158 337 550 672 118 332 579 '
+    '540 389 173 121 553 199 784 179 228 338 312 704 390 174 554 581 393 283 122 448 353 561 203 63 340 394 527 582 '
+    '556 181 295 285 232 124 205 182 643 562 286 585 299 354 211 401 185 396 344 586 645 593 535 240 206 95 327 564 '
+    '800 402 356 307 301 417 213 568 832 588 186 646 404 227 896 594 418 302 649 771 360 539 111 331 214 309 188 449 '
+    '217 408 609 596 551 650 229 159 420 310 541 773 610 657 333 119 600 339 218 368 652 230 391 313 450 542 334 233 '
+    '555 774 175 123 658 612 341 777 220 314 424 395 673 583 355 287 183 234 125 557 660 616 342 316 241 778 563 345 '
+    '452 397 403 207 674 558 785 432 357 187 236 664 624 587 780 705 126 242 565 398 346 456 358 405 303 569 244 595 '
+    '189 566 676 361 706 589 215 786 647 348 419 406 464 680 801 362 590 409 570 788 597 572 219 311 708 598 601 651 '
+    '421 792 802 611 602 410 231 688 653 248 369 190 364 654 659 335 480 315 221 370 613 422 425 451 614 543 235 412 '
+    '343 372 775 317 222 426 453 237 559 833 804 712 834 661 808 779 617 604 433 720 816 836 347 897 243 662 454 318 '
+    '675 618 898 781 376 428 665 736 567 840 625 238 359 457 399 787 591 678 434 677 349 245 458 666 620 363 127 191 '
+    '782 407 436 626 571 465 681 246 707 350 599 668 790 460 249 682 573 411 803 789 709 365 440 628 689 374 423 466 '
+    '793 250 371 481 574 413 603 366 468 655 900 805 615 684 710 429 794 252 373 605 848 690 713 632 482 806 427 904 '
+    '414 223 663 692 835 619 472 455 796 809 714 721 837 716 864 810 606 912 722 696 377 435 817 319 621 812 484 430 '
+    '838 667 488 239 378 459 622 627 437 380 818 461 496 669 679 724 841 629 351 467 438 737 251 462 442 441 469 247 '
+    '683 842 738 899 670 783 849 820 728 928 791 367 901 630 685 844 633 711 253 691 824 902 686 740 850 375 444 470 '
+    '483 415 485 905 795 473 634 744 852 960 865 693 797 906 715 807 474 636 694 254 717 575 913 798 811 379 697 431 '
+    '607 489 866 723 486 908 718 813 476 856 839 725 698 914 752 868 819 814 439 929 490 623 671 739 916 463 843 381 '
+    '497 930 821 726 961 872 492 631 729 700 443 741 845 920 382 822 851 730 498 880 742 445 471 635 932 687 903 825 '
+    '500 846 745 826 732 446 962 936 475 853 867 637 907 487 695 746 828 753 854 857 504 799 255 964 909 719 477 915 '
+    '638 748 944 869 491 699 754 858 478 968 383 910 815 976 870 917 727 493 873 701 931 756 860 499 731 823 922 874 '
+    '918 502 933 743 760 881 494 702 921 501 876 847 992 447 733 827 934 882 937 963 747 505 855 924 734 829 965 938 '
+    '884 506 749 945 966 755 859 940 830 911 871 639 888 479 946 750 969 508 861 757 970 919 875 862 758 948 977 923 '
+    '972 761 877 952 495 703 935 978 883 762 503 925 878 735 993 885 939 994 980 926 764 941 967 886 831 947 507 889 '
+    '984 751 942 996 971 890 509 949 973 1000 892 950 863 759 1008 510 979 953 763 974 954 879 981 982 927 995 765 '
+    '956 887 985 997 986 943 891 998 766 511 988 1001 951 1002 893 975 894 1009 955 1004 1010 957 983 958 987 1012 '
+    '999 1016 767 989 1003 990 1005 959 1011 1013 895 1006 1014 1017 1018 991 1020 1007 1015 1019 1021 1022 1023').split()]   # Table 5.3.1.2-1: Q_0 .. Q_1023, least reliable first
+POLAR_P = [0, 1, 2, 4, 3, 5, 6, 7, 8, 16, 9, 17, 10, 18, 11, 19, 12, 20, 13, 21, 14, 22, 15, 23, 24, 25, 26, 28, 27, 29, 30, 31]
+# Table 5.4.1.1-1, the sub-block interleaver: 32 sub-blocks
+POLAR_CRC = [1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1]   # CRC11: D^11 + D^10 + D^9 + D^5 + 1
+POLAR_NCRC, POLAR_EMAX = 11, 1024
+POLAR_LIST = 8           # list decoding: the 8 likeliest paths are kept; the first whose CRC holds wins
+POLAR_SCAN = 2           # soft cancellation iterations: the soft output that the single carrier's passes need
+POLAR_CLIP, POLAR_BIG, POLAR_SURE = 30.0, 1000.0, 100.0   # input LLRs clipped (as LDPC); known bits; a block whose CRC holds
+
+
+def polar_crc(bits):
+    """The 11 CRC bits of bits (shift register from zero, MSB first)."""
+    r = [0] * POLAR_NCRC
+    for b in bits:
+        fb = r[0] ^ int(b)
+        r = r[1:] + [0]
+        if fb:
+            r = [x ^ g for x, g in zip(r, POLAR_CRC[1:])]
+    return r
+
+
+_POLAR_M = {}
+def polar_crc_matrix(a):
+    """The CRC is linear: its bits are M m (mod 2) for a message m of a bits; M is 11 x a."""
+    if a not in _POLAR_M:
+        _POLAR_M[a] = np.array([polar_crc(np.eye(a, dtype=int)[i]) for i in range(a)], dtype=np.int64).reshape(a, POLAR_NCRC).T
+    return _POLAR_M[a]
+
+
+_POLAR_B = {}
+def polar_block(K, E):
+    """A block of K bits (message + CRC) sent as E bits: mother code length N = 2^n (5.3.1), the K information
+    positions (the most reliable ones that rate matching leaves free, 5.4.1.1), and each sent bit's codeword position:
+    the sub-block interleaver (y_k = d_J(k)), then repetition (E >= N), puncturing (the first N - E bits of y,
+    K/E <= 7/16) or shortening (the last N - E bits of y, which the frozen bits make zeros)."""
+    if (K, E) not in _POLAR_B:
+        lg = (E - 1).bit_length()
+        n1 = lg - 1 if 8 * E <= 9 * (1 << (lg - 1)) and 16 * K < 9 * E else lg
+        n = max(min(n1, (8 * K - 1).bit_length(), 10), 5)
+        N = 1 << n
+        J = [POLAR_P[32 * k // N] * (N // 32) + k % (N // 32) for k in range(N)]
+        mode = "repeat" if E >= N else "puncture" if 16 * K <= 7 * E else "shorten"
+        frozen = set()
+        if mode == "puncture":
+            frozen |= set(J[:N - E]) | set(range(-(-(3 * N - 2 * E) // 4) if 4 * E >= 3 * N else -(-(9 * N - 4 * E) // 16)))
+        elif mode == "shorten":
+            frozen |= set(J[E:])
+        free = [q for q in POLAR_Q if q < N and q not in frozen]
+        isinfo = np.zeros(N, dtype=bool)
+        isinfo[free[len(free) - K:]] = True
+        sent = [J[k % N] for k in range(E)] if mode != "puncture" else J[N - E:]
+        _POLAR_B[(K, E)] = dict(K=K, E=E, N=N, n=n, mode=mode, isinfo=isinfo, info=np.flatnonzero(isinfo),
+                                sent=np.array(sent), known=np.array(J[E:] if mode == "shorten" else [], dtype=int))
+    return _POLAR_B[(K, E)]
+
+
+def polar_params(nbits, rate):
+    """C blocks, the fewest that send at most 1024 bits each; a message bits and E sent bits per block (split evenly)."""
+    num, den = rate
+    C = 1
+    while -(-(nbits + POLAR_NCRC * C) * den // num) > POLAR_EMAX * C:
+        C += 1
+    G = -(-(nbits + POLAR_NCRC * C) * den // num)
+    a = [nbits // C + (i < nbits % C) for i in range(C)]
+    E = [G // C + (i < G % C) for i in range(C)]
+    return dict(C=C, a=a, E=E, G=G, blocks=[polar_block(a[i] + POLAR_NCRC, E[i]) for i in range(C)])
+
+
+def polar_transform(u):
+    """d = u G_N along the last axis, G_N = F (x) ... (x) F, F = [1 0; 1 1] (NR has no bit reversal): in stage s,
+    bit i (bit s of i clear) adds bit i + s."""
+    x = np.array(u, dtype=np.uint8)
+    N, s = x.shape[-1], 1
+    while s < N:
+        v = x.reshape(x.shape[:-1] + (N // (2 * s), 2, s))
+        v[..., 0, :] ^= v[..., 1, :]
+        s *= 2
+    return x
+
+
+def polar_codeword(m, b):
+    u = np.zeros(b["N"], dtype=np.uint8)
+    u[b["info"]] = np.r_[m, polar_crc(m)]
+    return polar_transform(u)[b["sent"]]
+
+
+def polar_encode(bits, rate):
+    bits, p, out, q = np.asarray(bits, dtype=np.uint8), polar_params(len(bits), rate), [], 0
+    for i, b in enumerate(p["blocks"]):
+        out.append(polar_codeword(bits[q:q + p["a"][i]], b))
+        q += p["a"][i]
+    return np.concatenate(out).astype(int)
+
+
+def _bplus(a, b):
+    """The check rule on LLRs: the LLR of x xor y from those of x and y (2 atanh(tanh(a/2) tanh(b/2)))."""
+    return (np.sign(a) * np.sign(b) * np.minimum(np.abs(a), np.abs(b))
+            + np.log1p(np.exp(-np.abs(a + b))) - np.log1p(np.exp(-np.abs(a - b))))
+
+
+# Decoding works on the tree of the code: a node of size s holds bits (v1 xor v2, v2), v1 and v2 being the codewords of
+# its two halves; from the LLRs a = (a1, a2) of its bits (ln P(0)/P(1)), v1's are a1 [+] a2, then, v1 known, v2's are
+# a2 + (1 - 2 v1) a1 (successive cancellation, SC). The leaves are the bits u_i, decided in order.
+def polar_scl(lam, b, L=POLAR_LIST):
+    """SC list decoding, G blocks at once (lam: G x N codeword LLRs ln P(0)/P(1)): at each information bit every path
+    tries 0 and 1 and the L likeliest stay (path metric: the sum of ln(1 + exp(-(1 - 2 u) LLR)) over the leaves). Each
+    depth keeps one array of LLRs (and of left-half decisions) for the L paths; a path copied only moves its index
+    (perm), and an array is read through it, so nothing is copied (Tal and Vardy). Returns the K bits (message + CRC)
+    of every block's L paths, likeliest first (G x L x K)."""
+    G, N, n = lam.shape[0], b["N"], b["n"]
+    ninfo = np.concatenate([[0], np.cumsum(b["isinfo"])])
+    alpha, beta = [None] * (n + 1), [None] * (n + 1)
+    perm = np.tile(np.arange(L), (2 * (n + 1), G, 1))   # perm[d]: each path's row of alpha[d]; perm[n + 1 + d]: of beta[d]
+    alpha[0] = np.repeat(lam[:, None, :], L, axis=1)
+    PM = np.full((G, L), np.inf)
+    PM[:, 0] = 0.0
+    hist = []                                           # per information bit: each path's parent and bit
+
+    def get(x, d):
+        return np.take_along_axis(x, perm[d][:, :, None], axis=1)
+
+    def fork(lr):
+        nonlocal PM, perm
+        cand = np.concatenate([PM + np.logaddexp(0, -lr), PM + np.logaddexp(0, lr)], axis=1)
+        order = np.argsort(cand, axis=1, kind="stable")[:, :L]
+        par, bit = order % L, (order // L).astype(np.uint8)
+        PM = np.take_along_axis(cand, order, axis=1)
+        perm = np.take_along_axis(perm, np.broadcast_to(par, perm.shape), axis=2)
+        hist.append((par, bit))
+        return bit[:, :, None]
+
+    def frozen(a):                                      # the leaves' LLRs under a node with no information bit
+        G_, L_, s = a.shape
+        x = a.reshape(G_, L_, 1, s)
+        while x.shape[-1] > 1:
+            h = x.shape[-1] // 2
+            a1, a2 = x[..., :h], x[..., h:]
+            x = np.stack([_bplus(a1, a2), a1 + a2], axis=3).reshape(G_, L_, -1, h)
+        return x.reshape(G_, L_, s)
+
+    def node(d, off):
+        nonlocal PM
+        s = N >> d
+        a = get(alpha[d], d)
+        if ninfo[off + s] == ninfo[off]:                # no information bit below: all zeros; the paths pay for their LLRs
+            PM = PM + np.logaddexp(0, -frozen(a)).sum(axis=2)
+            return np.zeros((G, L, s), dtype=np.uint8)
+        if s == 1:
+            return fork(a[:, :, 0])
+        h = s // 2
+        alpha[d + 1], perm[d + 1] = _bplus(a[..., :h], a[..., h:]), np.arange(L)
+        b1 = node(d + 1, off)
+        if ninfo[off + h] > ninfo[off]:
+            a = get(alpha[d], d)                        # the paths have moved
+        alpha[d + 1], perm[d + 1] = a[..., h:] + (1.0 - 2.0 * b1) * a[..., :h], np.arange(L)
+        beta[d], perm[n + 1 + d] = b1, np.arange(L)
+        b2 = node(d + 1, off + h)
+        return np.concatenate([get(beta[d], n + 1 + d) ^ b2, b2], axis=2)
+
+    node(0, 0)
+    idx = np.argsort(PM, axis=1, kind="stable")
+    u = np.zeros((G, L, len(hist)), dtype=np.uint8)
+    for k in range(len(hist) - 1, -1, -1):              # back through the parents
+        par, bit = hist[k]
+        u[:, :, k] = np.take_along_axis(bit, idx, axis=1)
+        idx = np.take_along_axis(par, idx, axis=1)
+    return u
+
+
+def polar_scan(lam, b, iters=POLAR_SCAN):
+    """Soft cancellation (SCAN, Fayyaz and Barry 2014), G blocks at once: SC with soft decisions, a node returning the
+    LLRs that the code (its frozen bits) gives its bits, the right halves' from the last iteration reused. Returns the
+    codeword's extrinsic LLRs (ln P(0)/P(1): what the code says about each bit, the bit's own LLR left out)."""
+    G, N = lam.shape[0], b["N"]
+    ninfo, right = np.concatenate([[0], np.cumsum(b["isinfo"])]), {}
+
+    def node(a, off, s):
+        k = ninfo[off + s] - ninfo[off]
+        if k == 0:
+            return np.full((G, s), POLAR_BIG)           # all frozen: known zeros
+        if k == s:
+            return np.zeros((G, s))                     # all free: the code says nothing
+        h = s // 2
+        a1, a2 = a[:, :h], a[:, h:]
+        b1 = node(_bplus(a1, a2 + right.get((off, s), 0.0)), off, h)
+        b2 = right[(off, s)] = node(a2 + _bplus(a1, b1), off + h, h)
+        return np.concatenate([_bplus(b1, a2 + b2), b2 + _bplus(a1, b1)], axis=1)
+
+    for _ in range(iters):
+        ext = node(lam, 0, N)
+    return ext
+
+
+def polar_decode(llr, nbits, rate, soft=False):
+    """CRC-aided list decoding; llr: the sent bits' LLRs (> 0 means 1), clipped to +-30. Returns the message bits and
+    every block's CRC verdict; with soft (turbo equalization) also the decoder's a-posteriori LLRs of the sent bits
+    (> 0 means 1): +-100 on the re-encoded message where the CRC holds, else soft cancellation's (repeated bits share
+    their total)."""
+    p, llr = polar_params(nbits, rate), np.asarray(llr, dtype=float)
+    q0 = np.concatenate([[0], np.cumsum(p["E"])])
+    bits, oks, post, groups = [None] * p["C"], np.zeros(p["C"], dtype=bool), np.zeros(p["G"]), {}
+    for i, b in enumerate(p["blocks"]):
+        groups.setdefault((p["a"][i], b["K"], b["E"]), []).append(i)
+    for (a, K, E), ii in groups.items():                # blocks of the same size, all at once
+        b = p["blocks"][ii[0]]
+        lam = np.zeros((len(ii), b["N"]))               # the codeword's LLRs: repeated bits add up, punctured ones 0
+        np.add.at(lam, (slice(None), b["sent"]), -np.clip(np.stack([llr[q0[i]:q0[i] + E] for i in ii]), -POLAR_CLIP, POLAR_CLIP))
+        lam[:, b["known"]] = POLAR_BIG                  # shortened bits: known zeros
+        u = polar_scl(lam, b)
+        ok = ((u[..., :a].astype(np.int64) @ polar_crc_matrix(a).T) % 2 == u[..., a:]).all(axis=2)
+        best = u[np.arange(len(ii)), np.where(ok.any(axis=1), ok.argmax(axis=1), 0), :a]   # the first whose CRC holds
+        ext = polar_scan(lam, b) if soft and not ok.any(axis=1).all() else None
+        for j, i in enumerate(ii):
+            bits[i], oks[i] = best[j], ok[j].any()
+            if soft:
+                post[q0[i]:q0[i] + E] = (np.where(polar_codeword(best[j], b) == 1, POLAR_SURE, -POLAR_SURE) if oks[i]
+                                         else -(lam[j] + ext[j])[b["sent"]])
+    return np.concatenate(bits).astype(int), oks, post
+
+
 LDPC_CODES = ["ldpc4", "ldpc3", "ldpc", "ldpc23", "ldpc34"]   # v7, header type 3: the code field (+ 4 with the CRC inverted)
-SC_CODES = list(TURBO_R) + LDPC_CODES        # the codes with soft output, which turbo equalization needs
+POLAR_CODES = ["polar3", "polar", "polar23"]   # v7.3: header type 3, the code field 5 to 7
+TYPE3_CODES = LDPC_CODES + POLAR_CODES
+SC_CODES = list(TURBO_R) + LDPC_CODES + POLAR_CODES   # the codes with soft output, which turbo equalization needs
 
 
 def encode_fec(code, d):
+    if code in POLAR_R:
+        return interleave(polar_encode(d, POLAR_R[code]))
     if code in LDPC_R:
         return interleave(ldpc_encode(d, LDPC_R[code]))
     if code == "conv":
@@ -868,6 +1139,8 @@ def encode_fec(code, d):
 def decode_fec(code, n0, llr, lim=4):
     """llr: channel LLRs after descrambling (> 0 means 1). Returns (n0 message bits, failed RS blocks)."""
     llr = np.asarray(llr, dtype=float)
+    if code in POLAR_R:
+        return polar_decode(deinterleave(llr), n0, POLAR_R[code])[0], None
     if code in LDPC_R:
         return ldpc_decode(deinterleave(llr), n0, LDPC_R[code])[0], None
     if code == "conv":
@@ -1047,8 +1320,8 @@ def crc8(bits):
 
 
 def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=False, nt=None):
-    if code in LDPC_R:                           # v7: type 3, the LDPC code's index in the code field (b = 0: a text)
-        typ, c = 3, LDPC_CODES.index(code)
+    if code in TYPE3_CODES:                      # v7: type 3, the LDPC (v7.3: or polar) code's index in the code field (b = 0: a text)
+        typ, c = 3, TYPE3_CODES.index(code)
     else:
         c = CODES.index(code)                    # codes 4 to 7: field c mod 4 and the CRC inverted
     if sc:                                       # v5, single carrier: tone set 3, rate field 2, the training in a's and b's top bits
@@ -1213,7 +1486,7 @@ def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127
     with 4 tones (mod=4) the message segment holds tones 0..3 instead of bits, and M = 4. With mod="ofdm" the message
     segment is the OFDM part (samples at 48 kHz, None, None), guard "long" or "short" (see OFDM_MODES), omap one of OFDM_MAPS.
     With mod="sc" (v5) it is the single-carrier part, omap one of SC_MAPS, code one of SC_CODES, train one of SC_TRAIN.
-    img: 2-D boolean array (True = white). jpeg (v7.1): the bytes of a JPEG file, sent as they are. code: none, conv, turbo, turbo3, turbo4 or an LDPC code (LDPC_R).
+    img: 2-D boolean array (True = white). jpeg (v7.1): the bytes of a JPEG file, sent as they are. code: none, conv, turbo, turbo3, turbo4, an LDPC code (LDPC_R) or a polar code (POLAR_R).
     sound = (order, periods): room sounding frame; its MLS segment is (samples at 48 kHz, None, None).
     control (v6), OFDM and single carrier only: "short" (the short control part, c6_wave; receivers older than v6 do
     not read it) or "long" (the 400 bit/s one, with the preamble pre; it reaches farther)."""
@@ -2362,8 +2635,13 @@ def turbo_siso(llr, n0, r=2, iters=8):
 
 def fec_siso(code, llr, n0):
     """The decided message and the a-posteriori LLR of every coded bit (> 0 means 1, in the order encode_fec sends
-    them), for a turbo or (v7) an LDPC code: what turbo equalization feeds back to the detector; and the decoder's own
-    a-posteriori LLRs, whose signs are its decisions (for LDPC, app adds back what the decoder's input clipping took off)."""
+    them), for a turbo, (v7) an LDPC or (v7.3) a polar code: what turbo equalization feeds back to the detector; and the
+    decoder's own a-posteriori LLRs, whose signs are its decisions (for LDPC and polar codes, app adds back what the
+    decoder's input clipping took off)."""
+    if code in POLAR_R:
+        x = deinterleave(np.asarray(llr, dtype=float))
+        bits, _, post = polar_decode(x, n0, POLAR_R[code], soft=True)
+        return bits, interleave(post + x - np.clip(x, -POLAR_CLIP, POLAR_CLIP)), interleave(post)
     if code in LDPC_R:
         bits, app, _, _, post = ldpc_decode(deinterleave(np.asarray(llr, dtype=float)), n0, LDPC_R[code])
         return bits, interleave(app), interleave(post)
@@ -2994,7 +3272,7 @@ def parse_header(hb):
             return None
     if mi and not (ofdm or sc):                  # a mapping mask on anything but OFDM or the single carrier
         return None
-    codes = LDPC_CODES if typ == 3 else CODES     # v7: type 3, an LDPC code
+    codes = TYPE3_CODES if typ == 3 else CODES    # v7: type 3, an LDPC code (v7.3: or a polar code)
     code = codes[c] if c < len(codes) else None
     if code is None or (sc and (OFDM_MAPS[mi] not in SC_MAPS or code not in SC_CODES)):
         return None
@@ -3153,7 +3431,7 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                 print(f"  SNR {o['snr']:.1f} dB, the median of the training blocks ({' / '.join(f'{v:.1f}' for v in o['snrs'])} dB: each block's room, {o['taps']} taps, against what it leaves"
                       f"{', MMSE' if est == 'mmse' else ''}), "
                       f"room change at each later block {ch} dB, sampling phase {o['phase']}")
-                print(f"  {'SMAP' if det == 'smap' else 'linear MMSE'} ({effort}) and the {'LDPC' if hdr['code'] in LDPC_R else 'turbo'} decoder: {o['passes']} pass{'es' if o['passes'] > 1 else ''}, "
+                print(f"  {'SMAP' if det == 'smap' else 'linear MMSE'} ({effort}) and the {'LDPC' if hdr['code'] in LDPC_R else 'polar' if hdr['code'] in POLAR_R else 'turbo'} decoder: {o['passes']} pass{'es' if o['passes'] > 1 else ''}, "
                       f"{'a codeword' if o['codeword'] else 'not a codeword (some bits are wrong)'}, {o['sec']:.1f} s"
                       + (f"; the clock wanders by {o['bend']:.1f} samples (samples lost or repeated?)" if o["bend"] > 1 else ""))
                 if o.get("relearn"):
@@ -3562,9 +3840,10 @@ def main():
                            "a restart marker on every row of blocks, saved next to the WAV")
             p.add_argument("--width", type=int, help="with --quality: scale the picture down to this width")
             p.add_argument("--grey", action="store_true", help="with --quality: a grey JPEG")
-            p.add_argument("--code", choices=[c for c in CODES if c not in (None, "rs")] + LDPC_CODES, default="none",
+            p.add_argument("--code", choices=[c for c in CODES if c not in (None, "rs")] + TYPE3_CODES, default="none",
                            help="turbo, turbo3, turbo4: turbo code of rate 1/2, 1/3, 1/4; ldpc4, ldpc3, ldpc, ldpc23, ldpc34: "
-                                "LDPC code (v7) of rate 1/4, 1/3, 1/2, 2/3, 3/4; Reed-Solomon (v0) is still decoded but no longer sent")
+                                "LDPC code (v7) of rate 1/4, 1/3, 1/2, 2/3, 3/4; polar3, polar, polar23: polar code (v7.3) of rate 1/3, 1/2, 2/3, "
+                                "with an 11-bit CRC per block and list decoding; Reed-Solomon (v0) is still decoded but no longer sent")
             p.add_argument("--sound", action="store_true", help="room sounding frame instead of a message")
             p.add_argument("--order", type=int, choices=sorted(SOUND_TAPS), default=15, help="sounding period 2^order - 1 samples at 48 kHz")
             p.add_argument("--periods", type=int, choices=range(1, 9), default=4, help="sounding periods averaged")

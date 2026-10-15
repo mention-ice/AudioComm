@@ -50,7 +50,7 @@
 \title{\color{icemagenta}\textbf{An acoustic modem for the classroom}\\[4pt]
 \large Algorithms, equations and parameter choices of the demo, version~6}
 \author{Communication Theory (2A), CentraleSup\'elec\,---\,Mention ICE}
-\date{14 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py},\\ the SMAP correction and JPEG pictures of version~7.1 and the second try of version~7.2 (\code{acoustic\_modem\_v7.html}, \code{audiocomm\_v7.py}),\\ and versions $N = 1$ to 5, \code{acoustic\_modem\_v}$N$\code{.html} and \code{audiocomm\_v}$N$\code{.py} (version~5 is also served as \code{acoustic\_modem.html})}
+\date{15 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py},\\ the SMAP correction and JPEG pictures of version~7.1 and the second try of version~7.2 and the polar codes of version~7.3 (\code{acoustic\_modem\_v7.html}, \code{audiocomm\_v7.py}),\\ and versions $N = 1$ to 5, \code{acoustic\_modem\_v}$N$\code{.html} and \code{audiocomm\_v}$N$\code{.py} (version~5 is also served as \code{acoustic\_modem.html})}
 
 \begin{document}
 \maketitle
@@ -78,7 +78,7 @@ Version~4 adds coherent detection for OFDM (\cref{sec:coh}): a channel estimate 
 Version~4.1 changes only the OFDM receiver: it finds samples that the microphone loses or repeats in the middle of a frame, reads the symbols after the gap again, and erases the symbol that holds it (\cref{sec:gaps}).
 Version~5 adds the single carrier (\cref{sec:sc}): a time map from its training blocks, a room of up to 1024 taps learnt by least squares, and turbo equalization with soft SMAP or a linear MMSE detector. Its page no longer offers the plain ratio $\ln(E_1/E_0)$ as soft output (\cref{sec:soft}), and tells for every turbo frame whether the decoding succeeded (\cref{sec:decode}).
 Version~6 adds the short control part (\cref{sec:c6}): the receiver finds it with a matched filter normalized to the share of the energy that the room's strongest path carries, learns the room, the clock and the noise from its last two periods, and reads the header against them.
-Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft output (\cref{sec:scdet}). Version~7.1 can send a picture as a JPEG file followed by a CRC-32, so that a receiver shows the file as it arrived and tells whether it is intact (\cref{sec:jpeg}). Version~7.2 gives a single-carrier frame that fails a second try, with a room of 2048 taps learned from the whole frame (\cref{sec:screlearn}).
+Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft output (\cref{sec:scdet}). Version~7.1 can send a picture as a JPEG file followed by a CRC-32, so that a receiver shows the file as it arrived and tells whether it is intact (\cref{sec:jpeg}). Version~7.2 gives a single-carrier frame that fails a second try, with a room of 2048 taps learned from the whole frame (\cref{sec:screlearn}). Version~7.3 adds the polar codes of 5G~NR at rates $1/3$, $1/2$ and $2/3$, decoded by CRC-aided list decoding, with soft cancellation for the single carrier's passes (\cref{sec:polar}).
 \end{abstract}
 
 \tableofcontents
@@ -90,7 +90,7 @@ Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft
 
 \subsection{Files and scope}
 \begin{itemize}
-\item \code{acoustic\_modem\_v7.html} and \code{audiocomm\_v7.py} are version~7: version~6 with the LDPC codes of 5G~NR at rates $1/4$ to $3/4$ in place of the Hamming code, and SMAP's soft output corrected (\cref{sec:scdet}). Since 14 October 2026 (version~7.1) they can also send a picture as a JPEG file (\cref{sec:jpeg}). Version~7.2, the same day, adds the single carrier's second try (\cref{sec:screlearn}); the frames did not change. Pages and scripts made before version~7 ignore LDPC frames, and those made before version~7.1 JPEG frames. The LDPC code is not described in this document yet.
+\item \code{acoustic\_modem\_v7.html} and \code{audiocomm\_v7.py} are version~7: version~6 with the LDPC codes of 5G~NR at rates $1/4$ to $3/4$ in place of the Hamming code, and SMAP's soft output corrected (\cref{sec:scdet}). Since 14 October 2026 (version~7.1) they can also send a picture as a JPEG file (\cref{sec:jpeg}). Version~7.2, the same day, adds the single carrier's second try (\cref{sec:screlearn}); the frames did not change. Version~7.3 (15 October 2026) adds polar codes (\cref{sec:polar}), which earlier pages and scripts ignore. Pages and scripts made before version~7 ignore LDPC frames, and those made before version~7.1 JPEG frames. The LDPC code is not described in this document yet.
 \item \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py} are version~6: version~5.1 plus a short control part for OFDM and single-carrier frames, their default (\cref{sec:c6}). They read every frame of version~5 with the same bits. Version~5 and earlier pages and scripts do not find frames with the short control part, so the sender can still choose the 400 bit/s one for them. \code{acoustic\_modem.html} is still a copy of \code{acoustic\_modem\_v5.html}.
 \item \code{acoustic\_modem\_v5.html} and \code{audiocomm\_v5.py} are version~5: version~4.1 plus a single carrier with QPSK, 16QAM, 64QAM or 256QAM, received by turbo equalization with soft SMAP (\cref{sec:sc}). Since 13 October 2026 \code{acoustic\_modem.html} is a copy of \code{acoustic\_modem\_v5.html}, whose receiver no longer offers the plain ratio $\ln(E_1/E_0)$ (\cref{sec:soft}) and checks every turbo frame for a codeword (\cref{sec:decode}). They send and read every frame of version~4; earlier pages and scripts ignore the single-carrier frames. Since 13 October 2026 (version~5.1) their single-carrier receiver also survives samples lost or repeated by the microphone, and offers an MMSE estimate of the room (\cref{sec:scrx}); the frames did not change.
 \item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK, 16QAM, 64QAM or 256QAM, DQPSK that follows a moving phone (\cref{sec:coh}), and images at four times the size. From 9 to 13 October 2026 \code{acoustic\_modem.html} was a copy of \code{acoustic\_modem\_v4.html}. Since 11 October 2026 (version~4.1) their OFDM receiver also survives samples lost by the microphone (\cref{sec:gaps}); the frames did not change. They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
@@ -277,7 +277,10 @@ The header has no free field left for the mapping, so version~4 marks it the way
 Tone set~3 with rate field~2 is the single carrier (\cref{sec:sc}), which receivers made before version~5 reject. Its mapping (QPSK, 16QAM, 64QAM or 256QAM) is in the CRC mask, as for coherent OFDM, and a version~5 receiver rejects a single-carrier header with another mapping or with a code other than the turbo codes. The training length goes in the top bits of $a$ and $b$, which are free because a text has at most 1023 characters and an image at most $512 \times 512$ pixels: $(a_{10}, b_{10}) = 0\,0$ medium, $0\,1$ short, $1\,0$ long, $1\,1$ rejected. Medium frames are bit for bit those of the first version~5 page (12 October 2026), which reads no other.
 
 \paragraph{Signalling LDPC (version~7).}
-Type~3, which no earlier receiver accepts, is a frame coded by LDPC: a text of $a$ characters if $b = 0$, otherwise an image of $a \times b$ pixels. The code field, plus 4 when the CRC is inverted (as for the turbo codes), indexes the rates $1/4$, $1/3$, $1/2$, $2/3$ and $3/4$; 5 to 7 are unused. Version~7 sends no Hamming code and reads code~1 as no code; code~3 (Reed--Solomon) stays unused.
+Type~3, which no earlier receiver accepts, is a frame coded by LDPC: a text of $a$ characters if $b = 0$, otherwise an image of $a \times b$ pixels. The code field, plus 4 when the CRC is inverted (as for the turbo codes), indexes the rates $1/4$, $1/3$, $1/2$, $2/3$ and $3/4$; 5 to 7 were unused until version~7.3. Version~7 sends no Hamming code and reads code~1 as no code; code~3 (Reed--Solomon) stays unused.
+
+\paragraph{Signalling polar codes (version~7.3).}
+In type~3, the code field plus 4 equal to 5, 6 and 7 are the polar codes of rates $1/3$, $1/2$ and $2/3$ (\cref{sec:polar}). Receivers made before version~7.3 find no code there and ignore the frame.
 
 \paragraph{Signalling a JPEG file (version~7.1).}
 An image (type 1, or 3 with LDPC) with $a > 512$ is a JPEG file of $512(a - 513) + b$ bytes (\cref{sec:jpeghdr}). Receivers made before version~7.1 reject it.
@@ -1410,7 +1413,7 @@ The code is chosen on the transmitter and announced in the header. \Cref{tab:cod
 
 \begin{table}[ht]
 \centering
-\caption{Codes, for $\nz$ message bits. Hamming, convolutional and turbo codewords then go through the interleaver of \cref{sec:ilv}.}
+\caption{Codes, for $\nz$ message bits. Hamming, convolutional, turbo and polar codewords then go through the interleaver of \cref{sec:ilv}.}
 \label{tab:codes}
 \begin{tabularx}{\linewidth}{lllX}
 \toprule
@@ -1422,6 +1425,7 @@ convolutional $(171,133)_8$, $K=7$ & $\approx 1/2$ & $2(\nz + 6)$ & soft-decisio
 turbo, $(1, 15/13)_8$ RSC $\times 2$ & $\approx 1/2$ & $2\nz + 12$ & iterative log-MAP, $\le 8$ iterations\\
 turbo, all parities & $\approx 1/3$ & $3\nz + 12$ & the same\\
 turbo, $+$ second parity $17_8$ & $\approx 1/4$ & $4\nz + 18$ & the same\\
+polar (5G NR), CRC11 & $R$ & $\lceil (\nz + 11C)/R \rceil$ & $R = 1/3, 1/2, 2/3$; CRC-aided list decoding, 8 paths\\
 Reed--Solomon $(255,223)$ & $\approx 7/8$ & $8(K + 32B)$ & Berlekamp--Massey, hard decisions (received only)\\
 \bottomrule
 \end{tabularx}
@@ -1543,6 +1547,55 @@ where at rate $1/2$ decoder 1 uses the even parities and its own tail, and decod
 \paragraph{Gain.}
 On the textbook channel (BPSK, white Gaussian noise, 456 message bits) the turbo code needs about $1.3\dB$ less $E_b/N_0$ than the convolutional code for the same frame error rate (an LDPC code of the same length, tried for comparison, about $1.1\dB$). In the simulated rooms the gain shrinks to $0.5$--$1\dB$, roughly 10\,\% more distance: the bit error rate climbs steeply with distance, frames that fail have 15--19\,\% wrong channel bits, beyond what any rate-$1/2$ code corrects, and about $1\dB$ farther the frame itself is no longer detected.
 On the textbook channel, rates $1/3$ and $1/4$ need $0.7$ and $1\dB$ less $E_b/N_0$ than rate $1/2$ (10\,\% frame errors at $1.4$, $0.7$ and $0.4\dB$, against $2.7\dB$ for the convolutional code; 400 frames per point). In the rooms they buy range only with airtime (\cref{tab:rates}).
+
+\subsection{Polar codes (version~7.3)}
+\label{sec:polar}
+Version~7.3 adds the polar codes of 5G~NR~\cite{arikan,ts38212}, those that NR uses for its short control messages, at rates $1/3$, $1/2$ and $2/3$, decoded by CRC-aided list decoding~\cite{talvardy,niuchen}. With the single carrier, a soft decoder (soft cancellation~\cite{scan}) gives the detector its extrinsic LLRs.
+
+\paragraph{Polarization.}
+A block of $N = 2^n$ bits $\bm u$ is sent as $\bm d = \bm u\, G_N$ (mod 2), with $G_N = F^{\otimes n}$ and $F = \bigl[\begin{smallmatrix}1 & 0\\ 1 & 1\end{smallmatrix}\bigr]$ (NR has no bit reversal): in stage $s = 1, 2, 4, \dots, N/2$, bit $i$ (with bit $s$ of $i$ clear) adds bit $i + s$. Decided one after the other, each $u_i$ given the channel output and the bits before it, the $N$ bits see channels that become, as $N$ grows, either nearly perfect or nearly useless, in the proportions $C$ and $1 - C$ of the channel's capacity~\cite{arikan}. The message goes on the $K$ most reliable positions; the others are \emph{frozen} to $0$, known to the receiver.
+
+\paragraph{Construction, as NR (TS~38.212, 5.3.1 and 5.4.1).}
+A block of $K$ bits (message and CRC) is sent as $E$ bits.
+\begin{itemize}
+\item \emph{Mother code length}: $N = 2^n$ with $n = \max\bigl(\min(n_1, n_2, 10), 5\bigr)$, $n_2 = \lceil \log_2 8K \rceil$ (the rate stays above $1/8$), and $n_1 = \lceil \log_2 E \rceil - 1$ if $E \le \frac98\, 2^{\lceil \log_2 E \rceil - 1}$ and $K/E < 9/16$, otherwise $\lceil \log_2 E \rceil$.
+\item \emph{Sub-block interleaver}: the codeword is cut into 32 sub-blocks of $N/32$ bits and read in the order
+\begin{align*}
+P = (&0, 1, 2, 4, 3, 5, 6, 7, 8, 16, 9, 17, 10, 18, 11, 19,\\
+&12, 20, 13, 21, 14, 22, 15, 23, 24, 25, 26, 28, 27, 29, 30, 31):
+\end{align*}
+$y_k = d_{J(k)}$ with $J(k) = P\bigl(\lfloor 32k/N \rfloor\bigr)\, N/32 + (k \bmod N/32)$.
+\item \emph{Rate matching}: if $E \ge N$, \emph{repetition}, $e_k = y_{k \bmod N}$; else if $K/E \le 7/16$, \emph{puncturing}, $e_k = y_{k + N - E}$ (the first $N - E$ bits of $\bm y$ are not sent); otherwise \emph{shortening}, $e_k = y_k$ (the last $N - E$ are not sent).
+\item \emph{Frozen positions}: with puncturing, $J(0), \dots, J(N - E - 1)$ and the indices $0, \dots, \lceil 3N/4 - E/2 \rceil - 1$ (if $E \ge 3N/4$; otherwise $0, \dots, \lceil 9N/16 - E/4 \rceil - 1$); with shortening, $J(E), \dots, J(N - 1)$, which makes the bits not sent zeros that the receiver knows. The $K$ information positions are the most reliable of the others, in the order of NR's reliability sequence $Q_0, \dots, Q_{1023}$ (Table 5.3.1.2-1, least reliable first; the sequence for $N < 1024$ is its entries below $N$).
+\item \emph{Bits}: the $a$ message bits and then their 11 CRC bits fill the information positions in increasing order. The CRC is NR's CRC11, $D^{11} + D^{10} + D^9 + D^5 + 1$, from a zero register.
+\end{itemize}
+
+\paragraph{Blocks.}
+NR uses at most two blocks of at most 1024 bits. The modem uses $C$ blocks, the fewest that send at most 1024 bits each: with $\nz$ message bits and the rate $R$,
+\begin{equation}
+\nc = \Bigl\lceil \frac{\nz + 11 C}{R} \Bigr\rceil \le 1024\, C,
+\end{equation}
+the message bits and the $\nc$ sent bits split as evenly as possible (the first blocks one more). The CRC counts as part of the block, as NR's code rate does: a 22-character text (176 bits) at rate $1/2$ is $374$ bits, where LDPC sends $352$. The large demo picture (17\,280 bits) takes 53, 35 and 26 blocks at rates $1/3$, $1/2$ and $2/3$. Other differences from NR: every block carries the 11-bit CRC (NR: 6 bits and 3 parity-check bits under 20 message bits, and another code under 12), and NR's own bit interleaver is left out, since the modem's interleaver (\cref{sec:ilv}) follows.
+
+\paragraph{Successive cancellation.}
+The decoder works on the tree of the code. A node of size $s$ holds bits $(\bm v_1 \oplus \bm v_2, \bm v_2)$, $\bm v_1$ and $\bm v_2$ being the codewords of its two halves. From the LLRs $\bm a = (\bm a_1, \bm a_2)$ of its bits ($\ln P(0)/P(1)$, the channel's at the root, with punctured bits at 0 and shortened ones known), those of $\bm v_1$ are $\bm a_1 \boxplus \bm a_2$, where $a \boxplus b = 2 \operatorname{artanh}\bigl(\tanh\frac a2 \tanh\frac b2\bigr)$ is the parity rule; once $\bm v_1$ is decided, those of $\bm v_2$ are $\bm a_2 + (1 - 2\bm v_1)\, \bm a_1$. The leaves are the bits $u_i$, decided in order: a frozen bit is 0, an information bit the sign of its LLR. Each node returns its bits $(\bm v_1 \oplus \bm v_2, \bm v_2)$ to its parent. A node with no information bit below returns zeros at once.
+
+\paragraph{List decoding.}
+A wrong early decision cannot be undone, which costs successive cancellation about $1\dB$ on a text. The list decoder~\cite{talvardy} keeps $L = 8$ paths: at each information bit every path tries 0 and 1, and the 8 with the smallest metric stay, the metric adding $\ln\bigl(1 + e^{-(1 - 2u_i)\lambda_i}\bigr)$ for each leaf (also the frozen ones), $\lambda_i$ being the leaf's LLR on that path~\cite{balatsoukas}. The paths share their arrays: each depth of the tree keeps one array of LLRs, and one of left-half bits, for the 8 paths, and a path that is copied only changes the index through which it reads them. At the end the decoder takes, in order of metric, the first path whose CRC holds~\cite{niuchen,talvardy} (otherwise the likeliest), which also tells whether the block is right: with 8 paths and 11 CRC bits, a wrong block passes about once in $2^{11}/8 = 256$ failures.
+
+\paragraph{Soft output for turbo equalization.}
+The single carrier needs the decoder's extrinsic LLRs on the coded bits (\cref{sec:scdet}). Soft cancellation (SCAN)~\cite{scan} replaces the hard bits that a node returns with LLRs $\bm b$ from the code's side: a frozen leaf returns $+\infty$ (a known 0), a node with no frozen bit below returns $0$, and a node computes
+\begin{align}
+\bm b_1 &= \mathrm{node}\bigl(\bm a_1 \boxplus (\bm a_2 + \bm b_2^{\mathrm{prev}})\bigr), &
+\bm b_2 &= \mathrm{node}\bigl(\bm a_2 + \bm a_1 \boxplus \bm b_1\bigr),\\
+\text{and returns}\quad & \bigl(\bm b_1 \boxplus (\bm a_2 + \bm b_2),\ \bm b_2 + \bm a_1 \boxplus \bm b_1\bigr), &&
+\end{align}
+with $\bm b_2^{\mathrm{prev}}$ the right half's output of the previous iteration (0 in the first). The root's output leaves out each bit's own LLR: it is the extrinsic information. The modem runs 2 iterations. In each pass, for each block, the list decoder runs first: if a path passes the CRC, the block's coded bits go back as $\pm 100$ on the re-encoded message, a certainty; otherwise SCAN's a posteriori LLRs go back. The frame is decoded when every block's CRC holds.
+
+\paragraph{Results.}
+In plain noise (BPSK, $E_b/N_0$ per message bit, the CRC counted as overhead, 400 frames per point; LDPC with 25 layered iterations), polar and LDPC need the same signal on a 22-character text: $10\,\%$ frame errors at $1.03$ and $0.97\dB$ at rate $1/3$, $1.56$ and $1.60\dB$ at $1/2$, $2.20$ and $2.29\dB$ at $2/3$. Longer messages favour LDPC, whose blocks are longer: at rate $1/2$, polar needs about $0.35\dB$ more at 1000 bits and about $1.1\dB$ more on the large picture (17\,280 bits, 35 blocks of 1024 bits, every one of which must decode), which is why NR keeps polar codes for short messages. The extrinsic information of the turbo-equalization loop, measured as in the EXIT charts of the iterative decoding tutorial (consistent Gaussian a priori LLRs, 2000 message bits, rate $1/2$), jumps from $0.13$ to $0.83$ between $I_A = 0.50$ and $0.55$ and reaches $0.97$ at $0.575$, as LDPC's ($0.09$, $0.77$, $1.00$). Single carrier through the measured room (rec1), the two codes need the same SNR within the steps tried: a text at 64QAM, rate $1/3$, decoded in 3 of 6 frames at $10\dB$ with either code, and in all at $12\dB$; a text at 256QAM, rate $1/2$, in 1 of 6 frames with LDPC and none with polar at $18\dB$, and in all at $20\dB$ (polar in 2 or 3 passes, LDPC in 1 or 2); the large picture at 64QAM, rate $2/3$, in none at $18$ or $19\dB$ and in all at $20\dB$.
+
+The page and the script encode bit for bit alike and decode alike (144 test blocks: the same bits and CRC verdicts, a posteriori LLRs within $10^{-13}$); each decodes the other's frames (single carrier, OFDM and FSK, texts, images and JPEG files), and the version~7.2 page and script ignore polar frames. In Node, the page's list decoder takes 0.3 to 0.4\,s for the large picture.
 
 \subsection{Reed--Solomon (255,223), received only}
 \label{sec:rs}
@@ -2277,6 +2330,21 @@ ITU-T Recommendation T.81 $|$ ISO/IEC 10918-1, \emph{Information technology---Di
 
 \bibitem{rfc1952}
 P.~Deutsch, ``GZIP file format specification version 4.3,'' RFC~1952, IETF, May 1996.
+
+\bibitem{arikan}
+E.~Ar{\i}kan, ``Channel polarization: a method for constructing capacity-achieving codes for symmetric binary-input memoryless channels,'' \emph{IEEE Trans. Inf. Theory}, vol.~55, no.~7, pp.~3051--3073, Jul. 2009.
+
+\bibitem{talvardy}
+I.~Tal and A.~Vardy, ``List decoding of polar codes,'' \emph{IEEE Trans. Inf. Theory}, vol.~61, no.~5, pp.~2213--2226, May 2015.
+
+\bibitem{niuchen}
+K.~Niu and K.~Chen, ``CRC-aided decoding of polar codes,'' \emph{IEEE Commun. Lett.}, vol.~16, no.~10, pp.~1668--1671, Oct. 2012.
+
+\bibitem{balatsoukas}
+A.~Balatsoukas-Stimming, M.~Bastani Parizi, and A.~Burg, ``LLR-based successive cancellation list decoding of polar codes,'' \emph{IEEE Trans. Signal Process.}, vol.~63, no.~19, pp.~5165--5179, Oct. 2015.
+
+\bibitem{scan}
+U.~U. Fayyaz and J.~R. Barry, ``Low-complexity soft-output decoding of polar codes,'' \emph{IEEE J. Sel. Areas Commun.}, vol.~32, no.~5, pp.~958--966, May 2014.
 
 \end{thebibliography}
 
