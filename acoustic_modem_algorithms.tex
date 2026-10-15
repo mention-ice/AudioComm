@@ -50,7 +50,7 @@
 \title{\color{icemagenta}\textbf{An acoustic modem for the classroom}\\[4pt]
 \large Algorithms, equations and parameter choices of the demo, version~6}
 \author{Communication Theory (2A), CentraleSup\'elec\,---\,Mention ICE}
-\date{15 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py},\\ the SMAP correction and JPEG pictures of version~7.1, the second try of version~7.2, the polar codes of version~7.3 and the wide band of version~7.4 (\code{acoustic\_modem\_v7.html}, \code{audiocomm\_v7.py}),\\ and versions $N = 1$ to 5, \code{acoustic\_modem\_v}$N$\code{.html} and \code{audiocomm\_v}$N$\code{.py} (version~5 is also served as \code{acoustic\_modem.html})}
+\date{15 October 2026\\[2pt]\small Describes \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py},\\ the SMAP correction and JPEG pictures of version~7.1, the second try of version~7.2, the polar codes of version~7.3, the wide band of version~7.4 and the 1024QAM of version~7.5 (\code{acoustic\_modem\_v7.html}, \code{audiocomm\_v7.py}),\\ and versions $N = 1$ to 5, \code{acoustic\_modem\_v}$N$\code{.html} and \code{audiocomm\_v}$N$\code{.py} (version~5 is also served as \code{acoustic\_modem.html})}
 
 \begin{document}
 \maketitle
@@ -78,7 +78,7 @@ Version~4 adds coherent detection for OFDM (\cref{sec:coh}): a channel estimate 
 Version~4.1 changes only the OFDM receiver: it finds samples that the microphone loses or repeats in the middle of a frame, reads the symbols after the gap again, and erases the symbol that holds it (\cref{sec:gaps}).
 Version~5 adds the single carrier (\cref{sec:sc}): a time map from its training blocks, a room of up to 1024 taps learnt by least squares, and turbo equalization with soft SMAP or a linear MMSE detector. Its page no longer offers the plain ratio $\ln(E_1/E_0)$ as soft output (\cref{sec:soft}), and tells for every turbo frame whether the decoding succeeded (\cref{sec:decode}).
 Version~6 adds the short control part (\cref{sec:c6}): the receiver finds it with a matched filter normalized to the share of the energy that the room's strongest path carries, learns the room, the clock and the noise from its last two periods, and reads the header against them.
-Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft output (\cref{sec:scdet}). Version~7.1 can send a picture as a JPEG file followed by a CRC-32, so that a receiver shows the file as it arrived and tells whether it is intact (\cref{sec:jpeg}). Version~7.2 gives a single-carrier frame that fails a second try, with a room of 2048 taps learned from the whole frame (\cref{sec:screlearn}). Version~7.3 adds the polar codes of 5G~NR at rates $1/3$, $1/2$ and $2/3$, decoded by CRC-aided list decoding, with soft cancellation for the single carrier's passes (\cref{sec:polar}). Version~7.4 can widen the single carrier's band from $3.2$--$16\kHz$ to $2.3$--$20.5\kHz$, $43\,\%$ more symbols per second (\cref{sec:scwide}).
+Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft output (\cref{sec:scdet}). Version~7.1 can send a picture as a JPEG file followed by a CRC-32, so that a receiver shows the file as it arrived and tells whether it is intact (\cref{sec:jpeg}). Version~7.2 gives a single-carrier frame that fails a second try, with a room of 2048 taps learned from the whole frame (\cref{sec:screlearn}). Version~7.3 adds the polar codes of 5G~NR at rates $1/3$, $1/2$ and $2/3$, decoded by CRC-aided list decoding, with soft cancellation for the single carrier's passes (\cref{sec:polar}). Version~7.4 can widen the single carrier's band from $3.2$--$16\kHz$ to $2.3$--$20.5\kHz$, $43\,\%$ more symbols per second (\cref{sec:scwide}). Version~7.5 adds 1024QAM to the single carrier (\cref{sec:sc1024}).
 \end{abstract}
 
 \tableofcontents
@@ -90,7 +90,7 @@ Version~7 adds the LDPC codes of 5G~NR and corrects the precision of SMAP's soft
 
 \subsection{Files and scope}
 \begin{itemize}
-\item \code{acoustic\_modem\_v7.html} and \code{audiocomm\_v7.py} are version~7: version~6 with the LDPC codes of 5G~NR at rates $1/4$ to $3/4$ in place of the Hamming code, and SMAP's soft output corrected (\cref{sec:scdet}). Since 14 October 2026 (version~7.1) they can also send a picture as a JPEG file (\cref{sec:jpeg}). Version~7.2, the same day, adds the single carrier's second try (\cref{sec:screlearn}); the frames did not change. Version~7.3 (15 October 2026) adds polar codes (\cref{sec:polar}), which earlier pages and scripts ignore. Version~7.4, the same day, adds the single carrier's wide band (\cref{sec:scwide}), which earlier pages and scripts ignore too. Pages and scripts made before version~7 ignore LDPC frames, and those made before version~7.1 JPEG frames. The LDPC code is not described in this document yet.
+\item \code{acoustic\_modem\_v7.html} and \code{audiocomm\_v7.py} are version~7: version~6 with the LDPC codes of 5G~NR at rates $1/4$ to $3/4$ in place of the Hamming code, and SMAP's soft output corrected (\cref{sec:scdet}). Since 14 October 2026 (version~7.1) they can also send a picture as a JPEG file (\cref{sec:jpeg}). Version~7.2, the same day, adds the single carrier's second try (\cref{sec:screlearn}); the frames did not change. Version~7.3 (15 October 2026) adds polar codes (\cref{sec:polar}), which earlier pages and scripts ignore. Version~7.4, the same day, adds the single carrier's wide band (\cref{sec:scwide}), which earlier pages and scripts ignore too, and version~7.5 its 1024QAM (\cref{sec:sc1024}), which they ignore as well. Pages and scripts made before version~7 ignore LDPC frames, and those made before version~7.1 JPEG frames. The LDPC code is not described in this document yet.
 \item \code{acoustic\_modem\_v6.html} and \code{audiocomm\_v6.py} are version~6: version~5.1 plus a short control part for OFDM and single-carrier frames, their default (\cref{sec:c6}). They read every frame of version~5 with the same bits. Version~5 and earlier pages and scripts do not find frames with the short control part, so the sender can still choose the 400 bit/s one for them. \code{acoustic\_modem.html} is still a copy of \code{acoustic\_modem\_v5.html}.
 \item \code{acoustic\_modem\_v5.html} and \code{audiocomm\_v5.py} are version~5: version~4.1 plus a single carrier with QPSK, 16QAM, 64QAM or 256QAM, received by turbo equalization with soft SMAP (\cref{sec:sc}). Since 13 October 2026 \code{acoustic\_modem.html} is a copy of \code{acoustic\_modem\_v5.html}, whose receiver no longer offers the plain ratio $\ln(E_1/E_0)$ (\cref{sec:soft}) and checks every turbo frame for a codeword (\cref{sec:decode}). They send and read every frame of version~4; earlier pages and scripts ignore the single-carrier frames. Since 13 October 2026 (version~5.1) their single-carrier receiver also survives samples lost or repeated by the microphone, and offers an MMSE estimate of the room (\cref{sec:scrx}); the frames did not change.
 \item \code{acoustic\_modem\_v4.html} and \code{audiocomm\_v4.py} are version~4: version~3 plus coherent OFDM with QPSK, 8PSK, 16QAM, 64QAM or 256QAM, DQPSK that follows a moving phone (\cref{sec:coh}), and images at four times the size. From 9 to 13 October 2026 \code{acoustic\_modem.html} was a copy of \code{acoustic\_modem\_v4.html}. Since 11 October 2026 (version~4.1) their OFDM receiver also survives samples lost by the microphone (\cref{sec:gaps}); the frames did not change. They send the same FSK frames, room soundings and DQPSK OFDM frames as version~3 and read all of version~3's frames; earlier pages and scripts ignore the coherent frames.
@@ -284,6 +284,9 @@ In type~3, the code field plus 4 equal to 5, 6 and 7 are the polar codes of rate
 
 \paragraph{Signalling the wide band (version~7.4).}
 On the single carrier, type~2 is the wide band (\cref{sec:scwide}), read as type~3: an LDPC or a polar code, a text if $b = 0$, otherwise an image. Receivers made before version~7.4 take type~2 for a room sounding, which they accept with two tones only, and ignore the frame.
+
+\paragraph{Signalling 1024QAM (version~7.5).}
+On the single carrier, the mask of 8PSK (0x55), a mapping the single carrier never sends, is 1024QAM (\cref{sec:sc1024}). Every earlier receiver rejects a single-carrier header with 8PSK's mask, so it ignores the frame.
 
 \paragraph{Signalling a JPEG file (version~7.1).}
 An image (type 1, or 3 with LDPC) with $a > 512$ is a JPEG file of $512(a - 513) + b$ bytes (\cref{sec:jpeghdr}). Receivers made before version~7.1 reject it.
@@ -691,6 +694,7 @@ and carries there the reference symbol's value $e^{j\theta_j}$: one subcarrier i
 \item 8PSK ($m = 3$): $e^{j2\pi p/8}$, labelled with the bits of $p \oplus \lfloor p/2 \rfloor$;
 \item 16QAM ($m = 4$): $(A_u + jA_v)/\sqrt{10}$, $A = (-3, -1, 1, 3)$, labelled $g_u g_v$ with $g = (00, 01, 11, 10)$;
 \item 64QAM ($m = 6$) and 256QAM ($m = 8$): $(A_u + jA_v)/\sqrt{2(L^2 - 1)/3}$ with $L = 8$ or 16 levels $A_u = 2u - L + 1$, labelled $g_u g_v$ with $g_u = u \oplus \lfloor u/2 \rfloor$ on $m/2$ bits ($\sqrt{42}$ and $\sqrt{170}$; 16QAM is the case $L = 4$).
+\item 1024QAM ($m = 10$, single carrier only, version~7.5): the same with $L = 32$ ($\sqrt{682}$).
 \end{itemize}
 The number of data symbols is the smallest $n_s$ with $m \sum_{i=1}^{n_s} (K - P_i) \ge \nc$, $P_i$ the number of pilots in symbol $i$. The last symbol is filled up with scrambled zeros (the scrambler of \cref{sec:scrambler} goes on past the coded bits): plain zeros would put the same point on hundreds of subcarriers, which add up to a peak and heavy clipping. Level and clipping are those of version~3; on the data symbols the clipping noise is about $21\dB$ below the signal.
 
@@ -1036,7 +1040,7 @@ SMAP~\cite{smap} replaces the discrete prior of each coordinate by a mixture of 
 f(u) = \frac{\|y - C s\|^2}{N_0} - \sum_{i=1}^{2n} \ln \sum_a \pi_{i,a}\, e^{-(u_i - A_a)^2/2\tau^2}, \qquad \tau^2 = \kappa_m\, d^2,
 \label{eq:smap}
 \end{equation}
-$d$ the spacing of the levels and $\kappa_m = 0.25$ (QPSK, 16QAM), $0.4$ (64QAM) or $1$ (256QAM). Its gradient,
+$d$ the spacing of the levels and $\kappa_m = 0.25$ (QPSK, 16QAM), $0.4$ (64QAM) or $1$ (256QAM and 1024QAM). Its gradient,
 \begin{equation}
 \nabla f(u) = \frac{2}{N_0} \begin{bmatrix} \operatorname{Re} \\ \operatorname{Im} \end{bmatrix} C^H (C s - y) + \frac{u - \mu(u)}{\tau^2},
 \end{equation}
@@ -1157,7 +1161,38 @@ Room & Frame & $+6\dB$ & $+10\dB$ & $+14\dB$ & $+18\dB$\\
 \end{table}
 
 \paragraph{Limits.}
-These are simulations with the rooms held still; no wide-band frame has been recorded yet. A clock offset above about 200\,ppm (a phone carried at walking speed, not two phones at rest) can make the first block report a gap that is not there (\cref{sec:scrx}), because the drift across it reaches the 4 samples that mark one; the usual band failed the same way at 500\,ppm.
+These are simulations with the rooms held still. On Sheng's phones the wide band worked well (15 October 2026), but no wide-band frame has been recorded for analysis yet. A clock offset above about 200\,ppm (a phone carried at walking speed, not two phones at rest) can make the first block report a gap that is not there (\cref{sec:scrx}), because the drift across it reaches the 4 samples that mark one; the usual band failed the same way at 500\,ppm.
+
+\subsection{1024QAM (version~7.5)}
+\label{sec:sc1024}
+Version~7.5 lets the single carrier send 1024QAM, 32 levels on each axis (\cref{sec:coh}): 10 bits per symbol, $25\,\%$ more than 256QAM before the code. With LDPC $2/3$ it carries $6.67$ bits of message per symbol, against 6 for 256QAM with LDPC $3/4$, the most until then. Sheng asked whether it would survive in the most favourable setting. OFDM keeps 256QAM at most: its clipping noise, about $21\dB$ below the signal (\cref{sec:cohres}), would leave 1024QAM no room; the single carrier's is about $35\dB$ below.
+
+\paragraph{On a clean channel.}
+\Cref{tab:q1024} gives the SNR each mapping needs with the modem's LDPC codes, through its interleaver and with exact LLRs, the channel known (a $17\,280$-bit message, half of 4 noise draws decoded, in steps of $0.5\dB$), with the Shannon and BICM limits (by Monte Carlo). 1024QAM with LDPC $1/2$ carries less than 256QAM with LDPC $2/3$ for about the same SNR, so only the rates $2/3$ and $3/4$ are worth it: $11\,\%$ more than 256QAM with LDPC $3/4$ for $2.9\dB$ more, and $25\,\%$ more for $5\dB$ more.
+
+\begin{table}[ht]
+\centering
+\caption{SNR per symbol (dB) needed on a Gaussian channel with the channel known: Shannon, the BICM limit of the mapping, and the modem's LDPC codes (half of the frames decoded).}
+\label{tab:q1024}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Mapping, code & bits per symbol & Shannon & BICM & LDPC\\
+\midrule
+256QAM, $2/3$ & $5.33$ & $16.0$ & $17.2$ & $18.2$\\
+256QAM, $3/4$ & $6.00$ & $18.0$ & $19.3$ & $20.0$\\
+1024QAM, $1/2$ & $5.00$ & $14.9$ & $16.7$ & $17.9$\\
+1024QAM, $2/3$ & $6.67$ & $20.0$ & $21.7$ & $22.9$\\
+1024QAM, $3/4$ & $7.50$ & $22.6$ & $24.1$ & $25.0$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Replaying a recording.}
+No 1024QAM frame has been recorded yet. The best single-carrier frames recorded (Impasse Carnot~11 and two test recordings, quiet and loud, phones close together and still) show 28 to $30\dB$ on the page, but real frames have needed 2 to $6\dB$ more than the clean channel (256QAM with turbo codes, 7 frames). To see what such a room allows, one 256QAM frame of Impasse Carnot~11 (page SNR $29.0\dB$) was rebuilt from its decoded bits, and a room of 6000 taps at $48\kHz$ ($125\ms$) and a time map from $50\ms$ windows were fitted to the recording by least squares, leaving a residual (noise, and whatever the model misses) $23.8\dB$ below the signal in $3.2$ to $16\kHz$. New frames were sent through that room, with that residual added. A new 256QAM frame of the same kind decoded with a page SNR of $26.7\dB$ and about twice the real frame's wrong channel bits, so the replay is about $2\dB$ harsher than the room was. 256QAM with LDPC $2/3$ and $3/4$ decoded in one pass, $3/4$ still with the residual $2\dB$ louder; 1024QAM with LDPC $1/2$ even with it $4\dB$ louder, with LDPC $2/3$ once it was $2\dB$ quieter, with LDPC $3/4$ once it was $4\dB$ quieter (SMAP decoded it there, the linear MMSE did not). In that room, then, 1024QAM with LDPC $2/3$ is at the edge, and $3/4$ needs about $2\dB$ more. SMAP's width: $\kappa = 0.5$ and 1 did equally well, 2 and 4 worse at rate $3/4$, so 1024QAM keeps 256QAM's $\kappa = 1$. A second replay, of the loud recording, fitted its room worse (a residual $17.6\dB$ below the signal, where the page had measured $29.6\dB$), and even 256QAM with LDPC $3/4$ failed in it; it says little.
+
+\paragraph{Header and tests.}
+On the single carrier, 8PSK's mask is 1024QAM (\cref{sec:header}). The page and the script make the same waveform (to the 16-bit output) and read each other's 1024QAM frames, with LDPC, polar and turbo codes, texts, images and JPEG files, in both bands; frames with every other mapping are bit for bit those of version~7.4, and receivers of version~7.4 find nothing in a 1024QAM frame. Through a model room ($0.1$\,s of reverberation, $40\dB$ of SNR) the page's SNR was $27\dB$ with medium training and $41\dB$ with long training (in the wide band), the echo beyond the room learnt being the limit, and a frame with short training failed: 1024QAM needs a training longer than the room's echo, more than 256QAM does.
 
 %======================================================================
 \section{Short control part (version~6)}

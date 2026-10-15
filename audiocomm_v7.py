@@ -3,7 +3,8 @@ carrier with QPSK to 256QAM and turbo equalization) and room sounding, Python ve
 control part (0.19 s instead of 0.65 s) for the OFDM and single-carrier frames. v7: LDPC codes (5G NR) at rates 1/4 to
 3/4; the Hamming code is gone. v7.1: pictures as JPEG files, with a CRC-32. v7.2: the single carrier tries a
 frame a second time when it fails, with a longer room (2048 taps, 213 ms) learned from the frame itself. v7.4: the
-single carrier's wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (43% more than 3.2 to 16 kHz).
+single carrier's wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (43% more than 3.2 to 16 kHz). v7.5: 1024QAM on
+the single carrier (10 bits per symbol), for phones close together in a quiet room.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -52,6 +53,7 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            of rate 1/3, 1/2, 2/3; receivers older than v7.3 ignore it
            v7.4: type 2 on the single carrier = the wide band (SC_BANDS), read as type 3 (an LDPC or a polar code, a
            text if b = 0, else an image); receivers older than v7.4 ignore it
+           v7.5: on the single carrier, 8PSK's mask (0x55) = 1024QAM (SC_SLOT); receivers older than v7.5 ignore it
   code   : 0 none, 1 Hamming (7,4) + interleaver (until v6; v7 neither sends nor reads it), 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
@@ -86,7 +88,8 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            each (MSB first, Gray: neighbouring points differ in 1 bit): QPSK (1 - 2 b0 + j (1 - 2 b1)) / sqrt 2;
            8PSK exp(j 2 pi p / 8) with bits p xor (p >> 1); 16QAM (A[u] + j A[v]) / sqrt 10, A = (-3, -1, 1, 3), with
            bits g(u) g(v), g = (00, 01, 11, 10); 64QAM and 256QAM the same with A = (-7, -5, ..., 7) or (-15, ..., 15),
-           3 or 4 Gray bits per axis, divided by sqrt 42 or sqrt 170. The last data symbol is filled up with scrambled zeros (the scrambling
+           3 or 4 Gray bits per axis, divided by sqrt 42 or sqrt 170; v7.5, the single carrier's 1024QAM: A = (-31, ..., 31),
+           5 Gray bits per axis, divided by sqrt 682. The last data symbol is filled up with scrambled zeros (the scrambling
            sequence goes on), then the reference symbol ends the part. The receiver estimates each subcarrier's gain
            and phase from the reference symbols and the pilots (see ofdm_receive).
   single carrier (v5): 9600 symbols/s at 9.6 kHz, root-raised-cosine pulses of roll-off 1/3 (3.2 to 16 kHz), rms 0.45;
@@ -104,6 +107,7 @@ Usage
   python audiocomm_v7.py tx --image greatwave_80x54.png -o img.wav   # the page's demo image (Hokusai's Great Wave); greatwave_160x108.png: the large one
   python audiocomm_v7.py tx --image greatwave_320x216.png --mod ofdm --map 256qam --code turbo -o big.wav   # the 4x one
   python audiocomm_v7.py tx --text "Hello" --mod sc --map 64qam --code ldpc --wide -o wide.wav   # v7.4: 2.3 to 20.5 kHz
+  python audiocomm_v7.py tx --image greatwave_160x108.png --mod sc --map 1024qam --code ldpc23 -o q1024.wav   # v7.5: 1024QAM
   (the earlier demo image: --image ../../Lab/bartS.png --step 2, without --step, or with --up 2 for the large and 4x ones)
   python audiocomm_v7.py tx --jpeg greatwave_160x108_q50.jpg --mod sc --code ldpc -o jpg.wav   # a JPEG file as it is (v7.1)
   python audiocomm_v7.py tx --image photo.jpg --quality 50 --width 160 --mod sc --code ldpc -o photo.wav   # a picture made into a JPEG (v7.1)
@@ -1347,7 +1351,8 @@ def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=F
         t = 3                                    # 6400 bit/s: tone set 3, rate field 3
     v = (msb(typ, 2) + msb(a, 11) + msb(b, 11) + msb(c & 3, 2) + msb(r, 2)
          + msb(3 if four else t, 2) + msb(t if four else 0, 2))   # 4 tones: tones 3, the tone set in the last two bits
-    mask = msb((0xFF if c >> 2 else 0) ^ (OFDM_MASKS[OFDM_MAPS.index(omap)] if ofdm is not None or sc else 0), 8)
+    slot = SC_SLOT.get(omap, omap) if sc else omap   # v7.5: 1024QAM in 8PSK's place
+    mask = msb((0xFF if c >> 2 else 0) ^ (OFDM_MASKS[OFDM_MAPS.index(slot)] if ofdm is not None or sc else 0), 8)
     return encode_fec("conv", np.array(v + [x ^ k for x, k in zip(crc8(v), mask)]))
 
 
@@ -1535,6 +1540,8 @@ def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127
         ctrl = np.concatenate([warm, PILOTS[pre], np.tile(hdr, HREPS[pre])]).astype(int)
         return [(ctrl, "hop", CTRL["rate"], -len(warm)), part], data
     if mod == "ofdm":                                      # OFDM: a hopping control part, then the OFDM symbols
+        if omap not in OFDM_MAPS:
+            raise ValueError(f"OFDM: mapping one of {OFDM_MAPS}")
         mode = ofdm_mode(guard)
         hdr = header_bits(typ, a, b, code, None, None, ofdm=mode, omap=omap)
         ch = encode_fec(code, data)
@@ -1808,9 +1815,9 @@ def ofdm_rate(mode, omap="dqpsk"):
 #   1 subcarrier in 12, shifted by 3 from one symbol to the next (8% of the subcarriers)
 #   header: the CRC xor OFDM_MASKS[mapping] (and xor 0xFF for codes 4 to 6), so that older receivers ignore the frame
 OFDM_MAPS = ["dqpsk", "qpsk", "8psk", "16qam", "64qam", "256qam"]
-OFDM_NAMES = dict(dqpsk="DQPSK", qpsk="QPSK", **{"8psk": "8PSK", "16qam": "16QAM", "64qam": "64QAM", "256qam": "256QAM"})
+OFDM_NAMES = dict(dqpsk="DQPSK", qpsk="QPSK", **{"8psk": "8PSK", "16qam": "16QAM", "64qam": "64QAM", "256qam": "256QAM", "1024qam": "1024QAM"})
 OFDM_MASKS = [0x00, 0x33, 0x55, 0x66, 0x3C, 0x0F]   # with xor 0xFF: 12 distinct masks, any two at least 4 bits apart
-OFDM_BITS = {"dqpsk": 2, "qpsk": 2, "8psk": 3, "16qam": 4, "64qam": 6, "256qam": 8}
+OFDM_BITS = {"dqpsk": 2, "qpsk": 2, "8psk": 3, "16qam": 4, "64qam": 6, "256qam": 8, "1024qam": 10}   # 1024QAM: single carrier only (v7.5)
 OFDM_PSTEP, OFDM_PSHIFT = 12, 3
 OFDM_DMAX = 8            # delay change of a symbol (moving phone) searched within +-8 samples
 OFDM_ITERS = 3           # rounds of channel estimate <-> per-symbol gain, phase and delay
@@ -2250,8 +2257,10 @@ SC_D = 4800              # at most this many data symbols between two training b
 SC_GAP = 0.1             # silence after the control part: its echoes fade before the training
 SC_L, SC_PRE = 512, 64   # channel taps, of which SC_PRE before the first strong arrival
 SC_FIELD = 2             # header: tone set 3, rate field 2 (OFDM uses 0 and 1, 6400 bit/s 3)
-SC_MAPS = ["qpsk", "16qam", "64qam", "256qam"]
-SC_WIDTH = {"qpsk": 0.25, "16qam": 0.25, "64qam": 0.4, "256qam": 1.0}   # SMAP: prior width tau^2 / d^2 (d: spacing of the levels)
+SC_MAPS = ["qpsk", "16qam", "64qam", "256qam", "1024qam"]
+SC_WIDTH = {"qpsk": 0.25, "16qam": 0.25, "64qam": 0.4, "256qam": 1.0, "1024qam": 1.0}   # SMAP: prior width tau^2 / d^2 (d: spacing of the levels)
+SC_SLOT = {"1024qam": "8psk"}   # v7.5: the header mask a single-carrier mapping borrows (8PSK is never sent on the single
+                         # carrier, and every older receiver rejects it there, so they ignore 1024QAM frames)
 SC_PASSES = 8            # turbo equalization: at most this many detector <-> decoder passes (full effort)
 SC_EFFORT = {"fast": ((30, 20), 4), "full": ((150, 100), SC_PASSES)}   # the receiver's choice: SMAP's steps (first pass,
                          # later ones) and the passes; fast costs at most 1 dB at the threshold on our recordings, and
@@ -3321,7 +3330,10 @@ def parse_header(hb):
     wide = sc and typ == 2                       # v7.4: the wide band, read as type 3
     codes = TYPE3_CODES if typ == 3 or wide else CODES    # v7: type 3, an LDPC code (v7.3: or a polar code)
     code = codes[c] if c < len(codes) else None
-    if code is None or (sc and (OFDM_MAPS[mi] not in SC_MAPS or code not in SC_CODES)):
+    omap = OFDM_MAPS[mi]
+    if sc:                                       # v7.5: 8PSK's mask = 1024QAM
+        omap = next((k for k, v in SC_SLOT.items() if v == omap), omap)
+    if code is None or (sc and (omap not in SC_MAPS or code not in SC_CODES)):
         return None
     if tones >= len(TONE_SETS) or (not four and val(30, 2)):
         return None
@@ -3345,7 +3357,7 @@ def parse_header(hb):
     if typ == 2 and not four and a in SOUND_TAPS and 1 <= b <= 8:
         h = dict(type="sound", n0=0, order=a, periods=b)
     if h and sc:                                 # ns: data symbols
-        nc, omap = coded_length(code, h["n0"]), OFDM_MAPS[mi]
+        nc = coded_length(code, h["n0"])
         h.update(code=code, nc=nc, rate=sc_rate(omap, nt, wide), tones="sc", M=None, sc=True, map=omap, ns=-(-nc // OFDM_BITS[omap]), train=nt,
                  wide=wide)
     elif h and ofdm:                             # ns: data symbols after the reference symbol
@@ -3872,9 +3884,9 @@ def main():
                            help="FSK with 2 tones (1 bit per symbol) or 4 (2 bits), OFDM, or a single carrier (v5)")
             p.add_argument("--guard", choices=[m["name"] for m in OFDM_MODES], default="long",
                            help="OFDM: long (N 2048, guard 21 ms) or short (N 1024, guard 5 ms)")
-            p.add_argument("--map", choices=OFDM_MAPS,
+            p.add_argument("--map", choices=OFDM_MAPS + ["1024qam"],
                            help="OFDM: DQPSK (no pilots, the default), or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots (2, 3, 4, 6, 8 bits per subcarrier); "
-                                "single carrier: QPSK, 16QAM, 64QAM or 256QAM (the default)")
+                                "single carrier: QPSK, 16QAM, 64QAM, 256QAM (the default) or 1024QAM (v7.5, phones close together in a quiet room)")
             p.add_argument("--tones", choices=TONE_SETS, default="low", help="hop: tone hopping, for reverberant rooms")
             p.add_argument("--train", choices=list(SC_TRAIN), default="medium",
                            help="single carrier: training of 640, 1280 or 2560 symbols (wide band: 896, 1792, 3584), echoes up to 20, 47 or 100 ms (as OFDM's guard)")

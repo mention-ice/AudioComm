@@ -177,7 +177,7 @@ details .row{margin:8px 0}
     <span class="muted mo">Modulation</span><span class="seg mo" id="modSeg"><button data-v="2">2 tones, 1 bit</button><button data-v="4">4 tones, 2 bits</button><button data-v="ofdm">OFDM</button><button data-v="sc">Single carrier</button></span>
     <span class="muted fk">Tones</span><span class="seg fk" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
     <span class="muted mo fk">Rate, bit/s</span><span class="seg mo fk" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button><button data-v="3200">3200</button><button data-v="6400">6400</button></span>
-    <span class="muted mo of">Mapping</span><span class="seg mo of" id="mapSeg"><button class="xsc" data-v="dqpsk">DQPSK</button><button data-v="qpsk">QPSK</button><button class="xsc" data-v="8psk">8PSK</button><button data-v="16qam">16QAM</button><button data-v="64qam">64QAM</button><button data-v="256qam">256QAM</button></span>
+    <span class="muted mo of">Mapping</span><span class="seg mo of" id="mapSeg"><button class="xsc" data-v="dqpsk">DQPSK</button><button data-v="qpsk">QPSK</button><button class="xsc" data-v="8psk">8PSK</button><button data-v="16qam">16QAM</button><button data-v="64qam">64QAM</button><button data-v="256qam">256QAM</button><button class="sco" data-v="1024qam">1024QAM</button></span>
     <span class="muted mo of nsc">Guard interval</span><span class="seg mo of nsc" id="guardSeg"><button data-v="long">21 ms · 17 kbit/s</button><button data-v="short">5 ms · 20 kbit/s</button></span>
     <span class="muted mo sco">Training, longest echo</span><span class="seg mo sco" id="trainSeg"><button data-v="short">20 ms · 68 kbit/s</button><button data-v="medium">47 ms · 61 kbit/s</button><button data-v="long">100 ms · 50 kbit/s</button></span>
     <span class="muted mo sco">Band</span><span class="seg mo sco" id="bandSeg"><button data-v="usual">3.2–16 kHz · 61 kbit/s</button><button data-v="wide">2.3–20.5 kHz · 87 kbit/s</button></span>
@@ -224,6 +224,7 @@ details .row{margin:8px 0}
     <p class="muted"><b>Single carrier with SMAP (v5).</b> OFDM pays for its simple receiver twice: the guard (a third of the time with the long guard) and its peaks, since hundreds of subcarriers add up to a signal whose rare peaks must be clipped. The single carrier sends one complex symbol at a time instead, 9600 per second on a carrier at 9.6 kHz, each shaped by a root-raised-cosine pulse (roll-off 1/3) so that the signal fills the same band, 3.2 to 16 kHz, with no guard. The room then smears every symbol over the next few hundred (intersymbol interference): the receiver writes what it hears, at the symbol rate, as y = c ∗ s + noise, with c the room seen through the two pulse filters (256 to 1024 taps, plotted below the received image). It learns c from known training symbols (QPSK, at the start and then every 0.5 s, which also give the clock and follow the room as people move), and then looks for the symbols. The training plays the role of OFDM's guard: the longer it is, the longer the echo the receiver can learn, for some of the rate. Short training (640 symbols) learns echoes up to 20 ms after the first strong arrival (256 taps), medium (1280) up to 47 ms (512 taps), long (2560) up to 100 ms (1024 taps, kept when they fit the room better than 512). A dry room needs only the short one; in a reverberant room, where the echo 50 ms on is still 15 to 20 dB down, the long one decodes 256QAM where the others fail. A <b>linear MMSE</b> equalizer undoes c as well as the noise allows, but it treats the symbols as Gaussian. <b>SMAP</b> (Ramos, Senecal and Yang) uses what the receiver knows: each symbol lies on the constellation. It minimizes |y − c ∗ s|²/N₀ − Σ ln p(s), with p a mixture of narrow Gaussians around the constellation's levels, by gradient steps that need only FFTs, and gives each bit a soft output. The detector and the decoder (turbo, or LDPC since v7) then exchange their beliefs on the coded bits a few times (<b>turbo equalization</b>): the decoder's beliefs sharpen p, which sharpens the detector's output, until the decisions form a codeword. Choose the detector on the receiver, and its effort: fast stops SMAP after 30 steps (20 on later passes) and turbo equalization after 4 passes, full allows 150 (100) steps and 8 passes. Fast cost at most 1 dB at the threshold on our recordings, and takes a third to two thirds of the time (a phone may need it). Either switch decodes the last frame again. On two recordings at one spot, the single carrier with SMAP needed 4 to 6 dB less SNR than OFDM at 256QAM (17 to 19 dB against 22 to 23) and 2 dB less at 64QAM, for 2 to 5 times OFDM's computation (more near the threshold, where it takes several passes). The decoding runs in the background (a few seconds, more for large images), so the receiver keeps listening. The header marks single-carrier frames with a rate field that older receivers do not know, so receivers older than v5 ignore them.</p>
     <p class="muted"><b>Second try (v7.2).</b> A training block lets the receiver learn at most 1024 taps of the room (107 ms of echo); whatever echoes later counts as noise. In a living room at 2 to 4 m the echo after 107 ms was only 15 to 19 dB below the sound, which capped the SNR there. So when the passes end without a codeword, the receiver learns the room again from the whole frame (training and data, the data as the decoder's current guesses): 2048 taps (213 ms), then up to 4 more passes. On 34 such frames this decoded 29 instead of 14. It cannot help when the room changes during the frame (someone walking, a moving phone).</p>
     <p class="muted"><b>Wide band (v7.4).</b> The single carrier can also send 13 714 symbols per second on a carrier at 11.4 kHz, which fills 2.3 to 20.5 kHz instead of 3.2 to 16 kHz: 43 % more bits per second. Room soundings in a reverberant room heard 16 to 20.5 kHz about as clearly as the usual band (the phone's speaker gives 6 to 10 dB less there, but the room's noise is as much lower, and the echo dies out fastest at high frequencies) and 2.3 to 3.2 kHz 3 to 5 dB less clearly; above 21 kHz the iPhone's microphone hears almost nothing. The training blocks have 10/7 as many symbols, so they last as long and let the receiver learn the same echoes. The pulses are made on a 96 kHz grid, 7 samples per symbol, and every other sample is played. The same loudness spread over a wider band gives each symbol about 1.5 dB less signal: in simulation through the rooms measured, it decoded wherever the usual band did up to 6 dB more noise than the room had, and failed more often beyond. LDPC or polar codes only. The header marks it as type 2 on the single carrier, which receivers older than v7.4 ignore.</p>
+    <p class="muted"><b>1024QAM (v7.5).</b> The single carrier can put 10 bits on each symbol, 32 levels on each axis, instead of 256QAM's 8: 25 % more bits per second before the code. The levels are half as far apart, so it needs about 6 dB more signal than 256QAM at the same code rate; at the same information rate, 1024QAM with LDPC 2/3 carries 11 % more than 256QAM with LDPC 3/4 for about 3 dB more signal, and 1024QAM with LDPC 1/2 is no better than 256QAM with LDPC 2/3. Replaying the room and noise of one of the best recordings (phones close together and still, 29 dB on this page) with 1024QAM frames put LDPC 2/3 at the edge, and 3/4 needed about 2 dB more signal. Take it with LDPC 2/3, for phones close together in a quiet room. The header marks it with the mask of 8PSK, which the single carrier never used, so receivers older than v7.5 ignore it.</p>
   </details>
 </section>
 
@@ -1330,6 +1331,7 @@ function drawQR(cv, text, px = 8) {
 // rates 1/4, 1/3, 1/2, 2/3, 3/4 (0 to 4); a text if b = 0 (a = characters), else an image. Receivers older than v7 ignore it.
 // v7.3: 5 to 7, polar codes of rate 1/3, 1/2, 2/3. Receivers older than v7.3 ignore them.
 // v7.4: type 2 on the single carrier is its wide band (SC_BANDS), read as type 3. Receivers older than v7.4 ignore it.
+// v7.5: on the single carrier, 8PSK's mask (0x55) is 1024QAM (SC_SLOT). Receivers older than v7.5 ignore it.
 const CTRL = { tones: 'low', rate: 400 };
 const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high', 'hop'], RATES4 = [400, 800, 1600, 3200];
 // 6400 bit/s, 4 tones only: one group of 4 tones spaced 3.2 kHz fills the band 3.2-12.8 kHz, so there is nothing left to
@@ -1348,7 +1350,7 @@ function headerBits(h) {   // 6400 bit/s: tone set 3, rate field 3; OFDM: tone s
   const B = SC_BANDS[+!!(h.sc && h.wide)], T = h.sc ? B.tcode[h.train || B.nc] : 0;   // v5, single carrier: the training length, 0 medium, 1 short, 2 long
   const v = [...msb(type, 2), ...msb(h.a | (T >> 1) << 10, 11), ...msb(h.b | (T & 1) << 10, 11), ...msb(c & 3, 2),
              ...msb(h.sc ? SC_FIELD : om >= 0 ? om : wide ? 3 : (four ? RATES4 : RATES).indexOf(h.rate), 2), ...msb(four ? 3 : t, 2), ...msb(four ? t : 0, 2)];
-  const mask = (c >> 2 ? 0xff : 0) ^ (coh ? OFDM_MASKS[Math.max(0, OFDM_MAPS.indexOf(h.map))] : 0);   // v4: the mapping's mask (OFDM, and the single carrier in v5)
+  const mask = (c >> 2 ? 0xff : 0) ^ (coh ? OFDM_MASKS[Math.max(0, OFDM_MAPS.indexOf(h.sc ? SC_SLOT[h.map] || h.map : h.map))] : 0);   // v4: the mapping's mask (OFDM, and the single carrier in v5; v7.5: 1024QAM in 8PSK's place)
   return encodeFEC('conv', lastHb = [...v, ...crc8(v).map((b, i) => b ^ ((mask >> (7 - i)) & 1))]);
 }
 // ---- v7.1: JPEG pictures ----
@@ -1542,13 +1544,14 @@ function parseHeader(hb) {   // hb: the 40 decoded header bits; null unless the 
   const rate = ofdm ? ofdmRate(ofdm) : sc ? 1 : set3 ? (val(26, 2) === 3 ? RATE_WIDE : 0) : (four ? RATES4 : RATES)[val(26, 2)];
   const tones = ofdm ? 'ofdm' : sc ? 'sc' : set3 ? 'hop' : TONE_SETS[four ? val(30, 2) : tf];
   if (!tones || !rate || !code || (!four && val(30, 2)) || (mi && !ofdm && !sc)) return null;   // a mapping mask on anything but OFDM or the single carrier: not ours
-  if (sc && (T === 3 || !SC_MAPS.includes(OFDM_MAPS[mi]) || !SC_CODES.includes(code))) return null;   // the single carrier: QPSK to 256QAM, turbo, LDPC or polar codes
+  const scMap = Object.keys(SC_SLOT).find(k => SC_SLOT[k] === OFDM_MAPS[mi]) || OFDM_MAPS[mi];   // v7.5: on the single carrier, 8PSK's mask = 1024QAM
+  if (sc && (T === 3 || !SC_MAPS.includes(scMap) || !SC_CODES.includes(code))) return null;   // the single carrier: QPSK to 1024QAM, turbo, LDPC or polar codes
   let h = null;
   if (type === 0 && a >= 1 && b === 0) h = { type: 'text', len: a, n0: 8 * a };
   if (type === 1 && a >= 1 && b >= 1 && a <= 512 && b <= 512 && a * b <= 70000) h = { type: 'image', h: a, w: b, n0: a * b };
   if (type === 1 && a >= 513 && b >= 1 && b <= 512 && jpegBytes(a, b) <= JPEG_MAX) h = { type: 'jpeg', len: jpegBytes(a, b), n0: 8 * (jpegBytes(a, b) + 4) };   // v7.1: a JPEG file   // v4: up to 4x images (the demos: 216 x 320 and 296 x 228; before: 20000 pixels)
   if (type === 2 && !four && SOUND_TAPS[a] && b >= 1 && b <= 8) h = { type: 'sound', order: a, periods: b, n0: 0 };
-  if (h && sc) { const nc = codedLength(code, h.n0), map = OFDM_MAPS[mi], tcode = SC_BANDS[+scw].tcode, train = +Object.keys(tcode).find(k => tcode[k] === T); Object.assign(h, { code, nc, rate: scRate(map, train, scw), tones, M: 0, sc: true, map, train, ns: Math.ceil(nc / OFDM_BITS[map]), wide: scw }); }   // ns: data symbols; v7.4: wide, the band
+  if (h && sc) { const nc = codedLength(code, h.n0), map = scMap, tcode = SC_BANDS[+scw].tcode, train = +Object.keys(tcode).find(k => tcode[k] === T); Object.assign(h, { code, nc, rate: scRate(map, train, scw), tones, M: 0, sc: true, map, train, ns: Math.ceil(nc / OFDM_BITS[map]), wide: scw }); }   // ns: data symbols; v7.4: wide, the band
   else if (h && ofdm) { const nc = codedLength(code, h.n0), map = OFDM_MAPS[mi]; Object.assign(h, { code, nc, rate: ofdmRate(ofdm, map), tones, M: 0, ofdm: ofdm.name, map, ns: ofdmLayout(ofdm, map, nc)[0] }); }   // ns: data symbols
   else if (h) { const nc = codedLength(code, h.n0), K = Math.log2(M); Object.assign(h, { code, nc, rate, tones, M, baud: rate / K, ns: Math.ceil(nc / K) }); }   // ns: message symbols
   return h;
@@ -1873,7 +1876,7 @@ function ofdmReference(K) { return Array.from({ length: K }, (_, j) => Math.PI *
 // subcarrier in 12, shifted by 3 from one symbol to the next (8 % of the subcarriers). The other subcarriers, in
 // increasing frequency, symbol after symbol, carry the bits; the last data symbol is filled up with scrambled zeros.
 const OFDM_MAPS = ['dqpsk', 'qpsk', '8psk', '16qam', '64qam', '256qam'], OFDM_MASKS = [0x00, 0x33, 0x55, 0x66, 0x3C, 0x0F];   // header: the CRC xor the mapping's mask (with xor 0xFF: 12 masks, any two at least 4 bits apart)
-const OFDM_BITS = { dqpsk: 2, qpsk: 2, '8psk': 3, '16qam': 4, '64qam': 6, '256qam': 8 }, OFDM_NAMES = { dqpsk: 'DQPSK', qpsk: 'QPSK', '8psk': '8PSK', '16qam': '16QAM', '64qam': '64QAM', '256qam': '256QAM' };
+const OFDM_BITS = { dqpsk: 2, qpsk: 2, '8psk': 3, '16qam': 4, '64qam': 6, '256qam': 8, '1024qam': 10 }, OFDM_NAMES = { dqpsk: 'DQPSK', qpsk: 'QPSK', '8psk': '8PSK', '16qam': '16QAM', '64qam': '64QAM', '256qam': '256QAM', '1024qam': '1024QAM' };   // 1024QAM: single carrier only (v7.5)
 const OFDM_PSTEP = 12, OFDM_PSHIFT = 3;
 const OFDM_DMAX = 8;       // delay change of a symbol (moving phone) searched within +-8 samples
 const OFDM_SLIP = 16;      // v4.1: a symbol whose timing jumps by more than CP / 16 from the symbols before it: samples lost or repeated
@@ -2431,8 +2434,10 @@ let SC_D = 4800;            // at most this many data symbols between two traini
 const SC_GAP = 0.1;           // silence after the control part: its echoes fade before the training
 const SC_L = 512, SC_PRE = 64;   // channel taps, of which SC_PRE before the first strong arrival
 const SC_FIELD = 2;           // header: tone set 3, rate field 2 (OFDM uses 0 and 1, 6400 bit/s 3)
-const SC_MAPS = ['qpsk', '16qam', '64qam', '256qam'];
-const SC_WIDTH = { qpsk: 0.25, '16qam': 0.25, '64qam': 0.4, '256qam': 1.0 };   // SMAP: prior width tau^2 / d^2 (d: spacing of the levels)
+const SC_MAPS = ['qpsk', '16qam', '64qam', '256qam', '1024qam'];
+const SC_WIDTH = { qpsk: 0.25, '16qam': 0.25, '64qam': 0.4, '256qam': 1.0, '1024qam': 1.0 };   // SMAP: prior width tau^2 / d^2 (d: spacing of the levels)
+const SC_SLOT = { '1024qam': '8psk' };   // v7.5: the header mask a single-carrier mapping borrows (8PSK is never sent on the single
+                                         // carrier, and every older receiver rejects it there, so they ignore 1024QAM frames)
 const SC_PASSES = 8;          // turbo equalization: at most this many detector <-> decoder passes (full effort)
 const SC_EFFORT = { fast: [[30, 20], 4], full: [[150, 100], SC_PASSES] };   // the receiver's choice: SMAP's steps (first pass,
                                // later ones) and the passes; fast costs at most 1 dB at the threshold on our recordings, and
@@ -3693,7 +3698,7 @@ const MOD0 = params.get('mod') === '4' ? 4 : ['ofdm', 'sc'].includes(params.get(
 const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: rateList(MOD0).includes(+params.get('rate')) ? +params.get('rate') : 400,
               code: [...CODES, ...TYPE3_CODES].filter(c => c && c !== 'rs').includes(params.get('code')) ? params.get('code') : 'none', soft: 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127,
               guard: params.get('guard') === 'short' ? 'short' : 'long',   // OFDM: the long (21 ms) or the short (5 ms) guard interval
-              map: OFDM_MAPS.includes(params.get('map')) ? params.get('map') : 'dqpsk',
+              map: [...OFDM_MAPS, '1024qam'].includes(params.get('map')) ? params.get('map') : 'dqpsk',   // v7.5: 1024QAM, single carrier only
               det: params.get('det') === 'lmmse' ? 'lmmse' : 'smap',   // v5: the single carrier's detector (receiver)
               train: ['short', 'long'].includes(params.get('train')) ? params.get('train') : 'medium',   // v5: its training (sender)
               band: params.get('band') === 'wide' ? 'wide' : 'usual',   // v7.4: its band, 3.2 to 16 or 2.3 to 20.5 kHz (sender)
@@ -3701,6 +3706,7 @@ const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params
               est: params.get('est') === 'mmse' ? 'mmse' : 'ls',   // v5: the room's estimate, least squares or MMSE (receiver)
               control: params.get('ctl') === 'long' ? 'long' : 'short' };   // v6: the control part of OFDM and single-carrier frames (sender)
 if (cfg.mod === 'sc') { if (!SC_MAPS.includes(cfg.map)) cfg.map = '256qam'; if (!(cfg.band === 'wide' ? TYPE3_CODES : SC_CODES).includes(cfg.code)) cfg.code = cfg.band === 'wide' ? 'ldpc' : 'turbo'; }   // OFDM (v4): DQPSK, or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots
+if (cfg.mod !== 'sc' && !OFDM_MAPS.includes(cfg.map)) cfg.map = '256qam';   // v7.5: OFDM has no 1024QAM
 if (cfg.rate === RATE_WIDE) cfg.tones = 'hop';   // 6400 bit/s: one group of 4 tones over the whole band
 const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
 let msgMode = 'text', pen = 0, actx = null, imgScale = { large: 2, huge: 4 }[params.get('img')] || 1;   // image size: 1 normal, 2 large, 4 huge (2 or 4 times the width and height)
@@ -3730,7 +3736,7 @@ const TX_HINT = {   // under the transmitter's options: what the modulation chos
   2: 'Binary FSK: one tone per bit, the low one for 0, the high one for 1. A lower rate, a longer preamble or 4 tones reach farther; in a reverberant room, beyond a few metres, use Hopping. Receivers need no settings: each frame\'s header tells them.',
   4: '4-FSK: one of four tones per symbol, 2 bits each (Gray-coded). At the same bit rate, a symbol lasts twice as long as with 2 tones and gathers twice the energy, so it reaches farther. In a reverberant room use Hopping; 6400 bit/s fills the whole band. Receivers need no settings: each frame\'s header tells them.',
   ofdm: 'OFDM: hundreds of subcarriers at once, far faster than FSK (the rates shown are before the code): use it with a code. Echo longer than the guard acts as noise, so take the long guard in a reverberant room. DQPSK needs no pilots; QPSK to 256QAM add pilots to measure the room: QPSK reaches farther than DQPSK, 16QAM is nearly twice as fast for about 3 dB more signal, 64QAM and 256QAM are 1.5 and 2 times faster again for about 5 and 11 dB more: try them close to the speaker. Receivers need no settings.',
-  sc: 'Single carrier (v5): one symbol at a time, 9600 per second (13 714 in the wide band), with no guard. Training blocks every 0.5 s let the receiver learn the room and undo its echo (soft SMAP with the decoder), which takes a few seconds. Take a training longer than the room\'s echo. 256QAM needs a still room; 16QAM or 64QAM is safer when people move. Turbo or LDPC codes only (the others are greyed out): at the same rate turbo needs about 1 dB less signal here, while LDPC 2/3 and 3/4 carry more when the signal is strong. The wide band (v7.4, 2.3 to 20.5 kHz) carries 43 % more, with LDPC or polar codes only, but gives each symbol about 1.5 dB less signal: take it when the signal is strong. Receivers need no settings.'
+  sc: 'Single carrier (v5): one symbol at a time, 9600 per second (13 714 in the wide band), with no guard. Training blocks every 0.5 s let the receiver learn the room and undo its echo (soft SMAP with the decoder), which takes a few seconds. Take a training longer than the room\'s echo. 256QAM needs a still room; 16QAM or 64QAM is safer when people move. 1024QAM (v7.5) needs about 6 dB more signal than 256QAM: only for phones close together in a quiet room, with LDPC 2/3. Turbo or LDPC codes only (the others are greyed out): at the same rate turbo needs about 1 dB less signal here, while LDPC 2/3 and 3/4 carry more when the signal is strong. The wide band (v7.4, 2.3 to 20.5 kHz) carries 43 % more, with LDPC or polar codes only, but gives each symbol about 1.5 dB less signal: take it when the signal is strong. Receivers need no settings.'
 };
 function showMod() {   // the rates and tone labels of binary or 4-tone FSK; OFDM has a guard interval instead of tones and a rate
   $('txHint').textContent = TX_HINT[cfg.mod];
@@ -3745,6 +3751,7 @@ seg($('modSeg'), cfg.mod, v => {
     if (!(cfg.band === 'wide' ? TYPE3_CODES : SC_CODES).includes(cfg.code)) $('codeSeg').querySelector(`[data-v="${cfg.band === 'wide' ? 'ldpc' : 'turbo'}"]`).click();   // v7.4: the wide band, LDPC or polar
     if (!SC_MAPS.includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();
   }
+  if (cfg.mod === 'ofdm' && !OFDM_MAPS.includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();   // v7.5: 1024QAM, single carrier only
   if (cfg.mod !== 'ofdm' && cfg.mod !== 'sc' && !rateList(cfg.mod).includes(cfg.rate)) { cfg.rate = cfg.mod === 4 ? 400 : 1600; $('rateSeg').querySelector(`[data-v="${cfg.rate}"]`).click(); }   // 200 is binary only, 3200 and 6400 4 tones only
   showMod(); syncUrl(); txInfo();
 });
@@ -4306,8 +4313,8 @@ function drawConst(o, cv = $('ofdmConst')) {   // the received points of the dat
   for (let i = 0; i < n; i += step) { const x = cx + sc * o.zr[i], y = cy - sc * o.zi[i]; if (x >= 0 && x <= W && y >= 0 && y <= H) g.fillRect(x - d, y - d, 2 * d, 2 * d); }
   g.globalAlpha = 1;
   const [pr, pim] = o.map === 'dqpsk' ? [[1, -1, -1, 1].map(v => v * Math.SQRT1_2), [1, 1, -1, -1].map(v => v * Math.SQRT1_2)] : ofdmPoints(o.map);
-  g.strokeStyle = '#fff'; g.lineWidth = 1.5 * d;
-  const rad = (pr.length > 64 ? 2 : pr.length > 16 ? 3 : 4) * d;   // 64QAM and 256QAM: smaller circles, the points are closer
+  g.strokeStyle = '#fff'; g.lineWidth = (pr.length > 256 ? 0.75 : 1.5) * d;
+  const rad = (pr.length > 256 ? 1 : pr.length > 64 ? 2 : pr.length > 16 ? 3 : 4) * d;   // 64QAM to 1024QAM: smaller circles, the points are closer
   pr.forEach((x, p) => { g.beginPath(); g.arc(cx + sc * x, cy - sc * pim[p], rad, 0, 2 * Math.PI); g.stroke(); });
   g.fillStyle = '#ffffffcc'; g.textBaseline = 'top'; g.fillText(OFDM_NAMES[o.map], 6 * d, 6 * d);
 }
