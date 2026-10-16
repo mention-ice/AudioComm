@@ -4,7 +4,7 @@ control part (0.19 s instead of 0.65 s) for the OFDM and single-carrier frames. 
 3/4; the Hamming code is gone. v7.1: pictures as JPEG files, with a CRC-32. v7.2: the single carrier tries a
 frame a second time when it fails, with a longer room (2048 taps, 213 ms) learned from the frame itself. v7.4: the
 single carrier's wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (43% more than 3.2 to 16 kHz). v7.5: 1024QAM on
-the single carrier (10 bits per symbol), for phones close together in a quiet room.
+the single carrier (10 bits per symbol), for phones close together in a quiet room. v7.6: LDPC rate 5/6.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -54,6 +54,9 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            v7.4: type 2 on the single carrier = the wide band (SC_BANDS), read as type 3 (an LDPC or a polar code, a
            text if b = 0, else an image); receivers older than v7.4 ignore it
            v7.5: on the single carrier, 8PSK's mask (0x55) = 1024QAM (SC_SLOT); receivers older than v7.5 ignore it
+           v7.6: type 0 or 1 with the code field 7 (3 with the CRC inverted) = LDPC 5/6 (LDPC56), on the single carrier's
+           wide band type 0 or 1 with the code field 2 (convolutional, which the single carrier never takes); receivers
+           older than v7.6 ignore it
   code   : 0 none, 1 Hamming (7,4) + interleaver (until v6; v7 neither sends nor reads it), 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
@@ -108,17 +111,18 @@ Usage
   python audiocomm_v7.py tx --image greatwave_320x216.png --mod ofdm --map 256qam --code turbo -o big.wav   # the 4x one
   python audiocomm_v7.py tx --text "Hello" --mod sc --map 64qam --code ldpc --wide -o wide.wav   # v7.4: 2.3 to 20.5 kHz
   python audiocomm_v7.py tx --image greatwave_160x108.png --mod sc --map 1024qam --code ldpc23 -o q1024.wav   # v7.5: 1024QAM
+  python audiocomm_v7.py tx --image greatwave_160x108.png --mod sc --map 256qam --code ldpc56 -o r56.wav   # v7.6: LDPC 5/6
   (the earlier demo image: --image ../../Lab/bartS.png --step 2, without --step, or with --up 2 for the large and 4x ones)
   python audiocomm_v7.py tx --jpeg greatwave_160x108_q50.jpg --mod sc --code ldpc -o jpg.wav   # a JPEG file as it is (v7.1)
   python audiocomm_v7.py tx --image photo.jpg --quality 50 --width 160 --mod sc --code ldpc -o photo.wav   # a picture made into a JPEG (v7.1)
-  python audiocomm_v7.py tx --text "Hello" --code conv -o coded.wav   # codes: none conv turbo turbo3 turbo4 ldpc4 ldpc3 ldpc ldpc23 ldpc34 polar3 polar polar23
+  python audiocomm_v7.py tx --text "Hello" --code conv -o coded.wav   # codes: none conv turbo turbo3 turbo4 ldpc4 ldpc3 ldpc ldpc23 ldpc34 ldpc56 polar3 polar polar23
   python audiocomm_v7.py rx recording.wav                    # decode a recording
   python audiocomm_v7.py rx recording.wav --soft ratio       # soft output ln(E1/E0) instead of the calibrated LLR
   python audiocomm_v7.py tx --text "Hello" --code conv --rate 200 --pre 511 -o far.wav   # long range
   python audiocomm_v7.py tx --text "Hello" --tones high --rate 800 -o fast.wav
   python audiocomm_v7.py tx --text "Hello" --tones hop --code conv -o hop.wav   # tone hopping, for reverberant rooms
   python audiocomm_v7.py tx --text "Hello" --tones hop --code turbo -o turbo.wav   # turbo code (turbo3, turbo4: rates 1/3, 1/4)
-  python audiocomm_v7.py tx --text "Hello" --tones hop --code ldpc -o ldpc.wav   # LDPC code (v7; ldpc4 ldpc3 ldpc23 ldpc34: 1/4 1/3 2/3 3/4)
+  python audiocomm_v7.py tx --text "Hello" --tones hop --code ldpc -o ldpc.wav   # LDPC code (v7; ldpc4 ldpc3 ldpc23 ldpc34 ldpc56: 1/4 1/3 2/3 3/4 5/6)
   python audiocomm_v7.py tx --text "Hello" --mod sc --code polar -o polar.wav   # polar code (v7.3; polar3 polar23: 1/3 2/3)
   python audiocomm_v7.py tx --text "Hello" --mod 4 --tones hop --rate 3200 --code turbo -o fast4.wav   # 4 tones, 2 bits per symbol
   python audiocomm_v7.py tx --text "Hello" --mod 4 --tones hop --rate 6400 --code turbo -o fast6.wav   # the whole band, no hopping
@@ -573,10 +577,10 @@ def rs_decode(c, n0):
 
 
 # ---- v7: LDPC codes of 5G NR (3GPP TS 38.212: 5.2.2 segmentation, 5.3.2 encoding, 5.4.2.1 rate matching), rates 1/4
-# to 3/4. Differences from NR: no transport-block or code-block CRC (the parity checks say whether a block decoded),
+# to 3/4 (v7.6: and 5/6). Differences from NR: no transport-block or code-block CRC (the parity checks say whether a block decoded),
 # no bit interleaving (the modem's channel interleaver follows), the coded bits split evenly between the blocks,
 # redundancy version 0 only. Base graphs: Tables 5.3.2-2 and 5.3.2-3, entries "row col V(iLS=0..7)".
-LDPC_R = {"ldpc4": (1, 4), "ldpc3": (1, 3), "ldpc": (1, 2), "ldpc23": (2, 3), "ldpc34": (3, 4)}   # code -> rate num/den
+LDPC_R = {"ldpc4": (1, 4), "ldpc3": (1, 3), "ldpc": (1, 2), "ldpc23": (2, 3), "ldpc34": (3, 4), "ldpc56": (5, 6)}   # code -> rate num/den
 LDPC_ITERS = 25          # layered belief propagation: at most this many iterations (about 50 of the flooding schedule)
 LDPC_CLIP, LDPC_CLIP1 = 30.0, 20.0   # input LLRs clipped (as the turbo decoder); the extension parity bits, which one check
 # alone protects, lower than what that check can send (about 28), or one read wrong with near certainty would stay wrong
@@ -1130,7 +1134,10 @@ def polar_decode(llr, nbits, rate, soft=False):
 LDPC_CODES = ["ldpc4", "ldpc3", "ldpc", "ldpc23", "ldpc34"]   # v7, header type 3: the code field (+ 4 with the CRC inverted)
 POLAR_CODES = ["polar3", "polar", "polar23"]   # v7.3: header type 3, the code field 5 to 7
 TYPE3_CODES = LDPC_CODES + POLAR_CODES
-SC_CODES = list(TURBO_R) + LDPC_CODES + POLAR_CODES   # the codes with soft output, which turbo equalization needs
+LDPC56 = "ldpc56"   # v7.6: LDPC 5/6, header type 0 or 1 with the code field 7 (single carrier, wide band: 2), see header_bits
+SC_CODES = list(TURBO_R) + LDPC_CODES + [LDPC56] + POLAR_CODES   # the codes with soft output, which turbo equalization needs
+WIDE_CODES = TYPE3_CODES + [LDPC56]   # v7.4: the codes of the single carrier's wide band (v7.6: and LDPC 5/6)
+OFDM_NO56 = ["64qam", "256qam"]   # v7.6: OFDM's mappings without LDPC 5/6 (see build_frame)
 
 
 def encode_fec(code, d):
@@ -1333,14 +1340,16 @@ def crc8(bits):
 def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=False, nt=None, wide=False):
     if code in TYPE3_CODES:                      # v7: type 3, the LDPC (v7.3: or polar) code's index in the code field (b = 0: a text)
         typ, c = 3, TYPE3_CODES.index(code)
+    elif code == LDPC56:                         # v7.6: type 0 or 1, the code field 7 (the single carrier's wide band: 2)
+        c = 2 if sc and wide else 7
     else:
         c = CODES.index(code)                    # codes 4 to 7: field c mod 4 and the CRC inverted
     if sc:                                       # v5, single carrier: tone set 3, rate field 2, the training in a's and b's top bits
         t, four, r, T = 3, True, SC_FIELD, SC_TCODE[nt or SC_NC]
         a, b = a | (T >> 1) << 10, b | (T & 1) << 10
-        if wide:                                 # v7.4: type 2, read as type 3
+        if wide and code != LDPC56:              # v7.4: type 2, read as type 3
             if typ != 3:
-                raise ValueError(f"the wide band takes an LDPC or a polar code: one of {TYPE3_CODES}")
+                raise ValueError(f"the wide band takes an LDPC or a polar code: one of {WIDE_CODES}")
             typ = 2
     elif ofdm is not None:                         # OFDM: tones 3, tone set 3, rate field = the mode (0 long guard, 1 short)
         t, four, r = 3, True, OFDM_MODES.index(ofdm)
@@ -1542,6 +1551,9 @@ def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127
     if mod == "ofdm":                                      # OFDM: a hopping control part, then the OFDM symbols
         if omap not in OFDM_MAPS:
             raise ValueError(f"OFDM: mapping one of {OFDM_MAPS}")
+        if omap in OFDM_NO56 and code == LDPC56:         # v7.6: OFDM's own noise (its clipping, about 21 dB below the signal) is too loud
+            raise ValueError("OFDM with 64QAM or 256QAM: LDPC 3/4 at most (OFDM's clipping leaves 64QAM 3 to 5 % of wrong bits on a short "
+                             "message, more than LDPC 5/6 corrects, and 256QAM with LDPC 5/6 needs 22.5 dB)")
         mode = ofdm_mode(guard)
         hdr = header_bits(typ, a, b, code, None, None, ofdm=mode, omap=omap)
         ch = encode_fec(code, data)
@@ -3330,6 +3342,8 @@ def parse_header(hb):
     wide = sc and typ == 2                       # v7.4: the wide band, read as type 3
     codes = TYPE3_CODES if typ == 3 or wide else CODES    # v7: type 3, an LDPC code (v7.3: or a polar code)
     code = codes[c] if c < len(codes) else None
+    if typ < 2 and (c == 7 or sc and c == 2):    # v7.6: LDPC 5/6, type 0 or 1 with the code 7 (the single carrier's wide band: 2)
+        code, wide = LDPC56, sc and c == 2
     omap = OFDM_MAPS[mi]
     if sc:                                       # v7.5: 8PSK's mask = 1024QAM
         omap = next((k for k, v in SC_SLOT.items() if v == omap), omap)
@@ -3344,7 +3358,7 @@ def parse_header(hb):
         if T == 3:
             return None
         nt = [k for k, v in SC_TCODE.items() if v == T][0]
-    if typ == 3 or wide:                         # v7: a text if b = 0, else an image
+    if typ == 3 or typ == 2 and wide:            # v7: a text if b = 0, else an image
         typ = 0 if b == 0 else 1
     h = None
     if typ == 0 and a >= 1 and b == 0:
@@ -3904,9 +3918,9 @@ def main():
                            "a restart marker on every row of blocks, saved next to the WAV")
             p.add_argument("--width", type=int, help="with --quality: scale the picture down to this width")
             p.add_argument("--grey", action="store_true", help="with --quality: a grey JPEG")
-            p.add_argument("--code", choices=[c for c in CODES if c not in (None, "rs")] + TYPE3_CODES, default="none",
-                           help="turbo, turbo3, turbo4: turbo code of rate 1/2, 1/3, 1/4; ldpc4, ldpc3, ldpc, ldpc23, ldpc34: "
-                                "LDPC code (v7) of rate 1/4, 1/3, 1/2, 2/3, 3/4; polar3, polar, polar23: polar code (v7.3) of rate 1/3, 1/2, 2/3, "
+            p.add_argument("--code", choices=[c for c in CODES if c not in (None, "rs")] + LDPC_CODES + [LDPC56] + POLAR_CODES, default="none",
+                           help="turbo, turbo3, turbo4: turbo code of rate 1/2, 1/3, 1/4; ldpc4, ldpc3, ldpc, ldpc23, ldpc34, ldpc56: "
+                                "LDPC code (v7) of rate 1/4, 1/3, 1/2, 2/3, 3/4 (v7.6: 5/6); polar3, polar, polar23: polar code (v7.3) of rate 1/3, 1/2, 2/3, "
                                 "with an 11-bit CRC per block and list decoding; Reed-Solomon (v0) is still decoded but no longer sent")
             p.add_argument("--sound", action="store_true", help="room sounding frame instead of a message")
             p.add_argument("--order", type=int, choices=sorted(SOUND_TAPS), default=15, help="sounding period 2^order - 1 samples at 48 kHz")

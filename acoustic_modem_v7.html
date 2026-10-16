@@ -51,7 +51,7 @@ header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,
 .opts>.muted:nth-child(odd){max-width:8.5em}
 .opts>.seg{justify-self:start}
 .opts .seg button{padding:7px 10px}
-.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ldpc) .lr,.opts:not(.polar) .pr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk,.opts.sc .nsc,.opts:not(.sc) .sco{display:none}
+.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ldpc) .lr,.opts:not(.polar) .pr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk,.opts.sc .nsc,.opts:not(.sc) .sco,.opts.x56 .n56{display:none}
 .opts.sc .xsc{opacity:.35;pointer-events:none}
 .opts.sc.wide .xw{opacity:.35;pointer-events:none}
 .opts.ofdm.short:not(.sounding) .pre{display:none}
@@ -172,7 +172,7 @@ details .row{margin:8px 0}
   <div class="opts" id="txOpts">
     <span class="muted mo">Error correction</span><span class="seg mo" id="codeSeg"><button class="xsc" data-v="none">None</button><button class="xsc" data-v="conv">Convolutional</button><button class="xw" data-v="turbo">Turbo</button><button data-v="ldpc">LDPC</button><button data-v="polar">Polar</button></span>
     <span class="muted mo tr">Turbo code rate</span><span class="seg mo tr" id="trSeg"><button data-v="turbo">1/2</button><button data-v="turbo3">1/3</button><button data-v="turbo4">1/4</button></span>
-    <span class="muted mo lr">LDPC code rate</span><span class="seg mo lr" id="lrSeg"><button data-v="ldpc4">1/4</button><button data-v="ldpc3">1/3</button><button data-v="ldpc">1/2</button><button data-v="ldpc23">2/3</button><button data-v="ldpc34">3/4</button></span>
+    <span class="muted mo lr">LDPC code rate</span><span class="seg mo lr" id="lrSeg"><button data-v="ldpc4">1/4</button><button data-v="ldpc3">1/3</button><button data-v="ldpc">1/2</button><button data-v="ldpc23">2/3</button><button data-v="ldpc34">3/4</button><button class="n56" data-v="ldpc56">5/6</button></span>
     <span class="muted mo pr">Polar code rate</span><span class="seg mo pr" id="prSeg"><button data-v="polar3">1/3</button><button data-v="polar">1/2</button><button data-v="polar23">2/3</button></span>
     <span class="muted mo">Modulation</span><span class="seg mo" id="modSeg"><button data-v="2">2 tones, 1 bit</button><button data-v="4">4 tones, 2 bits</button><button data-v="ofdm">OFDM</button><button data-v="sc">Single carrier</button></span>
     <span class="muted fk">Tones</span><span class="seg fk" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
@@ -208,7 +208,7 @@ details .row{margin:8px 0}
     <p class="muted">The receivers read the code from the header, so only the transmitter chooses it.
     <b>Convolutional</b>: rate 1/2, constraint length 7 (generators 171, 133 octal), decoded by the Viterbi algorithm on the soft outputs.
     <b>Turbo</b>: rate 1/2 as in 4G: two small recursive convolutional codes, the second fed with the message shuffled, decoded by two soft decoders that exchange what they learnt, up to 8 times. It needs about 1.3 dB less signal than the convolutional code for the same frame error rate.
-    <b>LDPC</b> (v7): the low-density parity-check codes of 5G (3GPP TS 38.212, base graphs 1 and 2), at rates 1/4, 1/3, 1/2, 2/3 and 3/4. Each coded bit takes part in a few parity checks; the decoder passes beliefs between the bits and the checks (layered belief propagation), up to 25 times, and stops as soon as every check holds, which also tells the receiver that the message is almost surely right. In simulation, in plain noise, it needs the same signal as turbo at the same rate, or up to 0.15 dB less, and shows no error floor where turbo 1/2 has one on short messages. With the single carrier, through a measured room, it needed 0.5 to 1.1 dB more than turbo at the same rate: until it converges it tells the detector little (see below), so turbo stays the single carrier's default. Its rates 2/3 and 3/4 carry more when the signal is strong: 64QAM with LDPC 2/3 carries 4 bits per symbol at the SNR that 256QAM with turbo 1/2 needs. Receivers older than v7 ignore LDPC frames.
+    <b>LDPC</b> (v7): the low-density parity-check codes of 5G (3GPP TS 38.212, base graphs 1 and 2), at rates 1/4, 1/3, 1/2, 2/3, 3/4 and 5/6 (v7.6). Each coded bit takes part in a few parity checks; the decoder passes beliefs between the bits and the checks (layered belief propagation), up to 25 times, and stops as soon as every check holds, which also tells the receiver that the message is almost surely right. In simulation, in plain noise, it needs the same signal as turbo at the same rate, or up to 0.15 dB less, and shows no error floor where turbo 1/2 has one on short messages. With the single carrier, through a measured room, it needed 0.5 to 1.1 dB more than turbo at the same rate: until it converges it tells the detector little (see below), so turbo stays the single carrier's default. Its rates 2/3 and 3/4 carry more when the signal is strong: 64QAM with LDPC 2/3 carries 4 bits per symbol at the SNR that 256QAM with turbo 1/2 needs. Receivers older than v7 ignore LDPC frames.
     <b>Polar</b> (v7.3): the polar codes of 5G (3GPP TS 38.212, those of its short control messages), at rates 1/3, 1/2 and 2/3. Combining the bits two by two, again and again, splits the channel into nearly perfect copies and nearly useless ones: the message goes on the best, the others carry known zeros. Each block of at most 1024 coded bits carries an 11-bit CRC; the decoder decides the bits one after the other, keeps the 8 likeliest guesses (list decoding), then takes the first whose CRC holds, which also tells the receiver that the block is right. In simulation, in plain noise, it needs the same signal as LDPC on a short text (within 0.1 dB at 10 % frame errors); on longer messages, cut into blocks of at most 1024 bits, LDPC does better: 0.35 dB at 1000 bits, 1.1 dB on the large picture, which is why 5G keeps polar codes for short messages. Through a measured room, with the single carrier, the two codes decoded the same frames. With the single carrier, a soft version of the decoder (soft cancellation) tells the detector what it learnt. Receivers older than v7.3 ignore polar frames.
     Convolutional, turbo, LDPC and polar bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.
     v0 also offered <b>Reed–Solomon (255,223)</b>, which corrects up to 16 wrong bytes in each block of 255. In a room it fails early, as did the Hamming (7,4) code of v1 to v6, since both decide each bit before decoding, so this page sends neither; it still decodes Reed–Solomon.</p>
@@ -225,6 +225,7 @@ details .row{margin:8px 0}
     <p class="muted"><b>Second try (v7.2).</b> A training block lets the receiver learn at most 1024 taps of the room (107 ms of echo); whatever echoes later counts as noise. In a living room at 2 to 4 m the echo after 107 ms was only 15 to 19 dB below the sound, which capped the SNR there. So when the passes end without a codeword, the receiver learns the room again from the whole frame (training and data, the data as the decoder's current guesses): 2048 taps (213 ms), then up to 4 more passes. On 34 such frames this decoded 29 instead of 14. It cannot help when the room changes during the frame (someone walking, a moving phone).</p>
     <p class="muted"><b>Wide band (v7.4).</b> The single carrier can also send 13 714 symbols per second on a carrier at 11.4 kHz, which fills 2.3 to 20.5 kHz instead of 3.2 to 16 kHz: 43 % more bits per second. Room soundings in a reverberant room heard 16 to 20.5 kHz about as clearly as the usual band (the phone's speaker gives 6 to 10 dB less there, but the room's noise is as much lower, and the echo dies out fastest at high frequencies) and 2.3 to 3.2 kHz 3 to 5 dB less clearly; above 21 kHz the iPhone's microphone hears almost nothing. The training blocks have 10/7 as many symbols, so they last as long and let the receiver learn the same echoes. The pulses are made on a 96 kHz grid, 7 samples per symbol, and every other sample is played. The same loudness spread over a wider band gives each symbol about 1.5 dB less signal: in simulation through the rooms measured, it decoded wherever the usual band did up to 6 dB more noise than the room had, and failed more often beyond. LDPC or polar codes only. The header marks it as type 2 on the single carrier, which receivers older than v7.4 ignore.</p>
     <p class="muted"><b>1024QAM (v7.5).</b> The single carrier can put 10 bits on each symbol, 32 levels on each axis, instead of 256QAM's 8: 25 % more bits per second before the code. The levels are half as far apart, so it needs about 6 dB more signal than 256QAM at the same code rate; at the same information rate, 1024QAM with LDPC 2/3 carries 11 % more than 256QAM with LDPC 3/4 for about 3 dB more signal, and 1024QAM with LDPC 1/2 is no better than 256QAM with LDPC 2/3. Replaying the room and noise of one of the best recordings (phones close together and still, 29 dB on this page) with 1024QAM frames put LDPC 2/3 at the edge, and 3/4 needed about 2 dB more signal. Take it with LDPC 2/3, for phones close together in a quiet room. The header marks it with the mask of 8PSK, which the single carrier never used, so receivers older than v7.5 ignore it.</p>
+    <p class="muted"><b>LDPC 5/6 (v7.6).</b> The highest rate: 5 message bits in every 6 sent, 11 % more than 3/4, for 1.5 to 2.5 dB more signal (in plain noise: 64QAM 15.5 dB with 3/4, 17 dB with 5/6; 256QAM 20 and 22.5 dB; 1024QAM 25 and 27.5 dB). 256QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 2/3 for a little less signal (22.5 against 22.9 dB in plain noise), and replaying the room and noise of one of the best recordings, it still decoded with the noise 2 dB louder than 1024QAM 2/3 could take: take it rather than 1024QAM 2/3. 64QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 1/2, for 1 dB less. 1024QAM with LDPC 5/6 failed in that replay even with the noise 8 dB quieter. It works with every modulation except OFDM with 64QAM or 256QAM: OFDM's own noise (its clipping, about 21 dB below the signal) leaves 64QAM 3 to 5 % of wrong bits on a short message even in a quiet room, more than 5/6 can correct, and 256QAM with 5/6 needs 22.5 dB. The header marks it as a text or an image with code 7, which receivers older than v7.6 ignore.</p>
   </details>
 </section>
 
@@ -369,6 +370,7 @@ const CODE_INFO = {
   ldpc:    { name: 'LDPC (5G NR), layered belief propagation + interleaver', short: 'LDPC code', rate: '1/2' },
   ldpc23:  { name: 'LDPC (5G NR), layered belief propagation + interleaver', short: 'LDPC code', rate: '2/3' },
   ldpc34:  { name: 'LDPC (5G NR), layered belief propagation + interleaver', short: 'LDPC code', rate: '3/4' },
+  ldpc56:  { name: 'LDPC (5G NR), layered belief propagation + interleaver', short: 'LDPC code', rate: '5/6' },   // v7.6
   polar3:  { name: 'polar (5G NR), 11-bit CRC per block, list decoding (8 paths) + interleaver', short: 'polar code', rate: '1/3' },
   polar:   { name: 'polar (5G NR), 11-bit CRC per block, list decoding (8 paths) + interleaver', short: 'polar code', rate: '1/2' },
   polar23: { name: 'polar (5G NR), 11-bit CRC per block, list decoding (8 paths) + interleaver', short: 'polar code', rate: '2/3' }
@@ -376,10 +378,10 @@ const CODE_INFO = {
 const TURBO_R = { turbo: 2, turbo3: 3, turbo4: 4 };   // turbo codes: rate 1/r
 
 // ---- v7: LDPC codes of 5G NR (3GPP TS 38.212: 5.2.2 segmentation, 5.3.2 encoding, 5.4.2.1 rate matching), rates 1/4
-// to 3/4; as audiocomm_v7.py (ldpc_*), bit for bit. Differences from NR: no transport-block or code-block CRC (the
+// to 3/4 (v7.6: and 5/6); as audiocomm_v7.py (ldpc_*), bit for bit. Differences from NR: no transport-block or code-block CRC (the
 // parity checks say whether a block decoded), no bit interleaving (the modem's channel interleaver follows), the coded
 // bits split evenly between the blocks, redundancy version 0 only. Base graphs: Tables 5.3.2-2 and 5.3.2-3.
-const LDPC_R = { ldpc4: [1, 4], ldpc3: [1, 3], ldpc: [1, 2], ldpc23: [2, 3], ldpc34: [3, 4] };   // code -> rate num/den
+const LDPC_R = { ldpc4: [1, 4], ldpc3: [1, 3], ldpc: [1, 2], ldpc23: [2, 3], ldpc34: [3, 4], ldpc56: [5, 6] };   // code -> rate num/den
 const LDPC_ITERS = 25;       // layered belief propagation: at most this many iterations
 const LDPC_CLIP = 30, LDPC_CLIP1 = 20;   // input LLRs clipped (as the turbo decoder); the extension parity bits, which one
 // check alone protects, lower than what that check can send (about 28), or one read wrong with near certainty would stay wrong
@@ -880,7 +882,11 @@ function polarDecode(llr, nbits, rate, soft = false) {   // as polar_decode: { b
 const LDPC_CODES = ['ldpc4', 'ldpc3', 'ldpc', 'ldpc23', 'ldpc34'];   // v7, header type 3: the code field (+ 4 with the CRC inverted)
 const POLAR_CODES = ['polar3', 'polar', 'polar23'];   // v7.3: header type 3, the code field 5 to 7
 const TYPE3_CODES = [...LDPC_CODES, ...POLAR_CODES];
-const SC_CODES = [...Object.keys(TURBO_R), ...LDPC_CODES, ...POLAR_CODES];   // the codes with soft output, which turbo equalization needs
+const LDPC56 = 'ldpc56';   // v7.6: LDPC 5/6, header type 0 or 1 with the code field 7 (single carrier, wide band: 2), see headerBits
+const SC_CODES = [...Object.keys(TURBO_R), ...LDPC_CODES, LDPC56, ...POLAR_CODES];   // the codes with soft output, which turbo equalization needs
+const WIDE_CODES = [...TYPE3_CODES, LDPC56];   // v7.4: the codes of the single carrier's wide band (v7.6: and LDPC 5/6)
+const OFDM_NO56 = ['64qam', '256qam'];   // v7.6: OFDM's own noise (its clipping, about 21 dB below the signal) leaves 64QAM 3 to 5 % of
+                                         // wrong bits on a short message, more than LDPC 5/6 corrects, and 256QAM needs 22.5 dB with it
 const RS_K = 223, RS_P = 32;
 
 function codedLength(code, n0) {
@@ -1332,6 +1338,9 @@ function drawQR(cv, text, px = 8) {
 // v7.3: 5 to 7, polar codes of rate 1/3, 1/2, 2/3. Receivers older than v7.3 ignore them.
 // v7.4: type 2 on the single carrier is its wide band (SC_BANDS), read as type 3. Receivers older than v7.4 ignore it.
 // v7.5: on the single carrier, 8PSK's mask (0x55) is 1024QAM (SC_SLOT). Receivers older than v7.5 ignore it.
+// v7.6: type 0 or 1 with the code field 7 (3 with the CRC inverted), which no receiver accepted, is LDPC 5/6; on the single
+// carrier's wide band (type 2 has no code left), type 0 or 1 with the code field 2 (convolutional, which the single carrier
+// never takes). Receivers older than v7.6 ignore it.
 const CTRL = { tones: 'low', rate: 400 };
 const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high', 'hop'], RATES4 = [400, 800, 1600, 3200];
 // 6400 bit/s, 4 tones only: one group of 4 tones spaced 3.2 kHz fills the band 3.2-12.8 kHz, so there is nothing left to
@@ -1344,9 +1353,9 @@ function crc8(bits) {   // CRC-8, generator x^8 + x^2 + x + 1
 }
 let lastHb = null;   // telemetry: the 40 header bits of the last frame built
 function headerBits(h) {   // 6400 bit/s: tone set 3, rate field 3; OFDM: tone set 3, rate field = its mode; single carrier (v5): tone set 3, rate field 2
-  const ld = TYPE3_CODES.indexOf(h.code), c = ld >= 0 ? ld : CODES.indexOf(h.code), type = ld >= 0 ? (h.sc && h.wide ? 2 : 3) : h.type, om = h.ofdm ? OFDM_MODES.findIndex(m => m.name === h.ofdm) : -1, wide = h.rate === RATE_WIDE, coh = om >= 0 || !!h.sc;
+  const ld = TYPE3_CODES.indexOf(h.code), c = ld >= 0 ? ld : h.code === LDPC56 ? (h.sc && h.wide ? 2 : 7) : CODES.indexOf(h.code), type = ld >= 0 ? (h.sc && h.wide ? 2 : 3) : h.type, om = h.ofdm ? OFDM_MODES.findIndex(m => m.name === h.ofdm) : -1, wide = h.rate === RATE_WIDE, coh = om >= 0 || !!h.sc;
   const t = wide || coh ? 3 : TONE_SETS.indexOf(h.tones), four = h.mod === 4 || coh;
-  if (h.sc && h.wide && ld < 0) throw new Error('the wide band takes an LDPC or a polar code');   // v7.4
+  if (h.sc && h.wide && ld < 0 && h.code !== LDPC56) throw new Error('the wide band takes an LDPC or a polar code');   // v7.4
   const B = SC_BANDS[+!!(h.sc && h.wide)], T = h.sc ? B.tcode[h.train || B.nc] : 0;   // v5, single carrier: the training length, 0 medium, 1 short, 2 long
   const v = [...msb(type, 2), ...msb(h.a | (T >> 1) << 10, 11), ...msb(h.b | (T & 1) << 10, 11), ...msb(c & 3, 2),
              ...msb(h.sc ? SC_FIELD : om >= 0 ? om : wide ? 3 : (four ? RATES4 : RATES).indexOf(h.rate), 2), ...msb(four ? 3 : t, 2), ...msb(four ? t : 0, 2)];
@@ -1481,7 +1490,7 @@ function buildFrame(msg, cfg) {   // cfg.control (v6), OFDM and single carrier: 
   else { type = 1; a = msg.h; b = msg.w; data = Array.from(msg.pixels); }
   if (cfg.mod === 'sc') {   // v5, single carrier: a hopping control part, then the single-carrier part (turbo codes only: turbo equalization)
     const wide = cfg.band === 'wide'; scSetBand(wide);   // v7.4: the wide band (cfg.band 'wide'), LDPC or polar codes only
-    const map = SC_MAPS.includes(cfg.map) ? cfg.map : '256qam', sc = wide ? (TYPE3_CODES.includes(code) ? code : 'ldpc') : SC_CODES.includes(code) ? code : 'turbo', train = SC_TRAINS[cfg.train] || SC_NC, hdr = headerBits({ type, a, b, code: sc, sc: true, map, train, wide });
+    const map = SC_MAPS.includes(cfg.map) ? cfg.map : '256qam', sc = wide ? (WIDE_CODES.includes(code) ? code : 'ldpc') : SC_CODES.includes(code) ? code : 'turbo', train = SC_TRAINS[cfg.train] || SC_NC, hdr = headerBits({ type, a, b, code: sc, sc: true, map, train, wide });
     const { bits, nc, ns } = scChannelBits(sc, data, map), wave = scPart(bits, map, train);
     if (cfg.control !== 'long') return { segs: [{ wave: c6Wave(hdr) }, { wave }], bits: [], data, n0: data.length, nc, warm: 0, ctl: 'short',   // v6: the short control part
                                           M: 0, sc: true, map, train, code: sc, ns, wide, dur: (C6_LEN + wave.length) / FS_TX };
@@ -1539,7 +1548,8 @@ function parseHeader(hb) {   // hb: the 40 decoded header bits; null unless the 
   const tf = val(28, 2), four = tf === 3, M = four ? 4 : 2;   // tones 3: 4-FSK, its tone set in the last two bits
   // tone set 3: 6400 bit/s, one hopping group over the whole band (rate field 3), or OFDM (v3, rate field 0 or 1)
   const set3 = four && val(30, 2) === 3, ofdm = set3 ? OFDM_MODES[val(26, 2)] : null, sc = set3 && val(26, 2) === SC_FIELD;   // v5: rate field 2, the single carrier
-  const scw = sc && val(0, 2) === 2, t3 = val(0, 2) === 3 || scw, T = sc ? 2 * val(2, 1) + val(13, 1) : 0, a = sc ? val(3, 10) : val(2, 11), b = sc ? val(14, 10) : val(13, 11), code = (t3 ? TYPE3_CODES : CODES)[val(24, 2) + 4 * ext];   // v5: T, the single carrier's training
+  const c = val(24, 2) + 4 * ext, l56 = val(0, 2) < 2 && (c === 7 || sc && c === 2);   // v7.6: LDPC 5/6, type 0 or 1 with the code 7 (the single carrier's wide band: 2)
+  const t3 = val(0, 2) === 3 || sc && val(0, 2) === 2, scw = sc && (val(0, 2) === 2 || l56 && c === 2), T = sc ? 2 * val(2, 1) + val(13, 1) : 0, a = sc ? val(3, 10) : val(2, 11), b = sc ? val(14, 10) : val(13, 11), code = l56 ? LDPC56 : (t3 ? TYPE3_CODES : CODES)[c];   // v5: T, the single carrier's training
   const type = t3 ? (b === 0 ? 0 : 1) : val(0, 2);   // v7: type 3, an LDPC (v7.3: or polar) code; a text if b = 0, else an image
   const rate = ofdm ? ofdmRate(ofdm) : sc ? 1 : set3 ? (val(26, 2) === 3 ? RATE_WIDE : 0) : (four ? RATES4 : RATES)[val(26, 2)];
   const tones = ofdm ? 'ofdm' : sc ? 'sc' : set3 ? 'hop' : TONE_SETS[four ? val(30, 2) : tf];
@@ -3681,7 +3691,7 @@ const demoJpegs = {};
 function demoJpeg(s = 1, q = 50) { const k = `${s}_${q}`; return demoJpegs[k] || (demoJpegs[k] = Uint8Array.from(atob(DEMO_JPEG[s][q]), c => c.charCodeAt(0))); }
 if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, RATES4, RATE_WIDE, TONES4, toneSet, symbolBits, toSymbols, bitSets, symbolMetrics, postErrors, contrast, knownContrast, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, JPEG_MAX, jpegFields, jpegBytes, crc32, jpegPayload, jpegUnpack, jpegResync, jpegEncode, DEMO_JPEG, demoJpeg, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
   SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
-  turboPerm, turboEncode, turboDecode, bcjr, TURBO_R, LDPC_R, LDPC_CODES, SC_CODES, ldpcParams, ldpcEncode, ldpcDecode, fecSiso, POLAR_R, POLAR_CODES, TYPE3_CODES, polarParams, polarBlock, polarEncode, polarDecode, polarScl, polarScan,
+  turboPerm, turboEncode, turboDecode, bcjr, TURBO_R, LDPC_R, LDPC_CODES, LDPC56, SC_CODES, WIDE_CODES, ldpcParams, ldpcEncode, ldpcDecode, fecSiso, POLAR_R, POLAR_CODES, TYPE3_CODES, polarParams, polarBlock, polarEncode, polarDecode, polarScl, polarScan,
   OFDM_MODES, OFDM_F0, OFDM_F1, ofdmMode, ofdmCarriers, ofdmRate, ofdmReference, ofdmSymbols, fracRead, ofdmReceive, ofdmDesc,
   C6_N, C6_CP, C6_REP, C6_LEN, C6_THR, C6_BAL, C6_K, c6Symbol, c6Index, c6Wave, c6Read, c6Filter,
   OFDM_MAPS, OFDM_MASKS, OFDM_BITS, OFDM_NAMES, OFDM_PSTEP, ofdmPoints, ofdmPilot, ofdmLayout, ofdmSmooth, levinson, ofdmCoherent,
@@ -3696,7 +3706,7 @@ const params = new URLSearchParams(location.search);
 $('demoCredit').innerHTML = DEMOS[DEMO_PICTURE].credit;
 const MOD0 = params.get('mod') === '4' ? 4 : ['ofdm', 'sc'].includes(params.get('mod')) ? params.get('mod') : 2, rateList = M => M === 4 ? [...RATES4, RATE_WIDE] : RATES;   // tones per symbol: 2 (binary) or 4, or OFDM
 const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params.get('tones') : 'low', rate: rateList(MOD0).includes(+params.get('rate')) ? +params.get('rate') : 400,
-              code: [...CODES, ...TYPE3_CODES].filter(c => c && c !== 'rs').includes(params.get('code')) ? params.get('code') : 'none', soft: 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127,
+              code: [...CODES, ...TYPE3_CODES, LDPC56].filter(c => c && c !== 'rs').includes(params.get('code')) ? params.get('code') : 'none', soft: 'cal', pre: [255, 511].includes(+params.get('pre')) ? +params.get('pre') : 127,
               guard: params.get('guard') === 'short' ? 'short' : 'long',   // OFDM: the long (21 ms) or the short (5 ms) guard interval
               map: [...OFDM_MAPS, '1024qam'].includes(params.get('map')) ? params.get('map') : 'dqpsk',   // v7.5: 1024QAM, single carrier only
               det: params.get('det') === 'lmmse' ? 'lmmse' : 'smap',   // v5: the single carrier's detector (receiver)
@@ -3705,7 +3715,7 @@ const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params
               effort: params.get('effort') === 'full' ? 'full' : 'fast',   // v5: SMAP's steps and the passes (receiver)
               est: params.get('est') === 'mmse' ? 'mmse' : 'ls',   // v5: the room's estimate, least squares or MMSE (receiver)
               control: params.get('ctl') === 'long' ? 'long' : 'short' };   // v6: the control part of OFDM and single-carrier frames (sender)
-if (cfg.mod === 'sc') { if (!SC_MAPS.includes(cfg.map)) cfg.map = '256qam'; if (!(cfg.band === 'wide' ? TYPE3_CODES : SC_CODES).includes(cfg.code)) cfg.code = cfg.band === 'wide' ? 'ldpc' : 'turbo'; }   // OFDM (v4): DQPSK, or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots
+if (cfg.mod === 'sc') { if (!SC_MAPS.includes(cfg.map)) cfg.map = '256qam'; if (!(cfg.band === 'wide' ? WIDE_CODES : SC_CODES).includes(cfg.code)) cfg.code = cfg.band === 'wide' ? 'ldpc' : 'turbo'; }   // OFDM (v4): DQPSK, or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots
 if (cfg.mod !== 'sc' && !OFDM_MAPS.includes(cfg.map)) cfg.map = '256qam';   // v7.5: OFDM has no 1024QAM
 if (cfg.rate === RATE_WIDE) cfg.tones = 'hop';   // 6400 bit/s: one group of 4 tones over the whole band
 const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
@@ -3736,7 +3746,7 @@ const TX_HINT = {   // under the transmitter's options: what the modulation chos
   2: 'Binary FSK: one tone per bit, the low one for 0, the high one for 1. A lower rate, a longer preamble or 4 tones reach farther; in a reverberant room, beyond a few metres, use Hopping. Receivers need no settings: each frame\'s header tells them.',
   4: '4-FSK: one of four tones per symbol, 2 bits each (Gray-coded). At the same bit rate, a symbol lasts twice as long as with 2 tones and gathers twice the energy, so it reaches farther. In a reverberant room use Hopping; 6400 bit/s fills the whole band. Receivers need no settings: each frame\'s header tells them.',
   ofdm: 'OFDM: hundreds of subcarriers at once, far faster than FSK (the rates shown are before the code): use it with a code. Echo longer than the guard acts as noise, so take the long guard in a reverberant room. DQPSK needs no pilots; QPSK to 256QAM add pilots to measure the room: QPSK reaches farther than DQPSK, 16QAM is nearly twice as fast for about 3 dB more signal, 64QAM and 256QAM are 1.5 and 2 times faster again for about 5 and 11 dB more: try them close to the speaker. Receivers need no settings.',
-  sc: 'Single carrier (v5): one symbol at a time, 9600 per second (13 714 in the wide band), with no guard. Training blocks every 0.5 s let the receiver learn the room and undo its echo (soft SMAP with the decoder), which takes a few seconds. Take a training longer than the room\'s echo. 256QAM needs a still room; 16QAM or 64QAM is safer when people move. 1024QAM (v7.5) needs about 6 dB more signal than 256QAM: only for phones close together in a quiet room, with LDPC 2/3. Turbo or LDPC codes only (the others are greyed out): at the same rate turbo needs about 1 dB less signal here, while LDPC 2/3 and 3/4 carry more when the signal is strong. The wide band (v7.4, 2.3 to 20.5 kHz) carries 43 % more, with LDPC or polar codes only, but gives each symbol about 1.5 dB less signal: take it when the signal is strong. Receivers need no settings.'
+  sc: 'Single carrier (v5): one symbol at a time, 9600 per second (13 714 in the wide band), with no guard. Training blocks every 0.5 s let the receiver learn the room and undo its echo (soft SMAP with the decoder), which takes a few seconds. Take a training longer than the room\'s echo. 256QAM needs a still room; 16QAM or 64QAM is safer when people move. 1024QAM (v7.5) needs about 6 dB more signal than 256QAM: only for phones close together in a quiet room, with LDPC 2/3. 256QAM with LDPC 5/6 (v7.6) carries as much and stands a little more noise. Turbo or LDPC codes only (the others are greyed out): at the same rate turbo needs about 1 dB less signal here, while LDPC 2/3 and 3/4 carry more when the signal is strong. The wide band (v7.4, 2.3 to 20.5 kHz) carries 43 % more, with LDPC or polar codes only, but gives each symbol about 1.5 dB less signal: take it when the signal is strong. Receivers need no settings.'
 };
 function showMod() {   // the rates and tone labels of binary or 4-tone FSK; OFDM has a guard interval instead of tones and a rate
   $('txHint').textContent = TX_HINT[cfg.mod];
@@ -3748,10 +3758,11 @@ function showMod() {   // the rates and tone labels of binary or 4-tone FSK; OFD
 seg($('modSeg'), cfg.mod, v => {
   cfg.mod = v === 'ofdm' || v === 'sc' ? v : +v;
   if (cfg.mod === 'sc') {   // turbo, LDPC or polar codes only, QPSK to 256QAM
-    if (!(cfg.band === 'wide' ? TYPE3_CODES : SC_CODES).includes(cfg.code)) $('codeSeg').querySelector(`[data-v="${cfg.band === 'wide' ? 'ldpc' : 'turbo'}"]`).click();   // v7.4: the wide band, LDPC or polar
+    if (!(cfg.band === 'wide' ? WIDE_CODES : SC_CODES).includes(cfg.code)) $('codeSeg').querySelector(`[data-v="${cfg.band === 'wide' ? 'ldpc' : 'turbo'}"]`).click();   // v7.4: the wide band, LDPC or polar
     if (!SC_MAPS.includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();
   }
   if (cfg.mod === 'ofdm' && !OFDM_MAPS.includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();   // v7.5: 1024QAM, single carrier only
+  no56();   // v7.6: OFDM with 64QAM or 256QAM, LDPC 3/4 at most
   if (cfg.mod !== 'ofdm' && cfg.mod !== 'sc' && !rateList(cfg.mod).includes(cfg.rate)) { cfg.rate = cfg.mod === 4 ? 400 : 1600; $('rateSeg').querySelector(`[data-v="${cfg.rate}"]`).click(); }   // 200 is binary only, 3200 and 6400 4 tones only
   showMod(); syncUrl(); txInfo();
 });
@@ -3770,10 +3781,10 @@ function trainLabels() {   // v5: like the guard's; v7.4: and the bands'
 }
 seg($('bandSeg'), cfg.band, v => {   // v7.4: the single carrier's band; the wide one takes LDPC or polar codes
   cfg.band = v; showMod();
-  if (v === 'wide' && cfg.mod === 'sc' && !TYPE3_CODES.includes(cfg.code)) $('codeSeg').querySelector('[data-v="ldpc"]').click();
+  if (v === 'wide' && cfg.mod === 'sc' && !WIDE_CODES.includes(cfg.code)) $('codeSeg').querySelector('[data-v="ldpc"]').click();
   trainLabels(); syncUrl(); txInfo();
 });
-seg($('mapSeg'), cfg.map, v => { cfg.map = v; guardLabels(); trainLabels(); syncUrl(); txInfo(); });
+seg($('mapSeg'), cfg.map, v => { cfg.map = v; no56(); guardLabels(); trainLabels(); syncUrl(); txInfo(); });
 guardLabels(); trainLabels();
 const role = matchMedia('(max-width:860px)').matches && params.get('role') === 'tx' ? 'tx' : 'rx';
 $('main').dataset.role = role;
@@ -3874,6 +3885,14 @@ const showTurbo = () => { $('txOpts').classList.toggle('turbo', !!TURBO_R[cfg.co
 seg($('codeSeg'), TURBO_R[cfg.code] ? 'turbo' : LDPC_R[cfg.code] ? 'ldpc' : POLAR_R[cfg.code] ? 'polar' : cfg.code, v => { cfg.code = v === 'turbo' ? turboCode : v === 'ldpc' ? ldpcCode : v === 'polar' ? polarCode : v; showTurbo(); syncUrl(); txInfo(); });
 seg($('trSeg'), turboCode, v => { cfg.code = turboCode = v; syncUrl(); txInfo(); });
 seg($('lrSeg'), ldpcCode, v => { cfg.code = ldpcCode = v; syncUrl(); txInfo(); });   // v7
+function no56() {   // v7.6: OFDM with 64QAM or 256QAM, LDPC 3/4 at most (OFDM_NO56)
+  const x56 = cfg.mod === 'ofdm' && OFDM_NO56.includes(cfg.map);
+  $('txOpts').classList.toggle('x56', x56);   // hides the 5/6 button
+  if (!x56 || ldpcCode !== LDPC56) return;
+  ldpcCode = 'ldpc34'; $('lrSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === ldpcCode)));
+  if (cfg.code === LDPC56) { cfg.code = ldpcCode; syncUrl(); txInfo(); }
+}
+no56();
 seg($('prSeg'), polarCode, v => { cfg.code = polarCode = v; syncUrl(); txInfo(); });   // v7.3
 showTurbo();
 seg($('ordSeg'), snd.order, v => { snd.order = +v; txInfo(); });
