@@ -191,6 +191,7 @@ details .row{margin:8px 0}
     <b>Turbo</b>: rate 1/2 as in 4G: two small recursive convolutional codes, the second fed with the message shuffled, decoded by two soft decoders that exchange what they learnt, up to 8 times. It needs about 1.3 dB less signal than the convolutional code for the same frame error rate.
     Hamming, convolutional and turbo bits go through an interleaver, which spreads a burst of errors (an echo, a cough) over many code blocks.
     v0 also offered <b>Reed–Solomon (255,223)</b>, which corrects up to 16 wrong bytes in each block of 255. In a room it fails as early as Hamming, since both decide each bit before decoding, so this page no longer sends it; it still decodes it.</p>
+    <p class="muted"><b>Sound output (v5.2).</b> Safari on a Mac, and every browser on an iPhone or iPad (all of them use Apple's WebKit), play the frames through an audio element, as a WAV file; other browsers use Web Audio. On an iPhone, Web Audio is silenced by the ring/silent switch, and in Safari on a Mac it has stayed silent until another program played a sound; an audio element plays in both cases. If no sound comes out one way (its clock does not move), the page tries the other. To use one only, add out=element or out=webaudio to the address.</p>
     <p class="muted"><b>Tone hopping.</b> In a room, the sound of each bit rings on for a large part of a second, far longer than the bit (2.5 ms at 400 bit/s). With only two tones, the echo of the earlier bits sits on both tones all the time; beyond the critical distance, where the echo is louder than the direct sound, it buries the bit. Hopping spreads the bits over 6400 / R pairs of adjacent tones from 3.2 to 16 kHz (16 pairs at 400 bit/s, R the rate): bit k uses pair 7k mod 16 (s k mod H in general), so a pair is used again only H bits later and the echo on each tone is H/2 times weaker, about 3 dB per doubling of the pairs. The preamble and header hop too (at 400 bit/s), otherwise far receivers would not find the frame. Each tone has its own level (speaker, room, microphone), so the receiver levels the tones before deciding. The band starts at 3.2 kHz: below that, a small speaker gives little and a room is noisy, and in a real test the 1.6 kHz tone the band first started at caused nearly all the errors.</p>
     <p class="muted"><b>Four tones (v2).</b> With 4 tones, a symbol carries 2 bits, Gray-coded so that neighbouring tones differ in one bit only. At the same bit rate it lasts twice as long and gathers twice the energy, and its tones, spaced by the symbol rate (half the bit rate), take the same band as the 2 tones of binary FSK. The receiver then compares 4 energies instead of 2, which non-coherent detection turns into a gain: in simulation, about 2 dB in noise and 2 to 3 dB in a room's echo, or roughly 25 to 40 % more distance, and 3200 bit/s becomes usable, where binary FSK would make errors even close to the speaker. Longer symbols also tolerate twice the timing error. The fixed tones are 4, 5.6, 7.2 and 8.8 kHz (or 8 to 12.8 kHz); with hopping, the 6400 / R pairs become groups of 4 adjacent tones. The control part stays binary, so every receiver finds the frame and reads the header; receivers older than v2 find no 4-tone mode in it and ignore the frame. With 4 tones the header's 4 rates are 400 to 3200 bit/s, and the postamble and the message are each padded to a whole number of symbols.</p>
     <p class="muted"><b>6400 bit/s.</b> At 6400 bit/s, with 4 tones, a symbol lasts 0.31 ms (15 samples at 48 kHz) and its tones, spaced 3.2 kHz, are 3.2, 6.4, 9.6 and 12.8 kHz: one group fills the whole band, so there is nothing left to hop over, and the echo of the earlier symbols always lies on the same 4 tones. FSK can go no faster in this band, because sending one tone at a time carries at most half a bit per second per hertz; going further takes many tones at once, each with its own phase (OFDM, as in Wi-Fi: see below). In simulation it needs about 4.7 dB more SNR and 3.6 dB more DRR than 3200 bit/s, so it reaches 60 to 70 % of that distance. Choosing 6400 selects Hopping, the only tone set that spans the band. The header marks it as tone set 3, which receivers made before it ignore.</p>
@@ -2931,30 +2932,59 @@ $('photoIn').onchange = e => {
   im.src = URL.createObjectURL(f);
 };
 let playing = null;
-// Each Send uses a fresh AudioContext, closed shortly after playback ends. A long-lived context can end up
-// suspended or "interrupted" (sleep, idle, output device change) and then plays silence.
-$('sendBtn').onclick = async () => {
+// v5.2: two ways to play a frame. Web Audio: a fresh AudioContext for each Send, closed shortly after playback ends (a
+// long-lived one can end up suspended or "interrupted" after sleep, idle or a change of output device, and then plays
+// silence). Or an audio element playing the frame as a WAV file. Safari on a Mac, and every browser on an iPhone or iPad
+// (all of them Apple's WebKit), start with the element: there, Web Audio is silenced by an iPhone's ring/silent switch,
+// and it has stayed silent in Safari on a Mac until another program played a sound. Other browsers start with Web Audio.
+// Both are made ready in the click (the moment browsers let a page start sound); if the clock of the first does not move
+// within 1.5 s, the other takes over. The address can choose one: out=element or out=webaudio.
+const APPLE = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Safari\//.test(navigator.userAgent) && !/Chrom|Edg|OPR|Firefox|Android/.test(navigator.userAgent));
+const OUT_WAYS = { element: ['element'], webaudio: ['webaudio'] }[params.get('out')] || (APPLE ? ['element', 'webaudio'] : ['webaudio', 'element']);
+$('sendBtn').onclick = () => {
   if (playing) { playing.stop(); return; }
-  const a = new (window.AudioContext || window.webkitAudioContext)();
-  try { await a.resume(); } catch (e) {}
-  lastHb = null; const x = modulate(buildFrame(currentMsg(), cfg)), teleHdr = lastHb && parseHeader(lastHb);
-  const buf = a.createBuffer(1, x.length, FS_TX); buf.copyToChannel(x, 0);
-  const src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination);
-  const dur = x.length / FS_TX; let t0 = a.currentTime;
-  playing = src; $('sendBtn').textContent = '■ Stop'; $('txStatus').textContent = `Sending ${dur.toFixed(1)} s… turn the volume up.`;
-  const tick = () => { if (playing !== src) return; $('txProg').style.width = Math.min(100, 100 * (a.currentTime - t0) / dur) + '%'; requestAnimationFrame(tick); };
+  const a = new (window.AudioContext || window.webkitAudioContext)(); a.resume().catch(() => {});
+  lastHb = null; const x = modulate(buildFrame(currentMsg(), cfg)), teleHdr = lastHb && parseHeader(lastHb), dur = x.length / FS_TX;
+  let way = null, el = null, url = null, src = null, t0 = 0;
+  const p = { stop: () => finish('Stopped.') }, pos = () => way === 'element' ? el.currentTime : way === 'webaudio' ? a.currentTime - t0 : 0;
+  const halt = () => {   // silences the way in use
+    if (el) { el.onended = null; el.pause(); }
+    if (src) { src.onended = null; try { src.stop(); } catch (e) {} src = null; }
+  };
   const finish = msg => {
-    if (playing !== src) return;
-    playing = null; $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = msg;
+    if (playing !== p) return;
+    playing = null; halt(); $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = msg;
     // The speaker may still be playing the end of the buffer (output latency, up to a few tenths of a second with
     // Bluetooth): closing the context now would cut it off, and the postamble with it. So wait before closing.
-    setTimeout(() => a.close().catch(() => {}), 2000 + 1000 * ((a.outputLatency || 0) + (a.baseLatency || 0)));
+    setTimeout(() => { a.close().catch(() => {}); if (url) URL.revokeObjectURL(url); }, 2000 + 1000 * ((a.outputLatency || 0) + (a.baseLatency || 0)));
   };
-  src.onended = () => finish('Sent.');
-  src.start(); t0 = a.currentTime; tick();
+  const next = k => {   // way k gave no sound: the next one, or say so instead of hanging on "Stop"
+    halt();
+    if (k + 1 >= OUT_WAYS.length) { finish('The browser played no sound. Check the output device, or play a sound in another app, then click Send again.'); return; }
+    start(k + 1); $('txStatus').textContent = `Sending ${dur.toFixed(1)} s (no sound the first way, so through ${OUT_WAYS[k + 1] === 'element' ? 'an audio element' : 'Web Audio'})… turn the volume up.`;
+  };
+  const start = k => {
+    way = OUT_WAYS[k];
+    if (way === 'element') {
+      if (!el) { url = URL.createObjectURL(wavBlob(x, FS_TX)); el = new Audio(url); }
+      el.onended = () => finish('Sent.');
+      let r; try { r = el.play(); } catch (e) { r = Promise.reject(e); }
+      if (r && r.catch) r.catch(() => { if (playing === p && way === 'element') next(k); });
+    } else {
+      const buf = a.createBuffer(1, x.length, FS_TX); buf.copyToChannel(x, 0);
+      src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination); src.onended = () => finish('Sent.');
+      src.start(); t0 = a.currentTime;
+    }
+    setTimeout(() => {   // if the clock does not move, this way plays nothing
+      if (playing !== p || way !== OUT_WAYS[k]) return;
+      if (pos() < 0.1) next(k); else if (way === 'element') a.close().catch(() => {});   // the element plays: no need for the AudioContext
+    }, 1500);
+  };
+  playing = p; $('sendBtn').textContent = '■ Stop'; $('txStatus').textContent = `Sending ${dur.toFixed(1)} s… turn the volume up.`;
+  start(0);
+  const tick = () => { if (playing !== p) return; $('txProg').style.width = Math.min(100, 100 * pos() / dur) + '%'; requestAnimationFrame(tick); };
+  tick();
   if (teleHdr) Tele.sent(frameWhat(teleHdr), teleHdr, dur);
-  // If the audio clock does not move, the browser is not playing anything: reset instead of hanging on "Stop".
-  setTimeout(() => { if (playing === src && a.currentTime - t0 < 0.1) finish('The browser gave no audio output. Click Send again.'); }, 1500);
 };
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 $('wavBtn').onclick = () => {

@@ -4,7 +4,9 @@ control part (0.19 s instead of 0.65 s) for the OFDM and single-carrier frames. 
 3/4; the Hamming code is gone. v7.1: pictures as JPEG files, with a CRC-32. v7.2: the single carrier tries a
 frame a second time when it fails, with a longer room (2048 taps, 213 ms) learned from the frame itself. v7.4: the
 single carrier's wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (43% more than 3.2 to 16 kHz). v7.5: 1024QAM on
-the single carrier (10 bits per symbol), for phones close together in a quiet room. v7.6: LDPC rate 5/6.
+the single carrier (10 bits per symbol), for phones close together in a quiet room. v7.6: LDPC rate 5/6. v7.7: picture
+files up to 255.5 KB, in any format (PNG, WebP, AVIF...), sent as they are. v7.8: the single carrier's second try
+also corrects the room for each data segment, when the room changed during the frame.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -57,6 +59,9 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            v7.6: type 0 or 1 with the code field 7 (3 with the CRC inverted) = LDPC 5/6 (LDPC56), on the single carrier's
            wide band type 0 or 1 with the code field 2 (convolutional, which the single carrier never takes); receivers
            older than v7.6 ignore it
+           v7.7: JPEG_MAX = 261 632 bytes (20 480 before), the most the single carrier's header can say (a <= 1023), and
+           the file may be in any picture format (file_kind tells it); receivers older than v7.7 ignore files over 20 480
+           bytes
   code   : 0 none, 1 Hamming (7,4) + interleaver (until v6; v7 neither sends nor reads it), 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
@@ -115,6 +120,8 @@ Usage
   (the earlier demo image: --image ../../Lab/bartS.png --step 2, without --step, or with --up 2 for the large and 4x ones)
   python audiocomm_v7.py tx --jpeg greatwave_160x108_q50.jpg --mod sc --code ldpc -o jpg.wav   # a JPEG file as it is (v7.1)
   python audiocomm_v7.py tx --image photo.jpg --quality 50 --width 160 --mod sc --code ldpc -o photo.wav   # a picture made into a JPEG (v7.1)
+  python audiocomm_v7.py tx --image photo.jpg --quality 50 --width 1280 --mod sc --code ldpc56 -o big.wav   # v7.7: up to 255.5 KB
+  python audiocomm_v7.py tx --file picture.webp --mod sc --code ldpc56 -o webp.wav   # v7.7: any picture file as it is
   python audiocomm_v7.py tx --text "Hello" --code conv -o coded.wav   # codes: none conv turbo turbo3 turbo4 ldpc4 ldpc3 ldpc ldpc23 ldpc34 ldpc56 polar3 polar polar23
   python audiocomm_v7.py rx recording.wav                    # decode a recording
   python audiocomm_v7.py rx recording.wav --soft ratio       # soft output ln(E1/E0) instead of the calibrated LLR
@@ -1373,7 +1380,7 @@ def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=F
 # standard scaled by the quality as libjpeg does, and a restart marker after every row of blocks. Huffman codes have
 # variable lengths and the DC values are sent as differences, so a wrong bit garbles the picture up to the next restart
 # marker; with a marker on every row, a wrong bit costs one stripe of 16 (grey: 8) rows instead of the rest of the picture.
-JPEG_MAX = 20480
+JPEG_MAX = 261632   # v7.7: the most the single carrier's header can say (a has 10 bits there: a <= 1023); 20480 before
 
 
 def jpeg_fields(n):
@@ -1408,6 +1415,30 @@ def jpeg_resync(f):
         if f[j] == 0xFF and f[j + 1] and not 0xD0 <= f[j + 1] <= 0xD7:
             f[j + 1] = 0
     return bytes(f)
+
+
+
+def file_kind(f):
+    """v7.7: a picture file's format, from its first bytes: its name ("" if unknown) and the extension to save it with
+    (as the page's fileKind)."""
+    f = bytes(f[:32])
+    if f[:3] == b"\xff\xd8\xff":
+        return "JPEG", "jpg"
+    if f[:4] == b"\x89PNG":
+        return "PNG", "png"
+    if f[:4] == b"GIF8":
+        return "GIF", "gif"
+    if f[:4] == b"RIFF" and f[8:12] == b"WEBP":
+        return "WebP", "webp"
+    if f[4:8] == b"ftyp" and (b"avif" in f[8:] or b"avis" in f[8:]):
+        return "AVIF", "avif"
+    if f[4:8] == b"ftyp" and any(k in f[8:] for k in (b"heic", b"heix", b"mif1", b"msf1")):
+        return "HEIC", "heic"
+    if f[:2] == b"BM":
+        return "BMP", "bmp"
+    if f[:4] in (b"II*\0", b"MM\0*"):
+        return "TIFF", "tif"
+    return "", "bin"
 
 # The example tables of the JPEG standard (ITU-T T.81, Annex K): quantization (row by row) and Huffman codes (number of
 # codes of each length 1 to 16, then the symbols): DC luminance, AC luminance, DC chrominance, AC chrominance
@@ -2282,6 +2313,9 @@ SC_RELEARN_TAPS = 2048   # v7.2, the second try: when the passes end without a c
                          # as the decoder's soft symbols; in a living room at 2 to 4 m the echo after 107 ms was only
                          # 15 to 19 dB down, so the training's room capped the SNR there (14 -> 29 of 34 frames)
 SC_RELEARN_PASSES = 4    # v7.2: at most this many more passes, the room learned again after each (0: no second try)
+SC_RELEARN_GAIN = 0.5    # v7.8, the second try per segment: a data segment keeps its own correction of the room only
+                         # if, its taps counted, it leaves this many dB less there (None: one room for the whole part,
+                         # as in v7.2)
 SC_REL = 1.0             # ridge prior of a training block's room: the one before, give or take its own size (a weak
                          # pull; a tight one, -20 dB, cost 2 to 7 dB on our recordings when people moved)
 SC_MAX_PPM = 500         # clock offset plus a moving phone
@@ -2631,6 +2665,21 @@ def sc_relearn(yy, x, w, L):
     return c, w * (yy[:R] - SCConv([x], [1.0], L).fwd(c))
 
 
+def sc_relearn_seg(x, res, w, A, B, Ld, lam):
+    """v7.8, the second try per segment: a correction of Ld taps to the whole part's room, by least squares (ridge
+    lam) over the rows A to B (where w = 1) of what that room leaves, res ~ x * d. Returns d, what it leaves on those
+    rows, and the taps' degrees-of-freedom factor there."""
+    x0 = A - Ld + 1
+    xw = np.zeros(B - x0, dtype=complex)
+    lo, hi = max(x0, 0), min(B, len(x))
+    xw[lo - x0:hi - x0] = x[lo:hi]
+    yw, mw = np.zeros(len(xw) + Ld - 1, dtype=complex), np.zeros(len(xw) + Ld - 1)
+    yw[A - x0:B - x0], mw[A - x0:B - x0] = res[A:B], w[A:B]
+    d = sc_fit(xw, yw, mw, Ld, np.zeros(Ld, dtype=complex), lam, it=60)
+    nwin = float(w[A:B].sum())
+    return d, w[A:B] * (res[A:B] - SCConv([xw], [1.0], Ld).fwd(d)[A - x0:B - x0]), nwin / max(nwin - Ld, nwin / 4)
+
+
 _PRED = [[(s, u) for s in range(8) for u in (0, 1) if TB_NEXT[s, u] == q] for q in range(8)]
 _PS, _PU = np.array([[a[0][0], a[1][0]] for a in _PRED]), np.array([[a[0][1], a[1][1]] for a in _PRED])
 
@@ -2885,7 +2934,11 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
        by least squares over every row the recording holds, the data symbols as the decoder's soft symbols (the mean
        under its last beliefs); the noise of each segment from what it leaves there, less the soft symbols' variance,
        the taps' degrees of freedom counted. Each segment then sees every other symbol removed (the other segments'
-       as soft symbols), and at most SC_RELEARN_PASSES more passes follow, the room learned again after each."""
+       as soft symbols), and at most SC_RELEARN_PASSES more passes follow, the room learned again after each.
+       v7.8, per segment: the room may change during a long frame, so for each data segment a correction of L taps
+       is fitted on what the whole part's room leaves on the rows from the block before it to the end of the block
+       after it (soft symbols, the same ridge); the segment keeps it only if it leaves SC_RELEARN_GAIN dB less there,
+       its taps counted (sc_relearn_seg)."""
     import time as _time
     t_start = _time.time()
     m = OFDM_BITS[omap]
@@ -3145,17 +3198,27 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
             w2 = good[:ntot + L2 - 1] * ins[np.minimum(2 * SC_DLY + phase + P5 * np.arange(ntot + L2 - 1), len(ins) - 1)]
             c2, res2 = sc_relearn(yy, xsoft, w2, L2)
             P2, nw = float(np.vdot(c2, c2).real), float(w2.sum())
-            obs, ops, N0s = [], [], []
-            for S, E in segs:
+            lam = 1e-3 * float(np.sum(w2 * np.abs(yy[:ntot + L2 - 1]) ** 2)) / max(nw, 1.0)
+            obs, ops, N0s, nseg_own = [], [], [], 0
+            for j, (S, E) in enumerate(segs):
+                cj, rj, dof = c2, res2, 1.0
+                if SC_RELEARN_GAIN is not None:          # v7.8, per segment: the room's change over this segment, if it pays
+                    ra, rb = blocks[j][0], min(blocks[j + 1][1] + L - 1, ntot + L2 - 1)
+                    d, rd, dw = sc_relearn_seg(xsoft, res2, w2, ra, rb, L, lam)
+                    hr = min(E + L2 - 1, rb)
+                    if np.sum(np.abs(rd[S - ra:hr - ra]) ** 2) * dw * 10 ** (SC_RELEARN_GAIN / 10) < np.sum(np.abs(res2[S:hr]) ** 2):
+                        cj, rj, dof, nseg_own = c2.copy(), res2.copy(), dw, nseg_own + 1
+                        cj[:L] += d
+                        rj[ra:rb] = rd
                 xo = xsoft.copy()
                 xo[S:E] = 0
                 gw = w2[S:E + L2 - 1]
-                obs.append(gw * (yy[S:E + L2 - 1] - SCConv([xo], [1.0], L2).fwd(c2)[S:E + L2 - 1]))
-                ops.append(SCConv([c2], [1.0], E - S) if gw.all() else SCMask(SCConv([c2], [1.0], E - S), gw))
-                e2 = float(np.sum(np.abs(res2[S:E + L2 - 1]) ** 2)) / max(float(gw.sum()), 1.0) * nw / max(nw - L2, nw / 4)
-                N0s.append(max(e2 - P2 * float(np.mean(vs[S:E])), 0.3 * e2))
+                obs.append(gw * (yy[S:E + L2 - 1] - SCConv([xo], [1.0], L2).fwd(cj)[S:E + L2 - 1]))
+                ops.append(SCConv([cj], [1.0], E - S) if gw.all() else SCMask(SCConv([cj], [1.0], E - S), gw))
+                e2 = float(np.sum(np.abs(rj[S:E + L2 - 1]) ** 2)) / max(float(gw.sum()), 1.0) * nw / max(nw - L2, nw / 4) * dof
+                N0s.append(max(e2 - float(np.vdot(cj, cj).real) * float(np.mean(vs[S:E])), 0.3 * e2))
             xs = [None] * len(segs)
-            relearn = dict(taps=L2, snr=float(10 * np.log10(P2 / np.mean(N0s))))
+            relearn = dict(taps=L2, snr=float(10 * np.log10(P2 / np.mean(N0s))), own=nseg_own)
     if relearn is not None:
         relearn["passes"] = passes - npass
     out = dict(bits=bits, passes=passes, codeword=bool(np.array_equal((dec > 0).astype(int), cw)),
@@ -3399,7 +3462,7 @@ def frame_what(res):
     if res["type"] == "text":
         return repr(res["text"])
     if res["type"] == "jpeg":
-        return f"JPEG file of {res['len']} bytes, {'intact (its CRC-32 holds)' if res['crc_ok'] else 'corrupted (its CRC-32 fails)'}"
+        return f"{file_kind(res['file'])[0] or 'unknown'} file of {res['len']} bytes, {'intact (its CRC-32 holds)' if res['crc_ok'] else 'corrupted (its CRC-32 fails)'}"
     return f"{res['w']}x{res['h']} image"
 
 
@@ -3512,7 +3575,8 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                       + (f"; the clock wanders by {o['bend']:.1f} samples (samples lost or repeated?)" if o["bend"] > 1 else ""))
                 if o.get("relearn"):
                     r2 = o["relearn"]
-                    print(f"  second try (v7.2): the room learned again from the frame, {r2['taps']} taps (SNR {r2['snr']:.1f} dB), "
+                    own = f", {r2['own']} of the {o['nseg']} data segments with their own correction" if r2.get("own") else ""
+                    print(f"  second try (v7.2{', v7.8' if r2.get('own') else ''}): the room learned again from the frame, {r2['taps']} taps{own} (SNR {r2['snr']:.1f} dB), "
                           f"{r2['passes']} more pass{'es' if r2['passes'] > 1 else ''}: {'a codeword' if o['codeword'] else 'still not a codeword'}")
                 for tg, sz in o["gaps"]:
                     print(f"  {abs(sz):.0f} samples {'lost' if sz < 0 else 'repeated'} by the microphone {tg:.2f} s into the part, "
@@ -3913,7 +3977,8 @@ def main():
             p.add_argument("--image")
             p.add_argument("--step", type=int, default=1, help="image: every step-th pixel")
             p.add_argument("--up", type=int, choices=(1, 2, 4), default=1, help="image: up times the width and height (smooth edges)")
-            p.add_argument("--jpeg", help="v7.1: a JPEG file, sent as it is (see --quality to make one with restart markers)")
+            p.add_argument("--jpeg", "--file", dest="jpeg", help="v7.1: a JPEG file, sent as it is (see --quality to make one with restart "
+                           "markers); v7.7: any picture file (PNG, WebP, AVIF...), at most JPEG_MAX bytes")
             p.add_argument("--quality", type=int, help="v7.1: send the --image as a JPEG of this quality (1 to 100), in colour, "
                            "a restart marker on every row of blocks, saved next to the WAV")
             p.add_argument("--width", type=int, help="with --quality: scale the picture down to this width")
@@ -3949,7 +4014,8 @@ def main():
                            help="single carrier: the room estimate, least squares or MMSE (prior power per tap from a pilot)")
             p.add_argument("--ir", default="room_ir.wav", help="where to save the impulse response of a room sounding")
             p.add_argument("--plot", action="store_true", help="plot the room sounding (needs matplotlib)")
-            p.add_argument("--jpg", default="received", help="v7.1: JPEG files received are saved as JPG_1.jpg, JPG_2.jpg...")
+            p.add_argument("--jpg", default="received", help="v7.1: JPEG files received are saved as JPG_1.jpg, JPG_2.jpg... "
+                           "(v7.7: other formats with their own extension, e.g. JPG_1.webp)")
     a = ap.parse_args()
     if a.cmd == "sim":
         x, fs_x = read_wav(a.wav)
@@ -3964,9 +4030,11 @@ def main():
         return
     if a.cmd == "tx":
         jpeg = None
-        if a.jpeg:                                             # v7.1: a JPEG file as it is
+        if a.jpeg:                                             # v7.1: a JPEG file as it is (v7.7: any picture file)
             jpeg = open(a.jpeg, "rb").read()
-            if b"\xff\xdd" not in jpeg[:jpeg.find(b"\xff\xda") + 1]:
+            if not 1 <= len(jpeg) <= JPEG_MAX:
+                raise SystemExit(f"{a.jpeg}: {len(jpeg)} bytes, more than a frame carries ({JPEG_MAX}); make it smaller (--image with --quality and --width)")
+            if file_kind(jpeg)[0] == "JPEG" and b"\xff\xdd" not in jpeg[:jpeg.find(b"\xff\xda") + 1]:
                 print("note: this JPEG has no restart markers, so a wrong bit garbles the rest of the picture (see --quality)")
         elif a.image and a.quality:                            # v7.1: the picture made into a JPEG
             jpeg = jpeg_encode(load_rgb(a.image, a.width), a.quality, a.grey)
@@ -3987,7 +4055,8 @@ def main():
             how = ofdm_desc(ofdm_mode(a.guard), omap) if mod == "ofdm" else sc_desc(omap, SC_SIZES[a.wide][2][a.train], a.wide) if mod == "sc" else f"{mod} tones"
             if mod in ("ofdm", "sc"):
                 how += ", the short control part (v6)" if a.control == "short" else f", preamble {a.pre}"
-            what = f"a JPEG file of {len(jpeg)} bytes ({os.path.splitext(a.out)[0]}.jpg) and its CRC-32: " if jpeg is not None and not a.jpeg else ""
+            what = (f"a JPEG file of {len(jpeg)} bytes ({os.path.splitext(a.out)[0]}.jpg) and its CRC-32: " if not a.jpeg else
+                    f"{os.path.basename(a.jpeg)} ({file_kind(jpeg)[0] or 'format unknown'}, {len(jpeg)} bytes) and its CRC-32: ") if jpeg is not None else ""
             print(f"{what}{len(data)} message bits, code {code}, {how}, {len(x) / FS_TX:.1f} s -> {a.out}")
         if a.play:
             import sounddevice as sd
@@ -4015,14 +4084,15 @@ def main():
                 print("decoded:", f["text"])
             elif f["type"] == "jpeg":                          # v7.1: the file as it arrived; corrupted, also read again stripe by stripe
                 k = sum(g["type"] == "jpeg" for g in frames[:frames.index(f) + 1])
-                with open(f"{a.jpg}_{k}.jpg", "wb") as out:
+                kind, ext = file_kind(f["file"])               # v7.7: its format, from its first bytes
+                with open(f"{a.jpg}_{k}.{ext}", "wb") as out:
                     out.write(f["file"])
                 more = ""
-                if not f["crc_ok"]:
+                if not f["crc_ok"] and kind == "JPEG":
                     with open(f"{a.jpg}_{k}_resync.jpg", "wb") as out:
                         out.write(jpeg_resync(f["file"]))
                     more = f"; {a.jpg}_{k}_resync.jpg: the same without the markers that wrong bits made (see jpeg_resync)"
-                print(f"JPEG file {'intact' if f['crc_ok'] else 'CORRUPTED'} -> {a.jpg}_{k}.jpg{more}")
+                print(f"{kind or 'unknown'} file {'intact' if f['crc_ok'] else 'CORRUPTED'} -> {a.jpg}_{k}.{ext}{more}")
             else:
                 for row in f["img"][::2]:
                     print("".join(" " if p else "#" for p in row))

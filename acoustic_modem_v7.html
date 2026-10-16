@@ -51,7 +51,7 @@ header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,
 .opts>.muted:nth-child(odd){max-width:8.5em}
 .opts>.seg{justify-self:start}
 .opts .seg button{padding:7px 10px}
-.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ldpc) .lr,.opts:not(.polar) .pr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk,.opts.sc .nsc,.opts:not(.sc) .sco,.opts.x56 .n56{display:none}
+.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ldpc) .lr,.opts:not(.polar) .pr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk,.opts.sc .nsc,.opts:not(.sc) .sco,.opts.x56 .n56,#sizeSeg.nobig .big,#picSeg.nofile .pf{display:none}
 .opts.sc .xsc{opacity:.35;pointer-events:none}
 .opts.sc.wide .xw{opacity:.35;pointer-events:none}
 .opts.ofdm.short:not(.sounding) .pre{display:none}
@@ -93,7 +93,7 @@ canvas{display:block;max-width:100%}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 details{margin-top:12px}summary{cursor:pointer;color:var(--muted)}
 .hidden{display:none!important}
-figure{margin:0}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
+figure{margin:0;max-width:100%}figcaption{font-size:12px;color:var(--muted);margin-top:4px}
 .pad,#txCanvas{user-select:none;-webkit-user-select:none;touch-action:none}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px;cursor:pointer}
 .qrbox{background:#fff;color:#111;border-radius:16px;padding:20px;text-align:center;max-width:100%}
@@ -155,8 +155,8 @@ details .row{margin:8px 0}
     <div class="imgbox">
       <canvas id="txCanvas" class="pix" width="80" height="54"></canvas>
       <div>
-        <div class="row"><span class="muted">Size</span><span class="seg" id="sizeSeg"><button data-v="1">Normal</button><button data-v="2">Large, 2×</button><button data-v="4">Huge, 4×</button></span></div>
-        <div class="row" id="picRow"><span class="muted">Picture</span><span class="seg" id="picSeg"><button data-v="bits">1 bit per pixel</button><button data-v="jpeg">JPEG</button></span></div>
+        <div class="row"><span class="muted">Size</span><span class="seg" id="sizeSeg"><button data-v="1">Normal</button><button data-v="2">Large, 2×</button><button data-v="4">Huge, 4×</button><button class="big" data-v="8">8×</button><button class="big" data-v="16">16×</button></span></div>
+        <div class="row" id="picRow"><span class="muted">Picture</span><span class="seg" id="picSeg"><button data-v="bits">1 bit per pixel</button><button data-v="jpeg">JPEG</button><button class="pf" data-v="file">File as it is</button></span></div>
         <div class="row hidden" id="jqRow"><span class="muted">JPEG quality</span><span class="seg" id="jqSeg"><button data-v="25">25</button><button data-v="50">50</button><button data-v="75">75</button></span></div>
         <div id="drawTools" class="hidden">
           <div class="row"><span class="seg" id="penSeg"><button data-v="0">Pen</button><button data-v="1">Eraser</button></span><button class="btn" id="clearPad">Clear</button></div>
@@ -215,6 +215,9 @@ details .row{margin:8px 0}
     <p class="muted"><b>JPEG pictures (v7.1).</b> The demo image or a photo can also go as a JPEG file, in colour, at quality 25, 50 or 75: the file itself, then a CRC-32 of it (as Ethernet and Wi-Fi do), so that every receiver tells an intact file from a corrupted one, whatever the code. At quality 25 the file is about as long as the black-and-white picture of the same size.
     JPEG does not let a wrong bit stay local: its Huffman codes have variable lengths and each block's DC value is sent as a difference from the previous one, so after a wrong bit the decoder reads garbage, and a wrong bit among the first 630 bytes (the tables and the size) can make the whole file unreadable. This page's JPEGs carry a restart marker after every row of 16 × 16 pixels, where the decoder starts afresh, so a few scattered wrong bits cost only the stripes that hold them. The receiver also clears the markers that wrong bits create, which would otherwise stop the decoder and leave the rest of the picture grey ("save" keeps the file as it arrived).
     With a code, a frame that fails mostly fails everywhere (in simulation, 60 to 75 % of its bytes were wrong), so the picture is lost: what the receivers show is the frame error rate. Receivers older than v7.1 ignore JPEG frames.</p>
+    <p class="muted"><b>Bigger pictures, other formats (v7.7).</b> A photo can also go as a JPEG of at most 640 (8×) or 1280 pixels (16×), and <b>File as it is</b> sends the chosen file unchanged, in any format the receiving browser can show (JPEG, PNG, WebP, AVIF, GIF…); the receiver tells the format from the file's first bytes, and a file too big goes as a JPEG of the size chosen. A frame carries at most 261 632 bytes (255.5 KB, the most the single carrier's header can say). Formats newer than JPEG need fewer bytes for the same quality: for the Great Wave at 640 pixels, WebP about 60 % and AVIF about 50 % of a JPEG's, so that much less sound. PNG, made for drawings, needs more than 10 times as many bytes as JPEG for a photo. A corrupted JPEG still shows its intact stripes; a corrupted PNG, WebP or AVIF file usually cannot be opened at all.
+    This page's JPEG of the Great Wave at 1280 pixels (quality 50, about 140 KB) takes about 23 s of sound with 256QAM and LDPC 5/6 (17 s in the wide band), and decoding takes time too: on a laptop, about 2 s per second of sound, several times that when the room makes the receiver try again. Receivers older than v7.7 ignore files over 20 480 bytes.</p>
+    <p class="muted"><b>Sound output (v7.7).</b> Safari on a Mac, and every browser on an iPhone or iPad (all of them use Apple's WebKit), play the frames through an audio element, as a WAV file; other browsers use Web Audio. On an iPhone, Web Audio is silenced by the ring/silent switch, and in Safari on a Mac it has stayed silent until another program played a sound; an audio element plays in both cases. If no sound comes out one way (its clock does not move), the page tries the other. To use one only, add out=element or out=webaudio to the address.</p>
     <p class="muted"><b>Tone hopping.</b> In a room, the sound of each bit rings on for a large part of a second, far longer than the bit (2.5 ms at 400 bit/s). With only two tones, the echo of the earlier bits sits on both tones all the time; beyond the critical distance, where the echo is louder than the direct sound, it buries the bit. Hopping spreads the bits over 6400 / R pairs of adjacent tones from 3.2 to 16 kHz (16 pairs at 400 bit/s, R the rate): bit k uses pair 7k mod 16 (s k mod H in general), so a pair is used again only H bits later and the echo on each tone is H/2 times weaker, about 3 dB per doubling of the pairs. The preamble and header hop too (at 400 bit/s), otherwise far receivers would not find the frame. Each tone has its own level (speaker, room, microphone), so the receiver levels the tones before deciding. The band starts at 3.2 kHz: below that, a small speaker gives little and a room is noisy, and in a real test the 1.6 kHz tone the band first started at caused nearly all the errors.</p>
     <p class="muted"><b>Four tones (v2).</b> With 4 tones, a symbol carries 2 bits, Gray-coded so that neighbouring tones differ in one bit only. At the same bit rate it lasts twice as long and gathers twice the energy, and its tones, spaced by the symbol rate (half the bit rate), take the same band as the 2 tones of binary FSK. The receiver then compares 4 energies instead of 2, which non-coherent detection turns into a gain: in simulation, about 2 dB in noise and 2 to 3 dB in a room's echo, or roughly 25 to 40 % more distance, and 3200 bit/s becomes usable, where binary FSK would make errors even close to the speaker. Longer symbols also tolerate twice the timing error. The fixed tones are 4, 5.6, 7.2 and 8.8 kHz (or 8 to 12.8 kHz); with hopping, the 6400 / R pairs become groups of 4 adjacent tones. The control part stays binary, so every receiver finds the frame and reads the header; receivers older than v2 find no 4-tone mode in it and ignore the frame. With 4 tones the header's 4 rates are 400 to 3200 bit/s, and the postamble and the message are each padded to a whole number of symbols.</p>
     <p class="muted"><b>6400 bit/s.</b> At 6400 bit/s, with 4 tones, a symbol lasts 0.31 ms (15 samples at 48 kHz) and its tones, spaced 3.2 kHz, are 3.2, 6.4, 9.6 and 12.8 kHz: one group fills the whole band, so there is nothing left to hop over, and the echo of the earlier symbols always lies on the same 4 tones. FSK can go no faster in this band, because sending one tone at a time carries at most half a bit per second per hertz; going further takes many tones at once, each with its own phase (OFDM, as in Wi-Fi: see below). In simulation it needs about 4.7 dB more SNR and 3.6 dB more DRR than 3200 bit/s, so it reaches 60 to 70 % of that distance. Choosing 6400 selects Hopping, the only tone set that spans the band. The header marks it as tone set 3, which receivers made before it ignore.</p>
@@ -222,7 +225,7 @@ details .row{margin:8px 0}
     <p class="muted"><b>Coherent OFDM (v4).</b> DQPSK compares each symbol with the one before, so the receiver needs to know nothing about the room, but it pays for it: the comparison doubles the noise, and a phase step carries 2 bits at most in practice. With <b>pilots</b>, the reference symbol's values sent on 1 subcarrier in 12 of every data symbol (shifted by 3 from one symbol to the next: 8 % of the subcarriers), the receiver measures the gain and the phase of every subcarrier, the room's frequency response H, and decides on each symbol by itself: Y = H X + noise, so X ≈ Y / H. Then <b>QPSK</b> (2 bits per subcarrier) needs about 2 dB less signal than DQPSK, <b>8PSK</b> carries 3 bits, <b>16QAM</b> 4, <b>64QAM</b> 6 and <b>256QAM</b> 8, their amplitude carrying bits too, which is why the gain must be known as well as the phase. The estimate of H takes the two reference symbols and every pilot, removes from each symbol its own small change (a gain, a phase and a delay: a phone that moves by a few millimetres between symbols turns the high subcarriers by tens of degrees), averages, and smooths across the band, since an echo that arrives within the guard can only make a response that varies slowly from one subcarrier to the next. It costs about 1.5 dB against a receiver that would know H exactly. In simulation, with turbo 1/2 and the long guard: DQPSK 8.5 kbit/s; QPSK 7.8 kbit/s with 2 dB to spare in noise and 1 dB in echo; 8PSK 11.7 kbit/s for about 1 dB more than DQPSK; 16QAM 15.6 kbit/s for about 3 dB more (4.5 dB in a room whose echo is all diffuse), roughly 70 % of the distance; 64QAM 23.5 kbit/s for about 5 dB more than 16QAM in noise (1 to 4 dB in echo); 256QAM 31.3 kbit/s for about 11 dB more than 16QAM in noise (2 to 9.5 dB in echo), a third of 16QAM's distance where noise limits the link. 256QAM's points are so close that clipping the loudest peaks of the signal already flips about 5 % of its bits, which the code corrects. The receiver plots the received points divided by H: a tight cloud around each point means a clean channel, a cloud that spreads into its neighbours means errors for the code to correct. The header marks the mapping by xoring its CRC with a mask, so receivers older than v4 ignore these frames. v4 also follows, for DQPSK, the delay change from one symbol to the next: with v3, a phone swinging by 2 cm lost one frame in five.</p>
     <p class="muted"><b>Short control part (v6).</b> At 400 bit/s the control part takes 0.65 s, longer than the whole OFDM part of a short text. OFDM and single-carrier frames therefore start, by default, with a control part of 0.19 s sent like OFDM, over the whole band at once. Its preamble P is one symbol of 2048 samples (42.7 ms) on the 546 subcarriers from 3.2 to 16 kHz, all of the same amplitude, sent three times in a row; its phases are those of OFDM's reference symbol negated, so that the two sweep the band in opposite directions and are not mistaken for each other. Then, after a guard of 21 ms, one symbol H carries the same 92 coded header bits as the 400 bit/s header, one bit per subcarrier as a sign (BPSK): subcarrier j carries bit 37 j mod 92, so that each bit sits on 5 or 6 subcarriers spread over the band. The receiver passes what it hears through a matched filter of P and adds up the three periods: in noise the sum is about 1/1100 of the energy heard (at most 0.012 over our recordings), while a frame gives the share of its energy that its strongest path carries (0.17 to 0.35 in an ordinary room, 0.05 in a very reverberant one), and a frame is declared above 0.02 if the last two periods agree. The last two periods, which the room has filled, give its frequency response, the clock offset between them, and the noise on each subcarrier. The message part starts from the first strong arrival of that response, as the single carrier's timing does, and H is read against the response, the echo that arrives after its guard counted as noise. On two recordings of the v6 test sound in a reverberant room (Impasse Carnot), all 16 control parts, short and long, were found and read. Near the speaker the short one survived 7.5 dB less added noise than the 400 bit/s one (3 dB of it because it plays as loud as OFDM, rms 0.45, against FSK's 0.64), still noise 50 dB above the room's own; farther away both survived the same noise, the echo costing the 400 bit/s tones 9 dB and the short control part about 1, and there the messages failed long before either control part. Receivers older than v6 do not read it: the long control part is kept for them, and for the longest range. FSK frames and the room sounding keep the 400 bit/s control part.</p>
     <p class="muted"><b>Single carrier with SMAP (v5).</b> OFDM pays for its simple receiver twice: the guard (a third of the time with the long guard) and its peaks, since hundreds of subcarriers add up to a signal whose rare peaks must be clipped. The single carrier sends one complex symbol at a time instead, 9600 per second on a carrier at 9.6 kHz, each shaped by a root-raised-cosine pulse (roll-off 1/3) so that the signal fills the same band, 3.2 to 16 kHz, with no guard. The room then smears every symbol over the next few hundred (intersymbol interference): the receiver writes what it hears, at the symbol rate, as y = c ∗ s + noise, with c the room seen through the two pulse filters (256 to 1024 taps, plotted below the received image). It learns c from known training symbols (QPSK, at the start and then every 0.5 s, which also give the clock and follow the room as people move), and then looks for the symbols. The training plays the role of OFDM's guard: the longer it is, the longer the echo the receiver can learn, for some of the rate. Short training (640 symbols) learns echoes up to 20 ms after the first strong arrival (256 taps), medium (1280) up to 47 ms (512 taps), long (2560) up to 100 ms (1024 taps, kept when they fit the room better than 512). A dry room needs only the short one; in a reverberant room, where the echo 50 ms on is still 15 to 20 dB down, the long one decodes 256QAM where the others fail. A <b>linear MMSE</b> equalizer undoes c as well as the noise allows, but it treats the symbols as Gaussian. <b>SMAP</b> (Ramos, Senecal and Yang) uses what the receiver knows: each symbol lies on the constellation. It minimizes |y − c ∗ s|²/N₀ − Σ ln p(s), with p a mixture of narrow Gaussians around the constellation's levels, by gradient steps that need only FFTs, and gives each bit a soft output. The detector and the decoder (turbo, or LDPC since v7) then exchange their beliefs on the coded bits a few times (<b>turbo equalization</b>): the decoder's beliefs sharpen p, which sharpens the detector's output, until the decisions form a codeword. Choose the detector on the receiver, and its effort: fast stops SMAP after 30 steps (20 on later passes) and turbo equalization after 4 passes, full allows 150 (100) steps and 8 passes. Fast cost at most 1 dB at the threshold on our recordings, and takes a third to two thirds of the time (a phone may need it). Either switch decodes the last frame again. On two recordings at one spot, the single carrier with SMAP needed 4 to 6 dB less SNR than OFDM at 256QAM (17 to 19 dB against 22 to 23) and 2 dB less at 64QAM, for 2 to 5 times OFDM's computation (more near the threshold, where it takes several passes). The decoding runs in the background (a few seconds, more for large images), so the receiver keeps listening. The header marks single-carrier frames with a rate field that older receivers do not know, so receivers older than v5 ignore them.</p>
-    <p class="muted"><b>Second try (v7.2).</b> A training block lets the receiver learn at most 1024 taps of the room (107 ms of echo); whatever echoes later counts as noise. In a living room at 2 to 4 m the echo after 107 ms was only 15 to 19 dB below the sound, which capped the SNR there. So when the passes end without a codeword, the receiver learns the room again from the whole frame (training and data, the data as the decoder's current guesses): 2048 taps (213 ms), then up to 4 more passes. On 34 such frames this decoded 29 instead of 14. It cannot help when the room changes during the frame (someone walking, a moving phone).</p>
+    <p class="muted"><b>Second try (v7.2, v7.8).</b> A training block lets the receiver learn at most 1024 taps of the room (107 ms of echo); whatever echoes later counts as noise. In a living room at 2 to 4 m the echo after 107 ms was only 15 to 19 dB below the sound, which capped the SNR there. So when the passes end without a codeword, the receiver learns the room again from the whole frame (training and data, the data as the decoder's current guesses): 2048 taps (213 ms), then up to 4 more passes. On 34 such frames this decoded 29 instead of 14. One room for the whole frame cannot follow a room that changes during it, so since v7.8 each data segment may also correct it with taps of its own (as many as the training blocks learn), and keeps the correction only where it leaves at least 0.5 dB less: a 6.9 s class frame of 16 October, which the fast effort did not decode before, then decoded, and of 96 earlier frames none was lost and two more decoded. A phone that moves during the frame was not tried.</p>
     <p class="muted"><b>Wide band (v7.4).</b> The single carrier can also send 13 714 symbols per second on a carrier at 11.4 kHz, which fills 2.3 to 20.5 kHz instead of 3.2 to 16 kHz: 43 % more bits per second. Room soundings in a reverberant room heard 16 to 20.5 kHz about as clearly as the usual band (the phone's speaker gives 6 to 10 dB less there, but the room's noise is as much lower, and the echo dies out fastest at high frequencies) and 2.3 to 3.2 kHz 3 to 5 dB less clearly; above 21 kHz the iPhone's microphone hears almost nothing. The training blocks have 10/7 as many symbols, so they last as long and let the receiver learn the same echoes. The pulses are made on a 96 kHz grid, 7 samples per symbol, and every other sample is played. The same loudness spread over a wider band gives each symbol about 1.5 dB less signal: in simulation through the rooms measured, it decoded wherever the usual band did up to 6 dB more noise than the room had, and failed more often beyond. LDPC or polar codes only. The header marks it as type 2 on the single carrier, which receivers older than v7.4 ignore.</p>
     <p class="muted"><b>1024QAM (v7.5).</b> The single carrier can put 10 bits on each symbol, 32 levels on each axis, instead of 256QAM's 8: 25 % more bits per second before the code. The levels are half as far apart, so it needs about 6 dB more signal than 256QAM at the same code rate; at the same information rate, 1024QAM with LDPC 2/3 carries 11 % more than 256QAM with LDPC 3/4 for about 3 dB more signal, and 1024QAM with LDPC 1/2 is no better than 256QAM with LDPC 2/3. Replaying the room and noise of one of the best recordings (phones close together and still, 29 dB on this page) with 1024QAM frames put LDPC 2/3 at the edge, and 3/4 needed about 2 dB more signal. Take it with LDPC 2/3, for phones close together in a quiet room. The header marks it with the mask of 8PSK, which the single carrier never used, so receivers older than v7.5 ignore it.</p>
     <p class="muted"><b>LDPC 5/6 (v7.6).</b> The highest rate: 5 message bits in every 6 sent, 11 % more than 3/4, for 1.5 to 2.5 dB more signal (in plain noise: 64QAM 15.5 dB with 3/4, 17 dB with 5/6; 256QAM 20 and 22.5 dB; 1024QAM 25 and 27.5 dB). 256QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 2/3 for a little less signal (22.5 against 22.9 dB in plain noise), and replaying the room and noise of one of the best recordings, it still decoded with the noise 2 dB louder than 1024QAM 2/3 could take: take it rather than 1024QAM 2/3. 64QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 1/2, for 1 dB less. 1024QAM with LDPC 5/6 failed in that replay even with the noise 8 dB quieter. It works with every modulation except OFDM with 64QAM or 256QAM: OFDM's own noise (its clipping, about 21 dB below the signal) leaves 64QAM 3 to 5 % of wrong bits on a short message even in a quiet room, more than 5/6 can correct, and 256QAM with 5/6 needs 22.5 dB. The header marks it as a text or an image with code 7, which receivers older than v7.6 ignore.</p>
@@ -1370,7 +1373,7 @@ function headerBits(h) {   // 6400 bit/s: tone set 3, rate field 3; OFDM: tone s
 // standard scaled by the quality as libjpeg does, and a restart marker after every row of blocks. Huffman codes have
 // variable lengths and the DC values are sent as differences, so a wrong bit garbles the picture up to the next restart
 // marker; with a marker on every row, a wrong bit costs one stripe of 16 (grey: 8) rows instead of the rest of the picture.
-const JPEG_MAX = 20480;
+const JPEG_MAX = 261632;   // v7.7: the most the single carrier's header can say (a has 10 bits there: a <= 1023); 20480 before
 const jpegFields = n => [513 + ((n - 1) >> 9), 1 + ((n - 1) & 511)];   // the header's a and b for a file of n bytes
 const jpegBytes = (a, b) => 512 * (a - 513) + b;
 const CRC32_T = Uint32Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c; });
@@ -1395,6 +1398,18 @@ function jpegResync(file) {
   if (i + 4 > f.length || f[i] !== 0xff || f[i + 1] !== 0xda) return f;
   for (let j = i + 2 + ((f[i + 2] << 8) | f[i + 3]); j < f.length - 3; j++) if (f[j] === 0xff && f[j + 1] && (f[j + 1] < 0xd0 || f[j + 1] > 0xd7)) f[j + 1] = 0;   // the coded data, up to the end of image marker
   return f;
+}
+function fileKind(f) {   // v7.7: a picture file's format, from its first bytes: name ('' if unknown), MIME type, extension; as audiocomm_v7.py
+  const s = String.fromCharCode(...f.subarray(0, 32)), at = (o, t) => s.substr(o, t.length) === t, brands = s.slice(8);
+  if (at(0, '\xff\xd8\xff')) return { name: 'JPEG', mime: 'image/jpeg', ext: 'jpg' };
+  if (at(0, '\x89PNG')) return { name: 'PNG', mime: 'image/png', ext: 'png' };
+  if (at(0, 'GIF8')) return { name: 'GIF', mime: 'image/gif', ext: 'gif' };
+  if (at(0, 'RIFF') && at(8, 'WEBP')) return { name: 'WebP', mime: 'image/webp', ext: 'webp' };
+  if (at(4, 'ftyp') && /avif|avis/.test(brands)) return { name: 'AVIF', mime: 'image/avif', ext: 'avif' };
+  if (at(4, 'ftyp') && /heic|heix|mif1|msf1/.test(brands)) return { name: 'HEIC', mime: 'image/heic', ext: 'heic' };
+  if (at(0, 'BM')) return { name: 'BMP', mime: 'image/bmp', ext: 'bmp' };
+  if (at(0, 'II*\0') || at(0, 'MM\0*')) return { name: 'TIFF', mime: 'image/tiff', ext: 'tif' };
+  return { name: '', mime: 'image/jpeg', ext: 'bin' };
 }
 // The example tables of the JPEG standard (ITU-T T.81, Annex K): quantization (row by row) and Huffman codes (number of
 // codes of each length 1 to 16, then the symbols), luminance then chrominance
@@ -2457,6 +2472,9 @@ let SC_RELEARN_TAPS = 2048; // v7.2, the second try: when the passes end without
                               // as the decoder's soft symbols; in a living room at 2 to 4 m the echo after 107 ms was only
                               // 15 to 19 dB down, so the training's room capped the SNR there (14 -> 29 of 34 frames)
 const SC_RELEARN_PASSES = 4;  // v7.2: at most this many more passes, the room learned again after each (0: no second try)
+const SC_RELEARN_GAIN = 0.5;  // v7.8, the second try per segment: a data segment keeps its own correction of the room only
+                              // if, its taps counted, it leaves this many dB less there (null: one room for the whole part,
+                              // as in v7.2)
 const SC_REL = 1.0;           // ridge prior of a training block's room: the one before, give or take its own size (a weak
                                // pull; a tight one, -20 dB, cost 2 to 7 dB on our recordings when people moved)
 const SC_T0_FRAC = 0.5, SC_T0_BACK = 0.015;   // timing: the earliest arrival with half the strongest's correlation, up to 15 ms before it
@@ -2805,6 +2823,14 @@ function scRelearn(yy, x, w, L) {   // v7.2: one room of L taps for the whole pa
   for (let j = 0; j < R; j++) { res.r[j] = w[j] * (y.r[j] - f.r[j]); res.i[j] = w[j] * (y.i[j] - f.i[j]); }
   return { c, res };
 }
+function scRelearnSeg(x, res, w, A, B, Ld, lam) {   // v7.8, the second try per segment: a correction of Ld taps to the whole part's room, by least squares (ridge lam) over the rows A to B (where w = 1) of what that room leaves, res ~ x * d; d, what it leaves on those rows (as res, from A) and the taps' degrees-of-freedom factor there
+  const x0 = A - Ld + 1, nx = B - x0, xw = cvec(nx), yw = cvec(nx + Ld - 1), mw = new Float64Array(nx + Ld - 1);
+  for (let k = Math.max(0, -x0); k < nx && x0 + k < x.r.length; k++) { xw.r[k] = x.r[x0 + k]; xw.i[k] = x.i[x0 + k]; }
+  let nwin = 0; for (let r = A; r < B; r++) { const t = r - x0; yw.r[t] = res.r[r]; yw.i[t] = res.i[r]; mw[t] = w[r]; nwin += w[r]; }
+  const d = scFit(xw, yw, mw, Ld, cvec(Ld), lam, 60), f = new SCConv([xw], null, Ld).fwd(d), rd = cvec(B - A);
+  for (let r = A; r < B; r++) { const t = r - x0; rd.r[r - A] = w[r] * (res.r[r] - f.r[t]); rd.i[r - A] = w[r] * (res.i[r] - f.i[t]); }
+  return { d, rd, dof: nwin / Math.max(nwin - Ld, nwin / 4) };
+}
 function fecSiso(code, llr, n0) {   // v7: scTurboSiso, or the LDPC (v7.3: polar) decoder's decisions and a-posteriori LLRs (in the order encodeFEC sends them)
   if (POLAR_R[code]) {
     const x = deinterleave(Array.from(llr)), d = polarDecode(x, n0, POLAR_R[code], true);
@@ -3020,6 +3046,10 @@ function scSplit(y, rho, t, p, u) {
 //    under its last beliefs); the noise of each segment from what it leaves there, less the soft symbols' variance,
 //    the taps' degrees of freedom counted. Each segment then sees every other symbol removed (the other segments' as
 //    soft symbols), and at most SC_RELEARN_PASSES more passes follow, the room learned again after each.
+//    v7.8, per segment: the room may change during a long frame, so for each data segment a correction of L taps is
+//    fitted on what the whole part's room leaves on the rows from the block before it to the end of the block after it
+//    (soft symbols, the same ridge); the segment keeps it only if it leaves SC_RELEARN_GAIN dB less there, its taps
+//    counted (scRelearnSeg).
 function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt = SC_NC, effort = 'fast', est = 'ls', swap = null) {
   scSetBand(scWideOf(nt));   // v7.4: the band of a TC of nt symbols
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()), tStart = now();
@@ -3234,17 +3264,27 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
       const w2 = new Float64Array(R2);   // the rows the recording holds, but for gaps
       for (let r = 0; r < R2; r++) w2[r] = good[r] * (zt[Math.min(2 * SC_DLY + phase + P5 * r, nv - 1)] < y.length - 8 ? 1 : 0);
       const { c: c2, res } = scRelearn(yy, xsoft, w2, L2), P2 = cdot(c2, c2);
-      let nw = 0; for (let r = 0; r < R2; r++) nw += w2[r];
+      let nw = 0, Pw = 0; for (let r = 0; r < R2; r++) { nw += w2[r]; Pw += w2[r] * (yy.r[r] ** 2 + yy.i[r] ** 2); }
+      let own = 0;
       segs.forEach(([S, E], j) => {
+        let cj = c2, rj = res, dof = 1;
+        if (SC_RELEARN_GAIN !== null) {   // v7.8, per segment: the room's change over this segment, if it pays
+          const A = blocks[j][0], B = Math.min(blocks[j + 1][1] + L - 1, R2), { d: dl, rd, dof: dw } = scRelearnSeg(xsoft, res, w2, A, B, L, 1e-3 * Pw / Math.max(nw, 1));
+          let eS = 0, eC = 0; for (let r = S; r < Math.min(E + L2 - 1, B); r++) { eS += res.r[r] ** 2 + res.i[r] ** 2; eC += rd.r[r - A] ** 2 + rd.i[r - A] ** 2; }
+          if (eC * dw * 10 ** (SC_RELEARN_GAIN / 10) < eS) {
+            cj = { r: Float64Array.from(c2.r), i: Float64Array.from(c2.i) }; for (let l = 0; l < L; l++) { cj.r[l] += dl.r[l]; cj.i[l] += dl.i[l]; }
+            rj = { r: Float64Array.from(res.r), i: Float64Array.from(res.i) }; rj.r.set(rd.r, A); rj.i.set(rd.i, A); dof = dw; own++;
+          }
+        }
         const xo = { r: Float64Array.from(xsoft.r), i: Float64Array.from(xsoft.i) }; xo.r.fill(0, S, E); xo.i.fill(0, S, E);
-        const f = new SCConv([xo], null, L2).fwd(c2), nr = E - S + L2 - 1, gw = w2.subarray(S, S + nr), o = cvec(nr);
+        const f = new SCConv([xo], null, L2).fwd(cj), nr = E - S + L2 - 1, gw = w2.subarray(S, S + nr), o = cvec(nr);
         let e = 0, g = 0, v = 0;
-        for (let k = 0; k < nr; k++) { o.r[k] = gw[k] * (yy.r[S + k] - f.r[S + k]); o.i[k] = gw[k] * (yy.i[S + k] - f.i[S + k]); e += res.r[S + k] ** 2 + res.i[S + k] ** 2; g += gw[k]; }
+        for (let k = 0; k < nr; k++) { o.r[k] = gw[k] * (yy.r[S + k] - f.r[S + k]); o.i[k] = gw[k] * (yy.i[S + k] - f.i[S + k]); e += rj.r[S + k] ** 2 + rj.i[S + k] ** 2; g += gw[k]; }
         for (let s = S; s < E; s++) v += vs[s] / (E - S);
-        const e2 = e / Math.max(g, 1) * nw / Math.max(nw - L2, nw / 4), op = new SCConv([c2], null, E - S);
-        obs[j] = o; ops[j] = gw.every(t => t === 1) ? op : new SCMask(op, gw); N0s[j] = Math.max(e2 - P2 * v, 0.3 * e2); xs[j] = null;
+        const e2 = e / Math.max(g, 1) * nw / Math.max(nw - L2, nw / 4) * dof, op = new SCConv([cj], null, E - S);
+        obs[j] = o; ops[j] = gw.every(t => t === 1) ? op : new SCMask(op, gw); N0s[j] = Math.max(e2 - cdot(cj, cj) * v, 0.3 * e2); xs[j] = null;
       });
-      relearn = { taps: L2, snr: 10 * Math.log10(P2 / (N0s.reduce((a, b) => a + b, 0) / N0s.length)) };
+      relearn = { taps: L2, snr: 10 * Math.log10(P2 / (N0s.reduce((a, b) => a + b, 0) / N0s.length)), own };
     }
   }
   if (relearn) relearn.passes = passes - npass;
@@ -3689,7 +3729,7 @@ const DEMO_JPEG = {
 };
 const demoJpegs = {};
 function demoJpeg(s = 1, q = 50) { const k = `${s}_${q}`; return demoJpegs[k] || (demoJpegs[k] = Uint8Array.from(atob(DEMO_JPEG[s][q]), c => c.charCodeAt(0))); }
-if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, RATES4, RATE_WIDE, TONES4, toneSet, symbolBits, toSymbols, bitSets, symbolMetrics, postErrors, contrast, knownContrast, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, JPEG_MAX, jpegFields, jpegBytes, crc32, jpegPayload, jpegUnpack, jpegResync, jpegEncode, DEMO_JPEG, demoJpeg, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
+if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, RATES4, RATE_WIDE, TONES4, toneSet, symbolBits, toSymbols, bitSets, symbolMetrics, postErrors, contrast, knownContrast, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, JPEG_MAX, jpegFields, jpegBytes, crc32, jpegPayload, jpegUnpack, jpegResync, fileKind, jpegEncode, DEMO_JPEG, demoJpeg, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
   SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
   turboPerm, turboEncode, turboDecode, bcjr, TURBO_R, LDPC_R, LDPC_CODES, LDPC56, SC_CODES, WIDE_CODES, ldpcParams, ldpcEncode, ldpcDecode, fecSiso, POLAR_R, POLAR_CODES, TYPE3_CODES, polarParams, polarBlock, polarEncode, polarDecode, polarScl, polarScan,
   OFDM_MODES, OFDM_F0, OFDM_F1, ofdmMode, ofdmCarriers, ofdmRate, ofdmReference, ofdmSymbols, fracRead, ofdmReceive, ofdmDesc,
@@ -3719,8 +3759,10 @@ if (cfg.mod === 'sc') { if (!SC_MAPS.includes(cfg.map)) cfg.map = '256qam'; if (
 if (cfg.mod !== 'sc' && !OFDM_MAPS.includes(cfg.map)) cfg.map = '256qam';   // v7.5: OFDM has no 1024QAM
 if (cfg.rate === RATE_WIDE) cfg.tones = 'hop';   // 6400 bit/s: one group of 4 tones over the whole band
 const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
-let msgMode = 'text', pen = 0, actx = null, imgScale = { large: 2, huge: 4 }[params.get('img')] || 1;   // image size: 1 normal, 2 large, 4 huge (2 or 4 times the width and height)
-let picFmt = params.get('pic') === 'jpeg' ? 'jpeg' : 'bits', jpegQ = [25, 50, 75].includes(+params.get('q')) ? +params.get('q') : 50;   // v7.1: demo images and photos as 1 bit per pixel or as a JPEG file
+let msgMode = 'text', pen = 0, actx = null, imgScale = { large: 2, huge: 4, x8: 8, x16: 16 }[params.get('img')] || 1;   // image size: 1 normal, 2 large, 4 huge (2 or 4 times the width and height); v7.7: 8, 16 (sc4)
+let picFmt = ['jpeg', 'file'].includes(params.get('pic')) ? params.get('pic') : 'bits', jpegQ = [25, 50, 75].includes(+params.get('q')) ? +params.get('q') : 50;   // v7.1: demo images and photos as 1 bit per pixel or as a JPEG file (v7.7: a photo also as its own file, 'file')
+const sc4 = () => Math.min(imgScale, 4);   // v7.7: the size of everything but a photo's JPEG (8x and 16x are for those only)
+const bigOk = () => msgMode === 'photo' && picFmt !== 'bits';   // v7.7: 8x and 16x offered
 
 function seg(el, value, onPick) {
   const set = v => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v))));
@@ -3728,7 +3770,7 @@ function seg(el, value, onPick) {
   el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); onPick(b.dataset.v); });
 }
 function ctx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }
-function syncUrl() { const u = new URL(location.href); u.searchParams.set('mod', cfg.mod); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); if (cfg.mod === 'ofdm') u.searchParams.set('guard', cfg.guard); else u.searchParams.delete('guard'); if (cfg.mod === 'ofdm' || cfg.mod === 'sc') u.searchParams.set('map', cfg.map); else u.searchParams.delete('map'); if (cfg.mod === 'sc') u.searchParams.set('train', cfg.train); else u.searchParams.delete('train'); if (cfg.mod === 'sc' && cfg.band === 'wide') u.searchParams.set('band', 'wide'); else u.searchParams.delete('band'); if (imgScale > 1) u.searchParams.set('img', imgScale === 4 ? 'huge' : 'large'); else u.searchParams.delete('img'); if (picFmt === 'jpeg') { u.searchParams.set('pic', 'jpeg'); u.searchParams.set('q', jpegQ); } else { u.searchParams.delete('pic'); u.searchParams.delete('q'); } if ((cfg.mod === 'ofdm' || cfg.mod === 'sc') && cfg.control === 'long') u.searchParams.set('ctl', 'long'); else u.searchParams.delete('ctl'); history.replaceState(null, '', u); }
+function syncUrl() { const u = new URL(location.href); u.searchParams.set('mod', cfg.mod); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); if (cfg.mod === 'ofdm') u.searchParams.set('guard', cfg.guard); else u.searchParams.delete('guard'); if (cfg.mod === 'ofdm' || cfg.mod === 'sc') u.searchParams.set('map', cfg.map); else u.searchParams.delete('map'); if (cfg.mod === 'sc') u.searchParams.set('train', cfg.train); else u.searchParams.delete('train'); if (cfg.mod === 'sc' && cfg.band === 'wide') u.searchParams.set('band', 'wide'); else u.searchParams.delete('band'); if (imgScale > 1) u.searchParams.set('img', { 2: 'large', 4: 'huge', 8: 'x8', 16: 'x16' }[imgScale]); else u.searchParams.delete('img'); if (picFmt !== 'bits') { u.searchParams.set('pic', picFmt); u.searchParams.set('q', jpegQ); } else { u.searchParams.delete('pic'); u.searchParams.delete('q'); } if ((cfg.mod === 'ofdm' || cfg.mod === 'sc') && cfg.control === 'long') u.searchParams.set('ctl', 'long'); else u.searchParams.delete('ctl'); history.replaceState(null, '', u); }
 // QR code: the online copy of this page (also when the laptop runs it from a local file); receivers need no settings
 function phoneUrl() {   // from a local file: the online copy of the same file (the latest version if the name is not one of ours)
   if (location.protocol === 'https:') return location.origin + location.pathname;
@@ -3791,19 +3833,21 @@ $('main').dataset.role = role;
 seg($('roleSeg'), role, v => { $('main').dataset.role = v; });
 
 // ---------- transmitter ----------
-const pad = { h: 32 * imgScale, w: 32 * imgScale, pixels: new Uint8Array(1024 * imgScale * imgScale).fill(1) };
+const pad = { h: 32 * sc4(), w: 32 * sc4(), pixels: new Uint8Array(1024 * sc4() * sc4()).fill(1) };
 let photo = null, photoImg = null;   // photo: the pixels sent, made from photoImg at the chosen size
+let photoRaw = null;   // v7.7: the chosen file's own bytes ("File as it is")
 const snd = { order: 15, periods: 4 };   // room sounding: MLS order (period 2^order - 1 samples at 48 kHz) and periods averaged
 function currentMsg() {
   if (msgMode === 'sound') return { type: 'sound', ...snd };
   if (msgMode === 'text') return { type: 'text', text: $('txtIn').value || ' ' };
-  if (msgMode === 'demo') return picFmt === 'jpeg' ? { type: 'jpeg', file: demoJpeg(imgScale, jpegQ) } : demoPixels(imgScale);
+  if (msgMode === 'demo') return picFmt !== 'bits' ? { type: 'jpeg', file: demoJpeg(sc4(), jpegQ) } : demoPixels(sc4());
   if (msgMode === 'draw') return { type: 'image', ...pad };
-  if (picFmt === 'jpeg') return { type: 'jpeg', file: photoImg ? photoJpeg() : demoJpeg(imgScale, jpegQ) };
-  return photo ? { type: 'image', ...photo } : demoPixels(imgScale);
+  if (picFmt === 'file' && photoRaw && photoRaw.length <= JPEG_MAX) return { type: 'jpeg', file: photoRaw, asIs: true };   // v7.7: the file as it is
+  if (picFmt !== 'bits') return { type: 'jpeg', file: photoImg ? photoJpeg() : demoJpeg(sc4(), jpegQ) };   // (v7.7: also a file too big)
+  return photo ? { type: 'image', ...photo } : demoPixels(sc4());
 }
 let photoJpg = null;   // v7.1: the photo's JPEG, made again when the photo, the size or the quality changes
-function photoJpeg() {   // the photo scaled to at most 80 pixels (160 large, 320 huge), at the chosen quality, or lower if the file would pass JPEG_MAX
+function photoJpeg() {   // the photo scaled to at most 80 pixels (160 large, 320 huge; v7.7: 640, 1280), at the chosen quality, or lower if the file would pass JPEG_MAX
   const key = [photoImg, imgScale, jpegQ];
   if (photoJpg && photoJpg.key.every((v, i) => v === key[i])) return photoJpg.file;
   const s = Math.min(1, 80 * imgScale / Math.max(photoImg.width, photoImg.height)), w = Math.max(1, Math.round(photoImg.width * s)), h = Math.max(1, Math.round(photoImg.height * s));
@@ -3814,9 +3858,14 @@ function photoJpeg() {   // the photo scaled to at most 80 pixels (160 large, 32
   photoJpg = { key, file, q };
   return file;
 }
-function drawJpeg(cv, file, cap) {   // v7.1: a JPEG file decoded by the browser into the canvas, or a grey box when it cannot be opened
-  const tok = cv.dataset.tok = String(+(cv.dataset.tok || 0) + 1), u = URL.createObjectURL(new Blob([file], { type: 'image/jpeg' })), im = new Image();
-  const fit = (w, h) => { cv.width = w; cv.height = h; const z = Math.max(h <= 150 && w <= 170 ? 2 : 1, Math.floor(Math.min(220 / h, 240 / w))); cv.style.width = w * z + 'px'; cv.style.height = h * z + 'px'; return cv.getContext('2d'); };
+function drawJpeg(cv, file, cap, max = 320) {   // v7.1: a JPEG file decoded by the browser into the canvas, or a grey box when it cannot be opened
+  // (v7.7: any picture file; one over max pixels wide or high is shown smaller, smoothly, and at most as wide as the screen)
+  const tok = cv.dataset.tok = String(+(cv.dataset.tok || 0) + 1), u = URL.createObjectURL(new Blob([file], { type: fileKind(file).mime })), im = new Image();
+  const fit = (w, h) => {
+    cv.width = w; cv.height = h; const z = Math.min(Math.max(h <= 150 && w <= 170 ? 2 : 1, Math.floor(Math.min(220 / h, 240 / w))), max / w, max / h);
+    Object.assign(cv.style, { width: w * z + 'px', height: 'auto', maxWidth: '100%', imageRendering: z < 1 ? 'auto' : '' });
+    return cv.getContext('2d');
+  };
   im.onload = () => { URL.revokeObjectURL(u); if (cv.dataset.tok === tok) fit(im.naturalWidth, im.naturalHeight).drawImage(im, 0, 0); };
   im.onerror = () => {
     URL.revokeObjectURL(u); if (cv.dataset.tok !== tok) return;
@@ -3828,7 +3877,7 @@ function drawJpeg(cv, file, cap) {   // v7.1: a JPEG file decoded by the browser
 function drawPixels(cv, img, done = img.h * img.w, scale = 4) {
   cv.width = img.w; cv.height = img.h;
   const z = Math.max(img.h <= 150 && img.w <= 170 ? 2 : 1, Math.floor(Math.min(220 / img.h, 240 / img.w)));   // 4x images: one screen pixel per pixel (fits a phone)
-  cv.style.width = img.w * z + 'px'; cv.style.height = img.h * z + 'px';
+  cv.style.width = img.w * z + 'px'; cv.style.height = img.h * z + 'px'; cv.style.maxWidth = cv.style.imageRendering = '';   // (v7.7: as drawJpeg may leave them)
   const g = cv.getContext('2d'), id = g.createImageData(img.w, img.h);
   for (let k = 0; k < img.h * img.w; k++) {
     const r = k % img.h, c = Math.floor(k / img.h), o = 4 * (r * img.w + c);
@@ -3844,8 +3893,13 @@ function showTx() {
   $('drawTools').classList.toggle('hidden', msgMode !== 'draw');
   $('photoTools').classList.toggle('hidden', msgMode !== 'photo');
   $('picRow').classList.toggle('hidden', msgMode === 'draw');   // v7.1
-  $('jqRow').classList.toggle('hidden', msgMode === 'draw' || picFmt !== 'jpeg');
-  $('photoHint').innerHTML = picFmt === 'jpeg' ? `Scaled to at most ${80 * imgScale} pixels, in colour.` : `Scaled to at most <span id="photoMax">${64 * imgScale}</span> pixels and turned black and white.`;
+  $('jqRow').classList.toggle('hidden', msgMode === 'draw' || picFmt === 'bits');
+  // v7.7: 8x and 16x only for a photo's JPEG, "File as it is" only for a photo; the buttons pressed are the choices in force
+  const big = bigOk(); $('sizeSeg').classList.toggle('nobig', !big); $('picSeg').classList.toggle('nofile', msgMode !== 'photo');
+  $('sizeSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === (big ? imgScale : sc4()))));
+  $('picSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === (picFmt === 'file' && msgMode !== 'photo' ? 'jpeg' : picFmt))));
+  $('photoHint').innerHTML = picFmt === 'file' ? `Sent as it is, in any picture format, if it holds at most ${Math.floor(JPEG_MAX / 1024)} KB; a bigger file goes as a JPEG of at most ${80 * imgScale} pixels.`
+    : picFmt === 'jpeg' ? `Scaled to at most ${80 * imgScale} pixels, in colour.` : `Scaled to at most <span id="photoMax">${64 * sc4()}</span> pixels and turned black and white.`;
   const m = currentMsg(); if (m.type === 'image') drawPixels($('txCanvas'), m); else if (m.type === 'jpeg') drawJpeg($('txCanvas'), m.file);
   txInfo();
 }
@@ -3860,13 +3914,29 @@ function txRateLine(f) {   // v7: the information rate, the message part's bit r
   el.innerHTML = `<span class="muted">Information rate</span> <b>${fmtRate(air * f.n0 / (f.nc || f.n0))}</b> <span class="muted">= ${fmtRate(air)} on the air × ${how}</span>`
     + ` <span class="muted whole">Over the whole ${T.toFixed(1)} s of sound, control part included: ${f.n0} message bits, ${fmtRate(f.n0 / T)}</span>`;
 }
+// v7.7: the frame of a picture file, kept until the file or the settings change (one of 1280 pixels takes a second to build)
+let fileFrame = null;
+function txFrame(m = currentMsg()) {
+  if (m.type !== 'jpeg') return buildFrame(m, cfg);
+  const k = JSON.stringify(cfg);
+  if (!fileFrame || fileFrame.file !== m.file || fileFrame.k !== k) { lastHb = null; fileFrame = { file: m.file, k, f: buildFrame(m, cfg) }; fileFrame.hb = lastHb; }
+  else if (fileFrame.f.sc) scSetBand(fileFrame.f.wide);   // as buildFrame leaves it
+  lastHb = fileFrame.hb; return fileFrame.f;
+}
+function fileDesc(m) {   // v7.7: the picture file sent, in words
+  if (m.asIs) { const k = fileKind(m.file).name; return `${k ? k + ' file' : 'File (format unknown)'} of ${m.file.length} bytes, as it is, + CRC-32`; }
+  const jpg = `JPEG file of ${m.file.length} bytes (quality ${photoImg && msgMode === 'photo' ? photoJpg.q : jpegQ}) + CRC-32`;
+  if (picFmt !== 'file' || msgMode !== 'photo' || !photoRaw) return jpg;
+  return `The file holds ${Math.round(photoRaw.length / 1024)} KB, more than a frame carries (${Math.floor(JPEG_MAX / 1024)} KB): ${photoImg ? `sent as a ${jpg}` : `this browser cannot open it to make it smaller, so the demo image goes, as a ${jpg}`}`;
+}
 function txInfo() {
-  const f = buildFrame(currentMsg(), cfg);
+  const msg = currentMsg(), f = txFrame(msg);
   txRateLine(f);
   if (f.sound) { $('txInfo').textContent = `Room sounding · MLS of ${f.sound.N} samples (${(f.sound.N / FS_TX).toFixed(2)} s) played ${f.sound.periods + 1} times, the first to fill the room · preamble and header ${cfg.tones === 'hop' ? 'hopping' : 'at 4 / 8 kHz'} · ${(f.dur + 0.4).toFixed(1)} s of sound`; return; }
-  const desc = msgMode === 'text' ? `${textCodes($('txtIn').value).length} characters` : (() => { const m = currentMsg(); return m.type === 'jpeg' ? `JPEG file of ${m.file.length} bytes (quality ${photoImg && msgMode === 'photo' ? photoJpg.q : jpegQ}) + CRC-32` : `${m.w}×${m.h} image`; })();
+  const desc = msgMode === 'text' ? `${textCodes($('txtIn').value).length} characters` : msg.type === 'jpeg' ? fileDesc(msg) : `${msg.w}×${msg.h} image`;
   const coded = cfg.code === 'none' ? '' : ` → ${f.nc} coded bits`;
-  const long = f.dur + 0.4 > 150 ? ' · Too long: the receivers record at most 160 s, so choose a higher rate or a smaller message.' : '';
+  const long = f.dur + 0.4 > 150 ? ' · Too long: the receivers record at most 160 s, so choose a higher rate or a smaller message.'
+    : msg.type === 'jpeg' && f.dur > 10 ? ' · A long frame: receivers may take 2 s per second of sound to decode it, more if the room makes them try again.' : '';   // v7.7
   if (f.sc) {
     const nb = scLayout(f.ns, f.train).segs.length + 1;
     $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, single carrier${f.wide ? ', wide band (2.3 to 20.5 kHz)' : ''}: ${f.ns} ${OFDM_NAMES[f.map]} symbols at ${Math.round(scBand(f.train).rs)} symbols/s, ${nb} ${scTrainName(f.train)} training blocks of ${f.train} symbols (every ${+(scBand(f.train).d / scBand(f.train).rs).toFixed(2)} s; echoes up to ${scEcho(f.train)} ms) = ${(scRate(f.map, f.train) / 1000).toFixed(1)} kbit/s before the code` + ctlInfo(f) + long;
@@ -3905,8 +3975,8 @@ function resizePad(s) {   // keeps the drawing on the new grid: a new cell is bl
       for (let rr = Math.floor(r * pad.h / h); rr < Math.ceil((r + 1) * pad.h / h); rr++) p[c * h + r] &= pad.pixels[cc * pad.h + rr];
   Object.assign(pad, { h, w, pixels: p });
 }
-const sizeLabels = () => { $('padDim').textContent = `${pad.w}×${pad.h}`; if ($('photoMax')) $('photoMax').textContent = 64 * imgScale; };
-seg($('sizeSeg'), imgScale, v => { imgScale = +v; resizePad(imgScale); if (photoImg) photo = photoPixels(photoImg); sizeLabels(); syncUrl(); showTx(); });
+const sizeLabels = () => { $('padDim').textContent = `${pad.w}×${pad.h}`; if ($('photoMax')) $('photoMax').textContent = 64 * sc4(); };
+seg($('sizeSeg'), imgScale, v => { imgScale = +v; if (pad.w !== 32 * sc4()) resizePad(sc4()); if (photoImg) photo = photoPixels(photoImg); sizeLabels(); syncUrl(); showTx(); });
 seg($('picSeg'), picFmt, v => { picFmt = v; syncUrl(); showTx(); });   // v7.1
 seg($('jqSeg'), jpegQ, v => { jpegQ = +v; syncUrl(); showTx(); });
 sizeLabels();
@@ -3925,7 +3995,7 @@ $('txCanvas').addEventListener('pointerdown', e => { if (msgMode !== 'draw') ret
 $('txCanvas').addEventListener('pointermove', e => { if (painting) padPaint(e); });
 $('txCanvas').addEventListener('pointerup', () => { painting = false; lastCell = null; txInfo(); });
 function photoPixels(im) {   // scaled to at most 64 pixels (128 when large), black or white around the mean brightness
-  const s = 64 * imgScale / Math.max(im.width, im.height), w = Math.max(1, Math.round(im.width * s)), h = Math.max(1, Math.round(im.height * s));
+  const s = 64 * sc4() / Math.max(im.width, im.height), w = Math.max(1, Math.round(im.width * s)), h = Math.max(1, Math.round(im.height * s));
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.drawImage(im, 0, 0, w, h);
   const d = g.getImageData(0, 0, w, h).data, lum = new Float32Array(w * h); let mean = 0;
   for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) { const o = 4 * (r * w + c), L = 0.299 * d[o] + 0.587 * d[o + 1] + 0.114 * d[o + 2]; lum[c * h + r] = L; mean += L; }
@@ -3933,40 +4003,71 @@ function photoPixels(im) {   // scaled to at most 64 pixels (128 when large), bl
 }
 $('photoIn').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
+  photoRaw = null; f.arrayBuffer().then(b => { photoRaw = new Uint8Array(b); showTx(); });   // v7.7: the file's own bytes
   const im = new Image();
   im.onload = () => { photoImg = im; photo = photoPixels(im); showTx(); };
+  im.onerror = () => { photoImg = photo = null; showTx(); };   // v7.7: a format this browser cannot open (it can still go as it is)
   im.src = URL.createObjectURL(f);
 };
 let playing = null;
-// Each Send uses a fresh AudioContext, closed shortly after playback ends. A long-lived context can end up
-// suspended or "interrupted" (sleep, idle, output device change) and then plays silence.
-$('sendBtn').onclick = async () => {
+// v7.7: two ways to play a frame. Web Audio: a fresh AudioContext for each Send, closed shortly after playback ends (a
+// long-lived one can end up suspended or "interrupted" after sleep, idle or a change of output device, and then plays
+// silence). Or an audio element playing the frame as a WAV file. Safari on a Mac, and every browser on an iPhone or iPad
+// (all of them Apple's WebKit), start with the element: there, Web Audio is silenced by an iPhone's ring/silent switch,
+// and it has stayed silent in Safari on a Mac until another program played a sound. Other browsers start with Web Audio.
+// Both are made ready in the click (the moment browsers let a page start sound); if the clock of the first does not move
+// within 1.5 s, the other takes over. The address can choose one: out=element or out=webaudio.
+const APPLE = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Safari\//.test(navigator.userAgent) && !/Chrom|Edg|OPR|Firefox|Android/.test(navigator.userAgent));
+const OUT_WAYS = { element: ['element'], webaudio: ['webaudio'] }[params.get('out')] || (APPLE ? ['element', 'webaudio'] : ['webaudio', 'element']);
+$('sendBtn').onclick = () => {
   if (playing) { playing.stop(); return; }
-  const a = new (window.AudioContext || window.webkitAudioContext)();
-  try { await a.resume(); } catch (e) {}
-  lastHb = null; const x = modulate(buildFrame(currentMsg(), cfg)), teleHdr = lastHb && parseHeader(lastHb);
-  const buf = a.createBuffer(1, x.length, FS_TX); buf.copyToChannel(x, 0);
-  const src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination);
-  const dur = x.length / FS_TX; let t0 = a.currentTime;
-  playing = src; $('sendBtn').textContent = '■ Stop'; $('txStatus').textContent = `Sending ${dur.toFixed(1)} s… turn the volume up.`;
-  const tick = () => { if (playing !== src) return; $('txProg').style.width = Math.min(100, 100 * (a.currentTime - t0) / dur) + '%'; requestAnimationFrame(tick); };
+  const a = new (window.AudioContext || window.webkitAudioContext)(); a.resume().catch(() => {});
+  lastHb = null; const x = modulate(txFrame()), teleHdr = lastHb && parseHeader(lastHb), dur = x.length / FS_TX;
+  let way = null, el = null, url = null, src = null, t0 = 0;
+  const p = { stop: () => finish('Stopped.') }, pos = () => way === 'element' ? el.currentTime : way === 'webaudio' ? a.currentTime - t0 : 0;
+  const halt = () => {   // silences the way in use
+    if (el) { el.onended = null; el.pause(); }
+    if (src) { src.onended = null; try { src.stop(); } catch (e) {} src = null; }
+  };
   const finish = msg => {
-    if (playing !== src) return;
-    playing = null; $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = msg;
+    if (playing !== p) return;
+    playing = null; halt(); $('sendBtn').textContent = '▶ Send'; $('txProg').style.width = '0'; $('txStatus').textContent = msg;
     // The speaker may still be playing the end of the buffer (output latency, up to a few tenths of a second with
     // Bluetooth): closing the context now would cut it off, and the postamble with it. So wait before closing.
-    setTimeout(() => a.close().catch(() => {}), 2000 + 1000 * ((a.outputLatency || 0) + (a.baseLatency || 0)));
+    setTimeout(() => { a.close().catch(() => {}); if (url) URL.revokeObjectURL(url); }, 2000 + 1000 * ((a.outputLatency || 0) + (a.baseLatency || 0)));
   };
-  src.onended = () => finish('Sent.');
-  src.start(); t0 = a.currentTime; tick();
+  const next = k => {   // way k gave no sound: the next one, or say so instead of hanging on "Stop"
+    halt();
+    if (k + 1 >= OUT_WAYS.length) { finish('The browser played no sound. Check the output device, or play a sound in another app, then click Send again.'); return; }
+    start(k + 1); $('txStatus').textContent = `Sending ${dur.toFixed(1)} s (no sound the first way, so through ${OUT_WAYS[k + 1] === 'element' ? 'an audio element' : 'Web Audio'})… turn the volume up.`;
+  };
+  const start = k => {
+    way = OUT_WAYS[k];
+    if (way === 'element') {
+      if (!el) { url = URL.createObjectURL(wavBlob(x, FS_TX)); el = new Audio(url); }
+      el.onended = () => finish('Sent.');
+      let r; try { r = el.play(); } catch (e) { r = Promise.reject(e); }
+      if (r && r.catch) r.catch(() => { if (playing === p && way === 'element') next(k); });
+    } else {
+      const buf = a.createBuffer(1, x.length, FS_TX); buf.copyToChannel(x, 0);
+      src = a.createBufferSource(); src.buffer = buf; src.connect(a.destination); src.onended = () => finish('Sent.');
+      src.start(); t0 = a.currentTime;
+    }
+    setTimeout(() => {   // if the clock does not move, this way plays nothing
+      if (playing !== p || way !== OUT_WAYS[k]) return;
+      if (pos() < 0.1) next(k); else if (way === 'element') a.close().catch(() => {});   // the element plays: no need for the AudioContext
+    }, 1500);
+  };
+  playing = p; $('sendBtn').textContent = '■ Stop'; $('txStatus').textContent = `Sending ${dur.toFixed(1)} s… turn the volume up.`;
+  start(0);
+  const tick = () => { if (playing !== p) return; $('txProg').style.width = Math.min(100, 100 * pos() / dur) + '%'; requestAnimationFrame(tick); };
+  tick();
   if (teleHdr) Tele.sent(frameWhat(teleHdr), teleHdr, dur);
-  // If the audio clock does not move, the browser is not playing anything: reset instead of hanging on "Stop".
-  setTimeout(() => { if (playing === src && a.currentTime - t0 < 0.1) finish('The browser gave no audio output. Click Send again.'); }, 1500);
 };
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 $('wavBtn').onclick = () => {
   const m = currentMsg();
-  download(wavBlob(modulate(buildFrame(m, cfg)), FS_TX), m.type === 'sound' ? `acoustic_sounding_mls${m.order}_x${m.periods}.wav` : `acoustic_${m.type}_${cfg.mod === 'sc' ? `sc_${cfg.map}_${cfg.train}${cfg.band === 'wide' ? '_wide' : ''}` : cfg.mod === 'ofdm' ? `ofdm_${cfg.map}_${cfg.guard}` : `${cfg.mod === 4 ? '4fsk_' : ''}${cfg.tones}_${cfg.rate}bps`}${(cfg.mod === 'sc' || cfg.mod === 'ofdm') && cfg.control === 'long' ? '_longctl' : ''}.wav`);
+  download(wavBlob(modulate(txFrame(m)), FS_TX), m.type === 'sound' ? `acoustic_sounding_mls${m.order}_x${m.periods}.wav` : `acoustic_${m.type}_${cfg.mod === 'sc' ? `sc_${cfg.map}_${cfg.train}${cfg.band === 'wide' ? '_wide' : ''}` : cfg.mod === 'ofdm' ? `ofdm_${cfg.map}_${cfg.guard}` : `${cfg.mod === 4 ? '4fsk_' : ''}${cfg.tones}_${cfg.rate}bps`}${(cfg.mod === 'sc' || cfg.mod === 'ofdm') && cfg.control === 'long' ? '_longctl' : ''}.wav`);
 };
 showTx();
 
@@ -3998,7 +4099,7 @@ function frameWhat(h) {   // the message and how it was sent, in words
   if (h.type === 'sound') return `Room sounding, ${h.periods} × ${(((1 << h.order) - 1) / FS_TX).toFixed(2)} s`;
   const how = h.sc ? `single carrier ${OFDM_NAMES[h.map]}${h.wide ? ', wide band' : ''}, ${scTrainName(h.train)} training` : h.ofdm ? `OFDM ${OFDM_NAMES[h.map]}, ${h.ofdm} guard`
     : `${h.M === 4 ? 4 : 2} tones, ${h.rate} bit/s${h.tones === 'hop' ? (h.rate === RATE_WIDE ? ', whole band' : ', hopping') : ''}`;
-  return `${h.type === 'text' ? `Text, ${h.len} characters` : h.type === 'jpeg' ? `JPEG, ${h.len} bytes` : `Image ${h.w}×${h.h}`} · ${how} · ${h.code === 'none' ? 'no code' : TURBO_R[h.code] ? `turbo ${CODE_INFO[h.code].rate}` : LDPC_R[h.code] ? `LDPC ${CODE_INFO[h.code].rate}` : POLAR_R[h.code] ? `polar ${CODE_INFO[h.code].rate}` : CODE_INFO[h.code].short}`;
+  return `${h.type === 'text' ? `Text, ${h.len} characters` : h.type === 'jpeg' ? `Picture file, ${h.len} bytes` : `Image ${h.w}×${h.h}`} · ${how} · ${h.code === 'none' ? 'no code' : TURBO_R[h.code] ? `turbo ${CODE_INFO[h.code].rate}` : LDPC_R[h.code] ? `LDPC ${CODE_INFO[h.code].rate}` : POLAR_R[h.code] ? `polar ${CODE_INFO[h.code].rate}` : CODE_INFO[h.code].short}`;
 }
 function frameSnr(res) {   // one figure for the row: the SNR the receiver measured
   try {
@@ -4050,13 +4151,13 @@ function makeRx() {
     onState: (s, info) => {
       if (s === 'detected') pill('Frame detected', 'live');
       if (s === 'detected') specDet = info.t;   // v7: where the frame starts, in seconds of the receiver's samples
-      if (s === 'header' && rxT0 !== null && specDet !== null) specMarks.push({ t: rxT0 + specDet, label: info.type === 'sound' ? 'room sounding' : info.type === 'jpeg' ? 'JPEG' : info.type });
+      if (s === 'header' && rxT0 !== null && specDet !== null) specMarks.push({ t: rxT0 + specDet, label: info.type === 'sound' ? 'room sounding' : info.type === 'jpeg' ? 'picture file' : info.type });
       if (s === 'header') {   // a new frame: a row of its own, and the display follows it
         const f = { id: ++frameId, time: new Date(), hdr: info, state: info.type === 'sound' ? 'measuring…' : 'receiving…', res: null };
         frames.unshift(f); frames.splice(LOG_MAX);
         live = shown = f; lastRec = null; clearOut(); showLog();
         fpill(f, info.type === 'sound' ? `Measuring the room · ${info.periods} × ${(((1 << info.order) - 1) / FS_TX).toFixed(2)} s`
-          : (info.type === 'text' ? `Receiving ${info.len} characters` : info.type === 'jpeg' ? `Receiving a JPEG file of ${info.len} bytes` : `Receiving ${info.w}×${info.h} image`) + (info.sc ? ` · single carrier ${OFDM_NAMES[info.map]}` : info.ofdm ? ` · OFDM ${OFDM_NAMES[info.map]}, ${info.ofdm} guard` : ` · ${info.rate} bit/s` + (info.M === 4 ? ' · 4 tones' : '') + (info.tones === 'hop' ? (info.rate === RATE_WIDE ? ' · whole band' : ' · hopping') : '')) + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`));
+          : (info.type === 'text' ? `Receiving ${info.len} characters` : info.type === 'jpeg' ? `Receiving a picture file of ${info.len} bytes` : `Receiving ${info.w}×${info.h} image`) + (info.sc ? ` · single carrier ${OFDM_NAMES[info.map]}` : info.ofdm ? ` · OFDM ${OFDM_NAMES[info.map]}, ${info.ofdm} guard` : ` · ${info.rate} bit/s` + (info.M === 4 ? ' · 4 tones' : '') + (info.tones === 'hop' ? (info.rate === RATE_WIDE ? ' · whole band' : ' · hopping') : '')) + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`));
       }
       if (s === 'decoding') {   // v5: the single carrier is decoded in the background, listening goes on
         const f = find(info); if (live === f) live = null;
@@ -4213,10 +4314,11 @@ function restartRx() { if (rx && actx) { makeRx(); clearOut(); } }
 function clearOut() { $('rxOutText').textContent = ''; $('rxFig').classList.add('hidden'); $('refFig').classList.add('hidden'); $('rxProg').style.width = '0'; $('stats').innerHTML = ''; $('hist').classList.add('hidden'); $('histLegend').classList.add('hidden'); $('recBtn').classList.add('hidden'); $('teleBtn').classList.add('hidden'); $('irBtn').classList.add('hidden'); $('sndOut').classList.add('hidden'); $('rxRawText').classList.add('hidden'); $('rawFig').classList.add('hidden'); $('ofdmOut').classList.add('hidden'); $('scOut').classList.add('hidden'); $('statsHelp').classList.add('hidden'); }
 const CAPS = { rx: 'received', raw: 'same channel errors, without the code', ref: 'sent (demo image)' };
 function showJpeg(id, file, crcOk) {   // v7.1: a received JPEG, read from each restart marker (see jpegResync); the link saves the file as it arrived
-  const cap = $(id + 'Fig').querySelector('figcaption'), u = URL.createObjectURL(new Blob([file], { type: 'image/jpeg' }));
-  cap.textContent = id === 'rx' ? (crcOk ? 'received file, intact (its CRC-32 holds)' : 'received file, corrupted (its CRC-32 fails), read from each restart marker') : CAPS[id];
-  cap.insertAdjacentHTML('beforeend', ` · <a href="${u}" download="${id === 'ref' ? 'sent' : id === 'raw' ? 'without_code' : 'received'}.jpg">save</a>`);
-  drawJpeg($(id + 'Canvas'), id === 'ref' ? file : jpegResync(file), cap.firstChild);
+  // (v7.7: or a file in another format, told by its first bytes, shown at most 640 pixels wide or high)
+  const k = fileKind(file), jpg = k.name === 'JPEG', cap = $(id + 'Fig').querySelector('figcaption'), u = URL.createObjectURL(new Blob([file], { type: k.mime }));
+  cap.textContent = id === 'rx' ? `received ${k.name ? k.name + ' ' : ''}file, ` + (crcOk ? 'intact (its CRC-32 holds)' : `corrupted (its CRC-32 fails)${jpg ? ', read from each restart marker' : ''}`) : CAPS[id];
+  cap.insertAdjacentHTML('beforeend', ` · <a href="${u}" download="${id === 'ref' ? 'sent' : id === 'raw' ? 'without_code' : 'received'}.${k.ext}">save</a>`);
+  drawJpeg($(id + 'Canvas'), id === 'ref' || !jpg ? file : jpegResync(file), cap.firstChild, 640);
   $(id + 'Fig').classList.remove('hidden');
 }
 function showOut(hdr, bits, done) {
@@ -4250,7 +4352,7 @@ function showStats(res) {
   else if (h.ofdm) st.push([`${(h.rate / 1000).toFixed(1)} kbit/s`, 'before the code', `${ofdmDesc(ofdmMode(h.ofdm), h.map)}; ${h.ns} data symbol${h.ns > 1 ? 's' : ''}; ${ctlDesc(res.NP)}. All read from the header.`]);
   else st.push([`${h.rate} bit/s`, h.M === 4 ? '4 tones' : '2 tones', `${h.M === 4 ? `2 bits per symbol, ${h.baud} symbols/s, ` : ''}${toneDesc(h.tones, h.rate, h.M)}; ${ctlDesc(res.NP)}. All read from the header.`]);
   if (h.code !== 'none' && h.nc) st.push([fmtRate(h.rate * h.n0 / h.nc), 'information rate', `${fmtRate(h.rate)} on the air × code rate ${CODE_INFO[h.code].rate}: ${h.n0} message bits in ${h.nc} coded bits`]);   // v7
-  if (h.type === 'jpeg') st.push([res.crcOk ? '✓ intact' : '✗ corrupted', 'the JPEG file', `its CRC-32, the 32 bits sent after the ${h.len} bytes of the file, ${res.crcOk ? 'holds: the file is almost surely right' : 'fails: some bits of the file are wrong'} (v7.1)`]);
+  if (h.type === 'jpeg') st.push([res.crcOk ? '✓ intact' : '✗ corrupted', 'the file', `its CRC-32, the 32 bits sent after the ${h.len} bytes of the file, ${res.crcOk ? 'holds: the file is almost surely right' : 'fails: some bits of the file are wrong'} (v7.1)`]);
   st.push([h.n0, 'message bits', '']);
   if (code !== 'none') {
     st.push([CODE_INFO[code].rate, 'code rate', CODE_INFO[code].name]);
@@ -4264,7 +4366,7 @@ function showStats(res) {
     const o = res.sc, dn = detName(o.det);
     st.push([`${o.snr.toFixed(1)} dB`, 'SNR of the symbols', `the median over the training blocks (${o.snrs.map(v => v.toFixed(1)).join(' / ')} dB), each with its own room: the noise, plus the echo beyond the ${o.taps} taps (${Math.round((o.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms after the first strong arrival) and the room's drift`]);
     st.push([o.taps, 'taps of the room', o.est === 'mmse' ? `by MMSE, the most the ${scTrainName(o.train)} training allows: each tap weighed by the room's power at its delay` : scBand(o.train).taps[o.train].length > 1 ? `the ${scTrainName(o.train)} training allows ${scBand(o.train).taps[o.train].join(' or ')}: the receiver keeps the one that fits better` : `what the ${scTrainName(o.train)} training allows`]);
-    if (o.relearn) st.push([res.codeword ? '✓ decoded' : '✗ failed', 'second try', `the ${o.npass} passes ended without a codeword, so the room was learned again from the whole frame, its data as the decoder's soft symbols: ${o.relearn.taps} taps (${Math.round((o.relearn.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms of echo) instead of ${o.taps}, SNR ${o.relearn.snr.toFixed(1)} dB; then ${o.relearn.passes} more pass${o.relearn.passes > 1 ? 'es' : ''} (v7.2)`]);
+    if (o.relearn) st.push([res.codeword ? '✓ decoded' : '✗ failed', 'second try', `the ${o.npass} passes ended without a codeword, so the room was learned again from the whole frame, its data as the decoder's soft symbols: ${o.relearn.taps} taps (${Math.round((o.relearn.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms of echo) instead of ${o.taps}${o.relearn.own ? `, ${o.relearn.own} of the ${o.nseg} data segments with their own correction of ${o.taps} taps (the room changed during the frame)` : ''}, SNR ${o.relearn.snr.toFixed(1)} dB; then ${o.relearn.passes} more pass${o.relearn.passes > 1 ? 'es' : ''} (v7.2${o.relearn.own ? ', v7.8' : ''})`]);
     st.push([o.passes, `pass${o.passes > 1 ? 'es' : ''}, ${dn} ↔ ${LDPC_R[code] ? 'LDPC' : POLAR_R[code] ? 'polar' : 'turbo'}`, `turbo equalization, at most ${o.npass} passes (${o.effort} effort)${SC_RELEARN_PASSES ? `, then up to ${SC_RELEARN_PASSES} more for the second try` : ''}; it stops once the decisions form a codeword. Coded bits in doubt after each pass: ${o.hist.join(' → ')}`]);
     st.push([`${o.sec.toFixed(1)} s`, 'to decode', `${dn}, ${o.effort} effort, in the background: listening went on`]);
     st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset', `time scale Rx vs Tx (clock offset, or a moving phone), from the ${o.nseg + 1} training blocks`]);
