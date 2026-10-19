@@ -9,7 +9,8 @@ files up to 255.5 KB, in any format (PNG, WebP, AVIF...), sent as they are. v7.8
 also corrects the room for each data segment, when the room changed during the frame. v7.9: 256QAM and 1024QAM
 single-carrier parts are sent 1 dB quieter (their clipping, not the room, set the ceiling of the data's SNR), and the
 detector counts an error 30 dB under the signal that the training cannot show. v7.10: SMAP's search stays inside
-the constellation, between each axis's outer levels.
+the constellation, between each axis's outer levels. v7.11: the single-carrier receiver follows the level of the
+sound through the frame (the speaker or the phone changes its gain during it).
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -2301,6 +2302,13 @@ SC_FLOOR = -30.0         # v7.9: an error this many dB under each segment's leve
                          # assumes (the clipping, the speaker: what the training blocks cannot show). On 51 decoded
                          # frames the soft bits were honest up to 25 dB but 2.5 to 3 times too sure at 30 to 35 dB; this
                          # floor predicts the best scale of each frame twice as well as a constant (None: no floor)
+SC_LEVEL = 0.2           # v7.11: the receiver follows the level of the part, its power after the matched filter smoothed
+                         # over this many seconds (sc_level). The sound arrived 2 to 2.4 dB louder in the first 0.33 s,
+                         # then eased by about 3 dB over a 3 s frame: a room learned on a training block no longer fits
+                         # the data after it (a gain 1 dB wrong alone keeps the SNR under 18 dB). Against v7.10, on 99
+                         # recorded frames: 67 decode instead of 66, none lost; 2 to 4 dB more noise on two 1024QAM
+                         # frames. None: v7.10
+SC_LEVEL_EDGE = 64       # v7.11: rows at each end of the part left out of the level (the room filling and emptying)
 SC_NA = 1280             # TA: the first block's own training, before its TC
 SC_NC = 1280             # TC, the training block, by default (medium)
 SC_TRAIN = {"short": 640, "medium": 1280, "long": 2560}   # TC: the sender's choice; like OFDM's guard, it sets the
@@ -2957,6 +2965,20 @@ def sc_mmse_first(xA, y1, nA, L):
     return c0, N0b, N0b + float(np.sum(p * f / (p + f)))
 
 
+def sc_level(mf, a, b):
+    """v7.11: the gain by which each sample of the matched filter's output mf is divided: the square root of its power,
+    averaged over SC_LEVEL seconds around it, relative to the median over the part (samples a .. b - 1, the part's own
+    signal; beyond, the nearest whole average is held). All ones if the part is shorter than the average."""
+    h = max(int(SC_LEVEL * SC_FS), 1) // 2
+    if b - a < 2 * h + 1:
+        return np.ones(len(mf))
+    cs = np.r_[0.0, np.cumsum(np.abs(mf[a:b]) ** 2)]
+    k = np.arange(b - a)
+    lo, hi = np.maximum(k - h, 0), np.minimum(k + h + 1, b - a)
+    sm = (cs[hi] - cs[lo]) / (hi - lo)
+    return np.sqrt(sm[np.clip(np.arange(len(mf)) - a, h, b - a - 1 - h)] / np.median(sm[h:b - a - h]))
+
+
 def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_NC, effort="fast", est="ls", swap=None):
     """The single-carrier part of a frame whose control part ends near sample t0 of the recording y.
     1. Timing: the first strong arrival of the first training block (its correlation with the waveform sent): the
@@ -2980,7 +3002,8 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     3. Down-conversion, matched filter, symbol-rate samples for each of the 5 sampling phases; the phase whose room
        (fitted on the first block) would carry the most, mean of log2(1 + |C(f)|^2 / N0), is kept: the 5 fits leave
        the same error to 0.1 dB, but the room folded at the symbol rate differs from phase to phase by 1 to 1.5 dB
-       for detection.
+       for detection. v7.11: the matched filter's output is first divided by its level (sc_level, SC_LEVEL), so that
+       a gain that changes during the frame (the speaker's or the phone's) no longer sets the rooms apart from the data.
     4. The room: 256, 512 or 1024 taps (SC_TAPS, as the TC of nt symbols allows) by least squares on the first
        block (rows that see no data), the noise from what they leave; with the long TC, 1024 taps if they leave
        less, their own error counted; each later block by ridge regression from the one before (rows that see TC
@@ -3139,6 +3162,8 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     z = sc_read(y, tpos)
     v = math.sqrt(2) * z * np.exp(-2j * np.pi * SC_FC / SC_FS * n)
     mf = np.convolve(v, SC_G)
+    if SC_LEVEL is not None:                               # v7.11: the level, from the part's own rows
+        mf = mf / sc_level(mf, 2 * SC_DLY + P5 * (SC_PRE + SC_LEVEL_EDGE), 2 * SC_DLY + P5 * (SC_PRE + ntot - SC_LEVEL_EDGE))
     phases = [mf[2 * SC_DLY + p::P5][:nrows] for p in range(P5)]
     good = np.ones(nrows)                                  # v5.1: 0 on the rows a gap smears (row r: sample 5 (r - 64) + 60)
     nr_ = P5 * (np.arange(nrows) - SC_PRE) + SC_DLY
