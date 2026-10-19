@@ -6,7 +6,9 @@ frame a second time when it fails, with a longer room (2048 taps, 213 ms) learne
 single carrier's wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (43% more than 3.2 to 16 kHz). v7.5: 1024QAM on
 the single carrier (10 bits per symbol), for phones close together in a quiet room. v7.6: LDPC rate 5/6. v7.7: picture
 files up to 255.5 KB, in any format (PNG, WebP, AVIF...), sent as they are. v7.8: the single carrier's second try
-also corrects the room for each data segment, when the room changed during the frame.
+also corrects the room for each data segment, when the room changed during the frame. v7.9: 256QAM and 1024QAM
+single-carrier parts are sent 1 dB quieter (their clipping, not the room, set the ceiling of the data's SNR), and the
+detector counts an error 30 dB under the signal that the training cannot show.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -2287,8 +2289,17 @@ SC_BANDS = {False: (9600, 5, 9600, 1), True: (96000 / 7, 7, 11400, 2)}   # v7.4:
                          # 16 to 20.5 kHz as clearly as the usual band (the phone's speaker 6 to 10 dB weaker there, the
                          # noise as much lower), its echo die out fastest, and 2.3 to 3.2 kHz 3 to 5 dB less clearly; the
                          # iPhone's microphone stops at 21 kHz
-SC_RMS = 0.45            # rms at the speaker, as OFDM's; the peaks above 0.9 are clipped (about 1 % of the samples
-                         # at 256QAM, the distortion about 35 dB below the symbols)
+SC_RMS = 0.45            # rms at the speaker, as OFDM's; the peaks above 0.9 are clipped (1.5 % of the samples; in the
+                         # band the distortion is 32 dB under the data, 47 dB under the training, whose peaks are low)
+SC_QUIET = {"256qam": -1.0, "1024qam": -1.0}   # v7.9: these mappings send their part this many dB quieter. The clipping
+                         # was the ceiling of the data's SNR (about 30 dB after the equalizer whatever the page showed, the
+                         # room refitted on the true symbols included); 1 dB quieter clips 0.4 % of the samples, 40 dB
+                         # under the data: in a quiet room (noise 35 to 40 dB down) the data gains 2.5 to 5 dB, at 20 dB
+                         # it loses 0.7 dB (so 16 and 64QAM, used in noisier rooms, keep the full level)
+SC_FLOOR = -30.0         # v7.9: an error this many dB under each segment's level is added to the noise the detector
+                         # assumes (the clipping, the speaker: what the training blocks cannot show). On 51 decoded
+                         # frames the soft bits were honest up to 25 dB but 2.5 to 3 times too sure at 30 to 35 dB; this
+                         # floor predicts the best scale of each frame twice as well as a constant (None: no floor)
 SC_NA = 1280             # TA: the first block's own training, before its TC
 SC_NC = 1280             # TC, the training block, by default (medium)
 SC_TRAIN = {"short": 640, "medium": 1280, "long": 2560}   # TC: the sender's choice; like OFDM's guard, it sets the
@@ -2447,7 +2458,7 @@ def sc_passband(x):
 def sc_part(bits, omap, nt=SC_NC):
     """The single-carrier part at 48 kHz: the silence, then the symbols (v7.4, the wide band: every other sample of
     SC_FS; the pulses leave nothing above 20.5 kHz to fold back)."""
-    p = sc_passband(sc_symbols(bits, omap, nt))[::SC_FS // FS_TX]
+    p = sc_passband(sc_symbols(bits, omap, nt))[::SC_FS // FS_TX] * 10 ** (SC_QUIET.get(omap, 0.0) / 20)   # v7.9
     return np.clip(np.r_[np.zeros(round(SC_GAP * FS_TX)), p], -0.9, 0.9)
 
 
@@ -2928,12 +2939,13 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
        only); over the data between two blocks, the two blended linearly row by row. With est 'mmse', the first
        block's room is instead the most taps the TC allows, by MMSE (sc_mmse_first).
     5. Each data segment's rows, the training's echoes removed; detector (soft SMAP or linear MMSE) on each segment,
+       its noise the mean of its two blocks' plus (v7.9) an error SC_FLOOR dB under its level,
        turbo decoder over the whole message, its beliefs back to the detector; stops once the decisions form a
        codeword or after the passes of the effort chosen (SC_EFFORT).
     6. v7.2, the second try: if the passes end without a codeword, one room of SC_RELEARN_TAPS taps for the whole part,
        by least squares over every row the recording holds, the data symbols as the decoder's soft symbols (the mean
        under its last beliefs); the noise of each segment from what it leaves there, less the soft symbols' variance,
-       the taps' degrees of freedom counted. Each segment then sees every other symbol removed (the other segments'
+       the taps' degrees of freedom counted (v7.9: plus SC_FLOOR, as in 5.). Each segment then sees every other symbol removed (the other segments'
        as soft symbols), and at most SC_RELEARN_PASSES more passes follow, the room learned again after each.
        v7.8, per segment: the room may change during a long frame, so for each data segment a correction of L taps
        is fitted on what the whole part's room leaves on the rows from the block before it to the end of the block
@@ -3146,6 +3158,9 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
         n0k.append(float(np.vdot(r, r).real / (nk - L) * (1 + L / nfit)))   # plus the taps' error, as the first block's
         snrs.append(float(10 * np.log10(np.vdot(ck, ck).real / n0k[-1])))
     N0s = [(n0k[j] + n0k[j + 1]) / 2 for j in range(len(segs))]
+    if SC_FLOOR is not None:                               # v7.9: plus the error floor, under the segment's level
+        N0s = [n + 10 ** (SC_FLOOR / 10) * (np.vdot(chs[j], chs[j]).real + np.vdot(chs[j + 1], chs[j + 1]).real) / 2
+               for j, n in enumerate(N0s)]
     # 5. each segment: rows S .. E + L - 2, the training's part removed; its two anchors blended
     obs, ops = [], []
     for j, (S, E) in enumerate(segs):
@@ -3216,7 +3231,8 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
                 obs.append(gw * (yy[S:E + L2 - 1] - SCConv([xo], [1.0], L2).fwd(cj)[S:E + L2 - 1]))
                 ops.append(SCConv([cj], [1.0], E - S) if gw.all() else SCMask(SCConv([cj], [1.0], E - S), gw))
                 e2 = float(np.sum(np.abs(rj[S:E + L2 - 1]) ** 2)) / max(float(gw.sum()), 1.0) * nw / max(nw - L2, nw / 4) * dof
-                N0s.append(max(e2 - float(np.vdot(cj, cj).real) * float(np.mean(vs[S:E])), 0.3 * e2))
+                N0s.append(max(e2 - float(np.vdot(cj, cj).real) * float(np.mean(vs[S:E])), 0.3 * e2)
+                           + (0.0 if SC_FLOOR is None else 10 ** (SC_FLOOR / 10) * float(np.vdot(cj, cj).real)))   # v7.9
             xs = [None] * len(segs)
             relearn = dict(taps=L2, snr=float(10 * np.log10(P2 / np.mean(N0s))), own=nseg_own)
     if relearn is not None:
