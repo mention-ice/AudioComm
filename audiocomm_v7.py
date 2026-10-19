@@ -8,7 +8,8 @@ the single carrier (10 bits per symbol), for phones close together in a quiet ro
 files up to 255.5 KB, in any format (PNG, WebP, AVIF...), sent as they are. v7.8: the single carrier's second try
 also corrects the room for each data segment, when the room changed during the frame. v7.9: 256QAM and 1024QAM
 single-carrier parts are sent 1 dB quieter (their clipping, not the room, set the ceiling of the data's SNR), and the
-detector counts an error 30 dB under the signal that the training cannot show.
+detector counts an error 30 dB under the signal that the training cannot show. v7.10: SMAP's search stays inside
+the constellation, between each axis's outer levels.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -2313,6 +2314,8 @@ SC_L, SC_PRE = 512, 64   # channel taps, of which SC_PRE before the first strong
 SC_FIELD = 2             # header: tone set 3, rate field 2 (OFDM uses 0 and 1, 6400 bit/s 3)
 SC_MAPS = ["qpsk", "16qam", "64qam", "256qam", "1024qam"]
 SC_WIDTH = {"qpsk": 0.25, "16qam": 0.25, "64qam": 0.4, "256qam": 1.0, "1024qam": 1.0}   # SMAP: prior width tau^2 / d^2 (d: spacing of the levels)
+SC_BOX = True            # v7.10: SMAP's search stays inside the constellation, each coordinate between its axis's outer levels
+                         # (against v7.9, on 94 recorded frames: the same 67 decode, 11 in one pass fewer; False: v7.9)
 SC_SLOT = {"1024qam": "8psk"}   # v7.5: the header mask a single-carrier mapping borrows (8PSK is never sent on the single
                          # carrier, and every older receiver rejects it there, so they ignore 1024QAM frames)
 SC_PASSES = 8            # turbo equalization: at most this many detector <-> decoder passes (full effort)
@@ -2564,6 +2567,42 @@ def lbfgs(fg, x, iters=150, mem=10, tol=1e-5):
     return x
 
 
+def lbfgs_box(fg, x, lo, hi, iters=150, mem=10, tol=1e-5):
+    """v7.10: L-BFGS kept inside [lo, hi] by projection: the coordinates on a wall that the gradient pushes outward
+    are left out of the step, and the line search runs along the clipped path."""
+    x = np.clip(x, lo, hi)
+    f, g = fg(x)
+    S, Y = [], []
+    for _ in range(iters):
+        free = ~(((x <= lo) & (g > 0)) | ((x >= hi) & (g < 0)))
+        q, al = g * free, []
+        for s, y in reversed(list(zip(S, Y))):
+            a = (s @ q) / (y @ s)
+            al.append(a)
+            q -= a * y
+        if S:
+            q *= (S[-1] @ Y[-1]) / (Y[-1] @ Y[-1])
+        for (s, y), a in zip(zip(S, Y), reversed(al)):
+            q += s * (a - (y @ q) / (y @ s))
+        d = -q * free
+        if g @ d >= 0:
+            d = -g * free
+        t = 1.0
+        while True:
+            xn = np.clip(x + t * d, lo, hi)
+            fn, gn = fg(xn)
+            if fn <= f + 1e-4 * (g @ (xn - x)) or t < 1e-10:
+                break
+            t *= 0.5
+        s, yv = xn - x, gn - g
+        if s @ yv > 1e-12:
+            S, Y = (S + [s])[-mem:], (Y + [yv])[-mem:]
+        x, f, g = xn, fn, gn
+        if np.linalg.norm(g * ~(((x <= lo) & (g > 0)) | ((x >= hi) & (g < 0)))) < tol * math.sqrt(len(x)):
+            break
+    return x
+
+
 def sc_fit(x, y, mask, L, c0, lam, it=100):
     """Taps c (L of them): least squares over the rows where mask = 1 of y ~ x * c, plus lam |c - c0|^2."""
     T = SCConv([x], [1.0], L)                 # x * c = c * x: the taps are the unknown "symbols"
@@ -2620,7 +2659,9 @@ def sc_smap(y, op, N0, omap, lprior, x0, iters=150):
     """Soft SMAP: minimizes |y - c * s|^2 / N0 - sum ln p(s), p a mixture of Gaussians of variance tau^2 around each
     axis's levels, weighted by the decoder's beliefs; then each coordinate's local Gaussian (the data's precision
     at the minimum, from the circulant approximation with the prior's mean curvature) gives the extrinsic LLRs.
-    Returns them and the minimum (the next pass starts there)."""
+    v7.10 (SC_BOX): the search stays between the outer levels of each axis; a coordinate that ends on that wall takes
+    where the data alone would put it from the data's own gradient there. Returns the LLRs and the minimum (the next
+    pass starts there)."""
     (pI, pQ), amp = sc_priors(lprior, omap)
     _, g, h = sc_axis(omap)
     n = op.n
@@ -2642,7 +2683,10 @@ def sc_smap(y, op, N0, omap, lprior, x0, iters=150):
         pv, mu, _ = prior(v)
         return np.vdot(r, r).real / (2 * sz2) + pv.sum(), np.r_[gr.real, gr.imag] + (v - mu) / tau2
 
-    x = lbfgs(fg, np.r_[x0.real, x0.imag], iters)
+    if SC_BOX:
+        x = lbfgs_box(fg, np.r_[x0.real, x0.imag], amp[0], amp[-1], iters)
+    else:
+        x = lbfgs(fg, np.r_[x0.real, x0.imag], iters)
     _, mu, var = prior(x)
     D = 1 / tau2 - var / tau2 ** 2                        # the prior's own curvature at the minimum
     lam = op.spectrum() / sz2
@@ -2651,6 +2695,10 @@ def sc_smap(y, op, N0, omap, lprior, x0, iters=150):
     qv = np.mean(1 / (lam + Db + delta))                  # every symbol's precision, ~2.4x from the second pass on)
     lamx = np.full(2 * n, max(1 / qv - Db - delta, 1e-3))   # the data's precision on each coordinate, the prior taken out
     mloc = x + (x - mu) / tau2 / lamx                     # where the data alone would put it
+    wall = (x <= amp[0]) | (x >= amp[-1]) if SC_BOX else np.zeros(2 * n, bool)
+    if wall.any():                                        # v7.10: on the wall the prior's pull no longer balances the data's
+        gr = op.adj(op.fwd(x[:n] + 1j * x[n:]) - y) / sz2
+        mloc[wall] = (x - np.r_[gr.real, gr.imag] / lamx)[wall]
     d2 = -(mloc[:, None] - amp[None, :]) ** 2 * lamx[:, None] / 2
     Lb = np.empty((2 * n, h))
     for k in range(h):

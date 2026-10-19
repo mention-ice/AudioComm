@@ -228,6 +228,7 @@ details .row{margin:8px 0}
     <p class="muted"><b>Second try (v7.2, v7.8).</b> A training block lets the receiver learn at most 1024 taps of the room (107 ms of echo); whatever echoes later counts as noise. In a living room at 2 to 4 m the echo after 107 ms was only 15 to 19 dB below the sound, which capped the SNR there. So when the passes end without a codeword, the receiver learns the room again from the whole frame (training and data, the data as the decoder's current guesses): 2048 taps (213 ms), then up to 4 more passes. On 34 such frames this decoded 29 instead of 14. One room for the whole frame cannot follow a room that changes during it, so since v7.8 each data segment may also correct it with taps of its own (as many as the training blocks learn), and keeps the correction only where it leaves at least 0.5 dB less: a 6.9 s class frame of 16 October, which the fast effort did not decode before, then decoded, and of 96 earlier frames none was lost and two more decoded. A phone that moves during the frame was not tried.</p>
 
     <p class="muted"><b>Quieter 256QAM and 1024QAM, and an error floor (v7.9).</b> The page clips the single carrier's rare peaks at 0.9 (1.5 % of the samples). In the band, what the clipping leaves is 32 dB under the data but 47 dB under the training blocks, whose peaks are low: so the SNR shown, measured on the training, could read 35 dB while the data never got past about 30 dB, even with the room learned again from the true symbols. Since v7.9, 256QAM and 1024QAM play their single-carrier part 1 dB quieter: 0.4 % of the samples are clipped, 40 dB under the data. In a quiet room (noise 35 to 40 dB down) the data gains 2.5 to 5 dB; in a room at 20 dB it loses 0.7 dB, which is why 16QAM and 64QAM, used in noisier rooms, keep the full level. The receiver also counts, on top of the noise the training shows, an error 30 dB under the signal: on 51 decoded frames the soft bits were honest up to 25 dB but 2.5 to 3 times too sure at 30 to 35 dB, and this floor accounts for it. Older receivers read the quieter frames.</p>
+    <p class="muted"><b>SMAP inside the constellation (v7.10).</b> SMAP looks for the symbols that best explain what the microphone heard, each one drawn towards the levels the decoder believes in. Nothing stopped that search from going beyond the outer levels, where no symbol is ever sent: noise could push an outer symbol out there, and the soft bits it gave were then too sure. Since v7.10 each coordinate stays between its axis's outer levels (a box, as in the code of the SMAP paper), and one that ends on that wall gives its soft bits from where the data alone would put it. On 94 recorded single-carrier frames it decoded the same 67 as v7.9, 11 of them in one pass fewer; with noise added, it stood 0.5 to 1 dB more noise on 13 of the 28 frames tried, and less on none. Only the receiver changed: the frames are the same, and the decoding takes as long.</p>
     <p class="muted"><b>Wide band (v7.4).</b> The single carrier can also send 13 714 symbols per second on a carrier at 11.4 kHz, which fills 2.3 to 20.5 kHz instead of 3.2 to 16 kHz: 43 % more bits per second. Room soundings in a reverberant room heard 16 to 20.5 kHz about as clearly as the usual band (the phone's speaker gives 6 to 10 dB less there, but the room's noise is as much lower, and the echo dies out fastest at high frequencies) and 2.3 to 3.2 kHz 3 to 5 dB less clearly; above 21 kHz the iPhone's microphone hears almost nothing. The training blocks have 10/7 as many symbols, so they last as long and let the receiver learn the same echoes. The pulses are made on a 96 kHz grid, 7 samples per symbol, and every other sample is played. The same loudness spread over a wider band gives each symbol about 1.5 dB less signal: in simulation through the rooms measured, it decoded wherever the usual band did up to 6 dB more noise than the room had, and failed more often beyond. LDPC or polar codes only. The header marks it as type 2 on the single carrier, which receivers older than v7.4 ignore.</p>
     <p class="muted"><b>1024QAM (v7.5).</b> The single carrier can put 10 bits on each symbol, 32 levels on each axis, instead of 256QAM's 8: 25 % more bits per second before the code. The levels are half as far apart, so it needs about 6 dB more signal than 256QAM at the same code rate; at the same information rate, 1024QAM with LDPC 2/3 carries 11 % more than 256QAM with LDPC 3/4 for about 3 dB more signal, and 1024QAM with LDPC 1/2 is no better than 256QAM with LDPC 2/3. Replaying the room and noise of one of the best recordings (phones close together and still, 29 dB on this page) with 1024QAM frames put LDPC 2/3 at the edge, and 3/4 needed about 2 dB more signal. Take it with LDPC 2/3, for phones close together in a quiet room. The header marks it with the mask of 8PSK, which the single carrier never used, so receivers older than v7.5 ignore it.</p>
     <p class="muted"><b>LDPC 5/6 (v7.6).</b> The highest rate: 5 message bits in every 6 sent, 11 % more than 3/4, for 1.5 to 2.5 dB more signal (in plain noise: 64QAM 15.5 dB with 3/4, 17 dB with 5/6; 256QAM 20 and 22.5 dB; 1024QAM 25 and 27.5 dB). 256QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 2/3 for a little less signal (22.5 against 22.9 dB in plain noise), and replaying the room and noise of one of the best recordings, it still decoded with the noise 2 dB louder than 1024QAM 2/3 could take: take it rather than 1024QAM 2/3. 64QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 1/2, for 1 dB less. 1024QAM with LDPC 5/6 failed in that replay even with the noise 8 dB quieter. It works with every modulation except OFDM with 64QAM or 256QAM: OFDM's own noise (its clipping, about 21 dB below the signal) leaves 64QAM 3 to 5 % of wrong bits on a short message even in a quiet room, more than 5/6 can correct, and 256QAM with 5/6 needs 22.5 dB. The header marks it as a text or an image with code 7, which receivers older than v7.6 ignore.</p>
@@ -2467,6 +2468,8 @@ const SC_L = 512, SC_PRE = 64;   // channel taps, of which SC_PRE before the fir
 const SC_FIELD = 2;           // header: tone set 3, rate field 2 (OFDM uses 0 and 1, 6400 bit/s 3)
 const SC_MAPS = ['qpsk', '16qam', '64qam', '256qam', '1024qam'];
 const SC_WIDTH = { qpsk: 0.25, '16qam': 0.25, '64qam': 0.4, '256qam': 1.0, '1024qam': 1.0 };   // SMAP: prior width tau^2 / d^2 (d: spacing of the levels)
+const SC_BOX = true;          // v7.10: SMAP's search stays inside the constellation, each coordinate between its axis's outer levels
+                              // (against v7.9, on 94 recorded frames: the same 67 decode, 11 in one pass fewer; false: v7.9)
 const SC_SLOT = { '1024qam': '8psk' };   // v7.5: the header mask a single-carrier mapping borrows (8PSK is never sent on the single
                                          // carrier, and every older receiver rejects it there, so they ignore 1024QAM frames)
 const SC_PASSES = 8;          // turbo equalization: at most this many detector <-> decoder passes (full effort)
@@ -2692,6 +2695,37 @@ function scLBFGS(fg, x, iters = 150, mem = 10, tol = 1e-5) {   // minimizes f (f
   }
   return x;
 }
+function scLBFGSBox(fg, x, lo, hi, iters = 150, mem = 10, tol = 1e-5) {   // v7.10: scLBFGS kept inside [lo, hi] by projection: the coordinates on a wall that
+  // the gradient pushes outward are left out of the step, and the line search runs along the clipped path
+  const n = x.length, dot = (a, b) => { let s = 0; for (let k = 0; k < n; k++) s += a[k] * b[k]; return s; };
+  const clip = v => Math.min(hi, Math.max(lo, v)), free = new Uint8Array(n);
+  const setFree = (x, g) => { for (let j = 0; j < n; j++) free[j] = (x[j] <= lo && g[j] > 0) || (x[j] >= hi && g[j] < 0) ? 0 : 1; };
+  x = Float64Array.from(x, v => clip(v));
+  let [f, g] = fg(x); const S = [], Y = [];
+  for (let it = 0; it < iters; it++) {
+    setFree(x, g);
+    const q = new Float64Array(n), al = []; for (let j = 0; j < n; j++) q[j] = free[j] ? g[j] : 0;
+    for (let k = S.length - 1; k >= 0; k--) { const a = dot(S[k], q) / dot(Y[k], S[k]); al.push(a); for (let j = 0; j < n; j++) q[j] -= a * Y[k][j]; }
+    if (S.length) { const l = S.length - 1, sc = dot(S[l], Y[l]) / dot(Y[l], Y[l]); for (let j = 0; j < n; j++) q[j] *= sc; }
+    for (let k = 0; k < S.length; k++) { const c = al[S.length - 1 - k] - dot(Y[k], q) / dot(Y[k], S[k]); for (let j = 0; j < n; j++) q[j] += c * S[k][j]; }
+    const d = new Float64Array(n); for (let j = 0; j < n; j++) d[j] = free[j] ? -q[j] : 0;
+    if (dot(g, d) >= 0) for (let j = 0; j < n; j++) d[j] = free[j] ? -g[j] : 0;
+    let t = 1, xn, fn, gn;
+    for (;;) {
+      xn = new Float64Array(n); let gs = 0;
+      for (let j = 0; j < n; j++) { xn[j] = clip(x[j] + t * d[j]); gs += g[j] * (xn[j] - x[j]); }
+      [fn, gn] = fg(xn);
+      if (fn <= f + 1e-4 * gs || t < 1e-10) break;
+      t *= 0.5;
+    }
+    const s = new Float64Array(n), yv = new Float64Array(n); for (let j = 0; j < n; j++) { s[j] = xn[j] - x[j]; yv[j] = gn[j] - g[j]; }
+    if (dot(s, yv) > 1e-12) { S.push(s); Y.push(yv); if (S.length > mem) { S.shift(); Y.shift(); } }
+    x = xn; f = fn; g = gn;
+    setFree(x, g); let pg = 0; for (let j = 0; j < n; j++) if (free[j]) pg += g[j] * g[j];
+    if (Math.sqrt(pg) < tol * Math.sqrt(n)) break;
+  }
+  return x;
+}
 function scFit(x, y, mask, L, c0, lam, it = 100) {   // taps c (L of them): least squares over the rows where mask = 1 of y ~ x * c, plus sum of lam_l |c_l - c0_l|^2 (lam: one number, or one per tap)
   const T = new SCConv([x], null, L), m = v => { for (let j = 0; j < v.r.length; j++) { v.r[j] *= mask[j]; v.i[j] *= mask[j]; } return v; };   // x * c = c * x: the taps are the unknown "symbols"
   const lw = typeof lam === 'number' ? new Float64Array(L).fill(lam) : lam;
@@ -2754,6 +2788,8 @@ function scSic(y, op, N0, ax, lprior) {   // linear MMSE with soft interference 
 // Soft SMAP: minimizes |y - c * s|^2 / N0 - sum ln p(s), p a mixture of Gaussians of variance tau^2 around each axis's
 // levels, weighted by the decoder's beliefs; then each coordinate's local Gaussian (the data's precision at the
 // minimum, from the circulant approximation with the prior's mean curvature) gives the extrinsic LLRs.
+// v7.10 (SC_BOX): the search stays between the outer levels of each axis; a coordinate that ends on that wall takes
+// where the data alone would put it from the data's own gradient there.
 // Returns them and the minimum (the next pass starts there).
 function scSmap(y, op, N0, ax, lprior, x0, iters = 150) {
   const n = op.n, { amp } = ax, nl = amp.length, P = scPriors(lprior, ax), lw = P.map(p => Math.log(Math.max(p, 1e-30)));
@@ -2777,7 +2813,7 @@ function scSmap(y, op, N0, ax, lprior, x0, iters = 150) {
     for (let j = 0; j < n; j++) { gv[j] = gr.r[j] / sz2 + (v[j] - mu[j]) / tau2; gv[n + j] = gr.i[j] / sz2 + (v[n + j] - mu[n + j]) / tau2; }
     return [f / (2 * sz2) + pv, gv];
   };
-  const x = scLBFGS(fg, scFlat(x0), iters);
+  const x = SC_BOX ? scLBFGSBox(fg, scFlat(x0), amp[0], amp[nl - 1], iters) : scLBFGS(fg, scFlat(x0), iters);
   prior(x);
   let Db = 0;
   for (let c = 0; c < 2 * n; c++) Db += (1 / tau2 - vr[c] / (tau2 * tau2)) / (2 * n);   // the prior's own curvature at the minimum, mean
@@ -2786,6 +2822,14 @@ function scSmap(y, op, N0, ax, lprior, x0, iters = 150) {
   // the lowest curvature (one symbol between two far levels raised every symbol's precision, ~2.4x from the second pass on)
   const lx = Math.max(1 / qv - Db - delta, 1e-3), mloc = new Float64Array(2 * n), lamx = new Float64Array(2 * n).fill(lx);   // the data's precision on each coordinate, the prior taken out
   for (let c = 0; c < 2 * n; c++) mloc[c] = x[c] + (x[c] - mu[c]) / tau2 / lx;   // where the data alone would put it
+  const onWall = c => SC_BOX && (x[c] <= amp[0] || x[c] >= amp[nl - 1]);
+  let walls = false; for (let c = 0; c < 2 * n && !walls; c++) walls = onWall(c);
+  if (walls) {   // v7.10: on the wall the prior's pull no longer balances the data's, so the data's own gradient there
+    const r = op.fwd({ r: x.subarray(0, n), i: x.subarray(n) });
+    for (let j = 0; j < op.nr; j++) { r.r[j] -= y.r[j]; r.i[j] -= y.i[j]; }
+    const gr = op.adj(r);
+    for (let c = 0; c < 2 * n; c++) if (onWall(c)) mloc[c] = x[c] - (c < n ? gr.r[c] : gr.i[c - n]) / sz2 / lx;
+  }
   return { llr: scAxisLLR(mloc, lamx, ax), x: { r: x.slice(0, n), i: x.slice(n) } };
 }
 function scBcjrApp(ls, la, lp, lq) {   // as bcjr, but the a-posteriori LLRs (ln P0/P1) of the input and of both parity bits at every step
