@@ -11,7 +11,11 @@ single-carrier parts are sent 1 dB quieter (their clipping, not the room, set th
 detector counts an error 30 dB under the signal that the training cannot show. v7.10: SMAP's search stays inside
 the constellation, between each axis's outer levels. v7.11: the single-carrier receiver follows the level of the
 sound through the frame (the speaker or the phone changes its gain during it). v7.12: the short control part is found
-from a lower threshold, so that frames far from the speaker in an echoing room are not missed.
+from a lower threshold, so that frames far from the speaker in an echoing room are not missed. v7.13: the single
+carrier learns the room's long echo (up to 2048 taps) from all its training blocks together, at the first pass.
+v7.14: the long echo's noise is counted right with short or medium training, and every single-carrier frame reports
+the SNR after the equalizer (what the detector sees) and the modes that SNR fits. v7.15: the long echo is used
+whenever enough training rows reach it, its noise as measured (v7.14 dropped it unless that noise was 1 dB lower).
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -2310,6 +2314,22 @@ SC_LEVEL = 0.2           # v7.11: the receiver follows the level of the part, it
                          # recorded frames: 67 decode instead of 66, none lost; 2 to 4 dB more noise on two 1024QAM
                          # frames. None: v7.10
 SC_LEVEL_EDGE = 64       # v7.11: rows at each end of the part left out of the level (the room filling and emptying)
+SC_TAIL = 3              # v7.13: rounds of the long echo's fit (sc_tail): the echo past each block's room, up to
+                         # SC_RELEARN_TAPS taps, learned from all the training blocks at once, the data's echo counted as
+                         # noise. Against v7.12 on 183 recorded frames: 2 more decode (64QAM far away in echoing rooms),
+                         # none lost; decodes that needed the second try 21 -> 10; 3 to 6 dB more noise on 4 of 27 frames,
+                         # none less. None: v7.12
+SC_TAIL_GATE = None      # v7.13, v7.14: 1.0, the tail used only if the noise it leaves on the training is this many dB lower;
+                         # v7.15: None, used whenever enough training rows reach it (the noise scaled as measured, never up)
+SC_TAIL_SHRINK = 128     # v7.13: each tap of the tail is shrunk by its error against its power, both over this many taps
+SC_NEED_RATES = ("1/4", "1/3", "1/2", "2/3", "3/4", "5/6")
+SC_NEED = {"qpsk": (-3.8, -2.3, 0.2, 2.3, 3.4, 4.6), "16qam": (0.6, 2.4, 5.3, 7.9, 9.3, 10.7),
+           "64qam": (3.7, 5.8, 9.4, 12.7, 14.4, 16.2), "256qam": (6.0, 8.7, 13.2, 17.2, 19.3, 21.3),
+           "1024qam": (8.1, 11.2, 16.7, 21.6, 24.0, 26.5)}   # v7.14: the SNR (dB) at which each Gray QAM's BICM mutual
+                         # information per coded bit equals each code rate, in plain noise: what a mode needs, the code's own
+                         # loss (about 1 dB for LDPC) aside
+SC_SPARE = 1.0           # v7.14: a mode fits if its need is this many dB under the SNR after the equalizer. Over 183 recorded
+                         # single-carrier frames, 78 of the 81 with 1 dB to spare decoded (with the training's SNR: 90 of 118)
 SC_NA = 1280             # TA: the first block's own training, before its TC
 SC_NC = 1280             # TC, the training block, by default (medium)
 SC_TRAIN = {"short": 640, "medium": 1280, "long": 2560}   # TC: the sender's choice; like OFDM's guard, it sets the
@@ -2980,6 +3000,68 @@ def sc_level(mf, a, b):
     return np.sqrt(sm[np.clip(np.arange(len(mf)) - a, h, b - a - 1 - h)] / np.median(sm[h:b - a - h]))
 
 
+def sc_fits(snr_eq):
+    """v7.14: for each mapping, the highest LDPC rate whose need (SC_NEED) is at least SC_SPARE dB under snr_eq (the SNR
+    after the equalizer), and the fastest of them (bits per symbol x rate): ([(map, rate), ...], (map, rate) or None)."""
+    fits = []
+    for mp, need in SC_NEED.items():
+        ok = [r for r, n in zip(SC_NEED_RATES, need) if n + SC_SPARE <= snr_eq]
+        if ok:
+            fits.append((mp, ok[-1]))
+    frac = lambda r: int(r.split("/")[0]) / int(r.split("/")[1])
+    return fits, (max(fits, key=lambda f: OFDM_BITS[f[0]] * frac(f[1])) if fits else None)
+
+
+def sc_tail(x, yy, wr, segs, chs, n0k, L, Lr):
+    """v7.13: the room's echo past its first L taps, up to Lr, learned from every training block at once (x: the part's
+    symbols, the data as 0; yy: its rows; wr: 1 on the rows the recording holds, but for gaps; chs, n0k: the blocks'
+    rooms and noises). Weighted least squares on the rows some training symbol reaches, SC_TAIL rounds: the data,
+    unknown, is left out, and its echo through the room found so far counts as noise on each row (row weight 1 / (noise
+    + that echo's power), the noise measured on the clean rows, where that echo is 10 dB under it); the first L taps
+    start from the blocks' mean room. The tail (taps L to Lr - 1) is then shrunk tap by tap by 1 - its error / its
+    power, both averaged over SC_TAIL_SHRINK taps (the error: the noise per tap, or the tail's own floor over its last
+    quarter if larger), so that a quiet room's noise is not taken for echo. Returns the tail (Lr taps, the first L zero)
+    and dict(used, taps, tail_db, noise_db, ratio): used if the noise left on the clean rows, the taps counted, is at
+    least SC_TAIL_GATE dB under the blocks' median noise (ratio: the one over the other). v7.14: those rows are among the
+    fitted ones, so their mean error goes to new rows x (N / (N - Lr))^2, N the clean rows (v7.13: 1 + Lr / max(N - Lr,
+    Lr), up to 14 dB too low with short or medium training, where N is under 2 Lr); no tail if N <= 1.2 Lr. v7.15:
+    used whatever that noise (SC_TAIL_GATE None): with the noise counted right, the 1 dB gate dropped tails that helped
+    (3 dB of added-noise margin lost on 2 of 27 recorded frames)."""
+    ntot, R = len(x), len(x) + Lr - 1
+    din = np.zeros(ntot)
+    for a, b in segs:
+        din[a:b] = 1
+    has = np.convolve((np.abs(x) > 0).astype(float), np.ones(Lr))[:R] > 0.5   # the rows some training symbol reaches
+    c = np.zeros(Lr, dtype=complex)
+    c[:L] = np.mean(chs, axis=0)
+    N0t, clean = float(min(n0k)) / 2, None
+    for _ in range(SC_TAIL):
+        v = np.convolve(din, np.abs(c) ** 2)[:R]           # the data's power reaching each row through c
+        ww = wr * has / (N0t + v)
+        ww = ww / ww.max()
+        c = sc_fit(x, yy[:R], ww, Lr, c, 1e-4 * float(np.sum(ww * np.abs(yy[:R]) ** 2) / np.sum(ww)), it=200)
+        clean = (v < 0.1 * N0t) & (wr > 0) & has
+        if clean.sum() > 100:
+            rr = yy[:R] - SCConv([x], [1.0], Lr).fwd(c)
+            N0t = float(np.mean(np.abs(rr[clean]) ** 2))
+    nclean = float(clean.sum())
+    tail = c.copy()
+    tail[:L] = 0
+    if SC_TAIL_SHRINK:
+        se = N0t / max(float(np.mean(ww[has])) * float(np.sum(np.abs(x) > 0)), 1.0)   # each tap's error: its rows ~ the training symbols
+        env = np.convolve(np.abs(tail) ** 2, np.ones(SC_TAIL_SHRINK) / SC_TAIL_SHRINK, mode="same")
+        se = max(se, float(np.median(env[Lr - Lr // 4:Lr - SC_TAIL_SHRINK // 2])))   # or the tail's own floor at its end
+        tail = tail * np.clip(1 - se / np.maximum(env, 1e-30), 0, 1)
+        c = np.r_[c[:L], tail[L:]]
+        rr = yy[:R] - SCConv([x], [1.0], Lr).fwd(c)
+        if clean.sum() > 100:
+            N0t = float(np.mean(np.abs(rr[clean]) ** 2))
+    ratio = min(1.0, N0t * (nclean / max(nclean - Lr, 1.0)) ** 2 / float(np.median(n0k)))
+    use = nclean > 1.2 * Lr and (SC_TAIL_GATE is None or 10 * np.log10(ratio) <= -SC_TAIL_GATE)
+    return tail, dict(used=bool(use), taps=Lr, tail_db=float(10 * np.log10(max(np.vdot(tail, tail).real, 1e-30) / np.vdot(c, c).real)),
+                      noise_db=float(10 * np.log10(ratio)), ratio=ratio)
+
+
 def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_NC, effort="fast", est="ls", swap=None):
     """The single-carrier part of a frame whose control part ends near sample t0 of the recording y.
     1. Timing: the first strong arrival of the first training block (its correlation with the waveform sent): the
@@ -3010,6 +3092,13 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
        less, their own error counted; each later block by ridge regression from the one before (rows that see TC
        only); over the data between two blocks, the two blended linearly row by row. With est 'mmse', the first
        block's room is instead the most taps the TC allows, by MMSE (sc_mmse_first).
+       v7.13: the echo past those taps, up to SC_RELEARN_TAPS, from all the blocks at once, the data's echo as noise
+       (sc_tail); if it lowers the noise on the training by SC_TAIL_GATE dB, every block's room takes it, and the
+       segments' noise drops as much. v7.15: whatever the drop, if enough training rows reach it (SC_TAIL_GATE None).
+       v7.14: the SNR after the equalizer, what the detector sees: per segment 1/mean_f(1/(1 + |C(f)|^2/N0)) - 1 (C the
+       mean of its two anchors' responses, N0 its noise as the detector takes it), combined over the segments as the
+       mean of log2(1 + SNR); and the modes it fits (sc_fits). Unlike the training's SNR, it counts the room's uneven
+       response and the echo it cannot learn.
     5. Each data segment's rows, the training's echoes removed; detector (soft SMAP or linear MMSE) on each segment,
        its noise the mean of its two blocks' plus (v7.9) an error SC_FLOOR dB under its level,
        turbo decoder over the whole message, its beliefs back to the detector; stops once the decisions form a
@@ -3235,16 +3324,36 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     if SC_FLOOR is not None:                               # v7.9: plus the error floor, under the segment's level
         N0s = [n + 10 ** (SC_FLOOR / 10) * (np.vdot(chs[j], chs[j]).real + np.vdot(chs[j + 1], chs[j + 1]).real) / 2
                for j, n in enumerate(N0s)]
-    # 5. each segment: rows S .. E + L - 2, the training's part removed; its two anchors blended
+    Ls, tail = L, None                                     # v7.13: the segments' rooms, L taps or Lr with the long tail
+    if SC_TAIL:
+        Lr = max(SC_RELEARN_TAPS, L)
+        ins = tpos < len(y) - 8                            # the rows the recording holds
+        wr = good[:ntot + Lr - 1] * ins[np.minimum(2 * SC_DLY + phase + P5 * np.arange(ntot + Lr - 1), len(ins) - 1)]
+        ct, tail = sc_tail(x, yy, wr, segs, chs, n0k, L, Lr)
+        if tail["used"]:
+            chs = [np.r_[cj, np.zeros(Lr - L)] + ct for cj in chs]
+            N0s = [(n0k[j] + n0k[j + 1]) / 2 * tail["ratio"] for j in range(len(segs))]
+            if SC_FLOOR is not None:
+                N0s = [n + 10 ** (SC_FLOOR / 10) * (np.vdot(chs[j], chs[j]).real + np.vdot(chs[j + 1], chs[j + 1]).real) / 2
+                       for j, n in enumerate(N0s)]
+            Ls = Lr
+    cap = 0.0                                              # v7.14: the SNR after the equalizer (4.)
+    for j, (S, E) in enumerate(segs):
+        Cf = (np.abs(np.fft.fft(chs[j], 4096)) ** 2 + np.abs(np.fft.fft(chs[j + 1], 4096)) ** 2) / 2
+        cap += (E - S) * np.log2(1 / np.mean(1 / (1 + Cf / N0s[j])))
+    snr_eq = float(10 * np.log10(max(2 ** (cap / sum(E - S for S, E in segs)) - 1, 1e-6)))
+    fits, fit_best = sc_fits(snr_eq)
+    # 5. each segment: rows S .. E + Ls - 2, the training's part removed; its two anchors blended
     obs, ops = [], []
     for j, (S, E) in enumerate(segs):
-        rows = np.arange(S, E + L - 1)
+        rows = np.arange(S, E + Ls - 1)
         wb = np.clip((rows - tk[j]) / (tk[j + 1] - tk[j]), 0, 1)
         w = [1 - wb, wb]
-        xk = x[S - L + 1:E + L - 1]
-        yk = sum(wi * SCConv([xk], [1.0], L).fwd(c)[L - 1:L - 1 + len(rows)] for wi, c in zip(w, chs[j:j + 2]))
-        gw = good[S:E + L - 1]
-        obs.append(gw * (yy[S:E + L - 1] - yk))
+        xk = np.r_[np.zeros(max(Ls - 1 - S, 0)), x[max(S - Ls + 1, 0):E + Ls - 1]]   # zeros past either end of the part
+        xk = np.r_[xk, np.zeros(E + 2 * Ls - 2 - S - len(xk))]
+        yk = sum(wi * SCConv([xk], [1.0], Ls).fwd(c)[Ls - 1:Ls - 1 + len(rows)] for wi, c in zip(w, chs[j:j + 2]))
+        gw = good[S:E + Ls - 1]
+        obs.append(gw * (yy[S:E + Ls - 1] - yk))
         ops.append(SCConv(chs[j:j + 2], w, E - S) if gw.all() else SCMask(SCConv(chs[j:j + 2], w, E - S), gw))
     erased = np.repeat(good[SC_PRE:SC_PRE + ntot] == 0, m)   # symbols whose first arrival is on a masked row
     key = prbs(ns * m)
@@ -3314,7 +3423,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     out = dict(bits=bits, passes=passes, codeword=bool(np.array_equal((dec > 0).astype(int), cw)),
                chan_errors=int(np.sum(first != (cw > 0))), snr=float(np.median(snrs)), snrs=snrs,
                ppm=ppm, bend=bend, phase=phase, change=change, taps=L, train=nt, effort=effort, est=est, nseg=len(segs), T0=T0,
-               gaps=[(ng / SC_FS, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist, relearn=relearn)
+               gaps=[(ng / SC_FS, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist, relearn=relearn, tail=tail, snr_eq=snr_eq, fits=fits, fit_best=fit_best)
     if gaps and not out["codeword"] and swap is None:     # v5.1: the other size, or the runner-up place, of the least sure gap
         o2 = sc_receive(y, fs, t0, omap, code, n0, nc, det, False, nt, effort, est, swap=max(unsure)[1])
         if o2["codeword"]:
@@ -3665,6 +3774,13 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                 print(f"  SNR {o['snr']:.1f} dB, the median of the training blocks ({' / '.join(f'{v:.1f}' for v in o['snrs'])} dB: each block's room, {o['taps']} taps, against what it leaves"
                       f"{', MMSE' if est == 'mmse' else ''}), "
                       f"room change at each later block {ch} dB, sampling phase {o['phase']}")
+                if o.get("tail") and o["tail"]["used"]:
+                    tl = o["tail"]
+                    print(f"  long echo (v7.13): {tl['taps']} taps from all the training blocks together, the tail past {o['taps']} taps "
+                          f"{-tl['tail_db']:.0f} dB under the room; the noise {-tl['noise_db']:.1f} dB lower")
+                fb = o.get("fit_best")
+                print(f"  SNR after the equalizer {o['snr_eq']:.1f} dB (v7.14: what the detector sees); with {SC_SPARE:.0f} dB to spare it fits "
+                      + (", ".join(f"{mp.upper()} LDPC {r}" for mp, r in o["fits"]) + f", fastest {fb[0].upper()} LDPC {fb[1]}" if fb else "no mode"))
                 print(f"  {'SMAP' if det == 'smap' else 'linear MMSE'} ({effort}) and the {'LDPC' if hdr['code'] in LDPC_R else 'polar' if hdr['code'] in POLAR_R else 'turbo'} decoder: {o['passes']} pass{'es' if o['passes'] > 1 else ''}, "
                       f"{'a codeword' if o['codeword'] else 'not a codeword (some bits are wrong)'}, {o['sec']:.1f} s"
                       + (f"; the clock wanders by {o['bend']:.1f} samples (samples lost or repeated?)" if o["bend"] > 1 else ""))
