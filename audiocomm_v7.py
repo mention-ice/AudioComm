@@ -10,7 +10,8 @@ also corrects the room for each data segment, when the room changed during the f
 single-carrier parts are sent 1 dB quieter (their clipping, not the room, set the ceiling of the data's SNR), and the
 detector counts an error 30 dB under the signal that the training cannot show. v7.10: SMAP's search stays inside
 the constellation, between each axis's outer levels. v7.11: the single-carrier receiver follows the level of the
-sound through the frame (the speaker or the phone changes its gain during it).
+sound through the frame (the speaker or the phone changes its gain during it). v7.12: the short control part is found
+from a lower threshold, so that frames far from the speaker in an echoing room are not missed.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -3372,7 +3373,11 @@ def pilot_correlation(d, Lr, P):
 # because it plays 3 dB quieter: rms 0.45 like OFDM, against FSK's 0.64), still 17 dB more than 16QAM needs there.
 C6_N, C6_CP, C6_REP, C6_ILV = 2048, 1024, 3, 37
 C6_LEN = C6_REP * C6_N + C6_CP + C6_N            # 9216 samples, 0.192 s
-C6_THR, C6_BAL = 0.02, 0.5                       # detection: rho above C6_THR and bal above C6_BAL (see c6_detect)
+C6_THR, C6_BAL = 0.015, 0.5                      # detection: rho above C6_THR and bal above C6_BAL (see c6_detect)
+# v7.12: C6_THR 0.015 (0.02 before). Far from the speaker in echoing rooms the strongest path held only 1.6 to 2 % of a
+# frame's energy: 7 control parts missed over Sheng's recordings, all found at 0.015 and at the same place; elsewhere rho
+# reached at most 0.016 (while the phone was moved, no header read there), and a false detection only costs a header
+# that fails its CRC-8.
 C6_K = ofdm_carriers(C6_N)
 C6_PH = -ofdm_reference(len(C6_K))
 
@@ -3400,8 +3405,9 @@ def c6_detect(y):
     """y at 48 kHz. rho[n], for P starting at sample n: the energy that the matched filter of one period collects at n,
     n + N and n + 2N, over that of P and over 3 times the in-band energy of the loudest of the three periods. It is the
     share of the energy that a single path explains: 1 for P alone at any level, about 1/1100 for noise, and in a room
-    the share of its strongest path (0.05 in Impasse Carnot, 0.17 to 0.35 in Rue Joliot Curie); 0.013 at most over
-    Sheng's recordings of v5 frames. A burst followed by silence gets no credit for the silence. bal[n] = c c' /
+    the share of its strongest path (0.05 in Impasse Carnot, 0.17 to 0.35 in Rue Joliot Curie, 0.016 to 0.02 far from
+    the speaker); 0.013 at most over Sheng's recordings of v5 frames, 0.016 over all of them (v7.12). A burst
+    followed by silence gets no credit for the silence. bal[n] = c c' /
     mean(c^2, c'^2), c and c' the matched filter at n + N and n + 2N: 1 for P (the same room for both periods), random
     for noise."""
     if len(y) < C6_LEN:
