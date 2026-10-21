@@ -16,6 +16,8 @@ carrier learns the room's long echo (up to 2048 taps) from all its training bloc
 v7.14: the long echo's noise is counted right with short or medium training, and every single-carrier frame reports
 the SNR after the equalizer (what the detector sees) and the modes that SNR fits. v7.15: the long echo is used
 whenever enough training rows reach it, its noise as measured (v7.14 dropped it unless that noise was 1 dB lower).
+v7.16: the modes a single-carrier frame fits come from a stricter table, what one LDPC decode needs (the mutual
+information per coded bit 0.06 above the code rate), with 0.5 dB to spare.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -2323,13 +2325,15 @@ SC_TAIL_GATE = None      # v7.13, v7.14: 1.0, the tail used only if the noise it
                          # v7.15: None, used whenever enough training rows reach it (the noise scaled as measured, never up)
 SC_TAIL_SHRINK = 128     # v7.13: each tap of the tail is shrunk by its error against its power, both over this many taps
 SC_NEED_RATES = ("1/4", "1/3", "1/2", "2/3", "3/4", "5/6")
-SC_NEED = {"qpsk": (-3.8, -2.3, 0.2, 2.3, 3.4, 4.6), "16qam": (0.6, 2.4, 5.3, 7.9, 9.3, 10.7),
-           "64qam": (3.7, 5.8, 9.4, 12.7, 14.4, 16.2), "256qam": (6.0, 8.7, 13.2, 17.2, 19.3, 21.3),
-           "1024qam": (8.1, 11.2, 16.7, 21.6, 24.0, 26.5)}   # v7.14: the SNR (dB) at which each Gray QAM's BICM mutual
-                         # information per coded bit equals each code rate, in plain noise: what a mode needs, the code's own
-                         # loss (about 1 dB for LDPC) aside
-SC_SPARE = 1.0           # v7.14: a mode fits if its need is this many dB under the SNR after the equalizer. Over 183 recorded
-                         # single-carrier frames, 78 of the 81 with 1 dB to spare decoded (with the training's SNR: 90 of 118)
+SC_NEED = {"qpsk": (-2.8, -1.2, 1.0, 3.1, 4.2, 5.6), "16qam": (1.9, 3.5, 6.2, 8.9, 10.3, 11.9),
+           "64qam": (5.3, 7.2, 10.6, 13.9, 15.6, 17.5), "256qam": (8.0, 10.4, 14.7, 18.7, 20.7, 23.0),
+           "1024qam": (10.4, 13.3, 18.6, 23.4, 25.8, 28.4)}   # v7.16: the SNR (dB) at which each Gray QAM's BICM mutual
+                         # information per coded bit is 0.06 above each code rate, in plain noise: what one LDPC decode needed
+                         # on the classroom recordings (0.05 to 0.09 above). v7.14: equal to the rate (-3.8 ... 26.5), which left
+                         # out the code's own loss, 0.8 to 2.3 dB (the most for 256QAM and 1024QAM at 1/4 and 1/3)
+SC_SPARE = 0.5           # v7.16: a mode fits if its need is this many dB under the SNR after the equalizer (v7.14: 1.0, over the
+                         # older table). Of 183 recorded single-carrier frames, 70 of the 73 whose own mode fits decoded (3 turbo
+                         # frames failed); with v7.14's table and spare, 78 of 81
 SC_NA = 1280             # TA: the first block's own training, before its TC
 SC_NC = 1280             # TC, the training block, by default (medium)
 SC_TRAIN = {"short": 640, "medium": 1280, "long": 2560}   # TC: the sender's choice; like OFDM's guard, it sets the
@@ -3779,7 +3783,7 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                     print(f"  long echo (v7.13): {tl['taps']} taps from all the training blocks together, the tail past {o['taps']} taps "
                           f"{-tl['tail_db']:.0f} dB under the room; the noise {-tl['noise_db']:.1f} dB lower")
                 fb = o.get("fit_best")
-                print(f"  SNR after the equalizer {o['snr_eq']:.1f} dB (v7.14: what the detector sees); with {SC_SPARE:.0f} dB to spare it fits "
+                print(f"  SNR after the equalizer {o['snr_eq']:.1f} dB (v7.14: what the detector sees); with {SC_SPARE:g} dB to spare it fits "
                       + (", ".join(f"{mp.upper()} LDPC {r}" for mp, r in o["fits"]) + f", fastest {fb[0].upper()} LDPC {fb[1]}" if fb else "no mode"))
                 print(f"  {'SMAP' if det == 'smap' else 'linear MMSE'} ({effort}) and the {'LDPC' if hdr['code'] in LDPC_R else 'polar' if hdr['code'] in POLAR_R else 'turbo'} decoder: {o['passes']} pass{'es' if o['passes'] > 1 else ''}, "
                       f"{'a codeword' if o['codeword'] else 'not a codeword (some bits are wrong)'}, {o['sec']:.1f} s"
