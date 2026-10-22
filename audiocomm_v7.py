@@ -17,7 +17,11 @@ v7.14: the long echo's noise is counted right with short or medium training, and
 the SNR after the equalizer (what the detector sees) and the modes that SNR fits. v7.15: the long echo is used
 whenever enough training rows reach it, its noise as measured (v7.14 dropped it unless that noise was 1 dB lower).
 v7.16: the modes a single-carrier frame fits come from a stricter table, what one LDPC decode needs (the mutual
-information per coded bit 0.06 above the code rate), with 0.5 dB to spare.
+information per coded bit 0.06 above the code rate), with 0.5 dB to spare. v7.17: the single carrier reads a frame on
+a steady clock (the straight line through its training blocks' delays), and the SNR after the equalizer counts the
+room's bend between training blocks as noise, so a room that changes during the frame lists slower modes. v7.18: the
+single carrier learns the room again from the decoder's soft symbols after every pass from the first, not only in the
+second try once the usual passes have failed (the same passes at most).
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -2334,6 +2338,17 @@ SC_NEED = {"qpsk": (-2.8, -1.2, 1.0, 3.1, 4.2, 5.6), "16qam": (1.9, 3.5, 6.2, 8.
 SC_SPARE = 0.5           # v7.16: a mode fits if its need is this many dB under the SNR after the equalizer (v7.14: 1.0, over the
                          # older table). Of 183 recorded single-carrier frames, 70 of the 73 whose own mode fits decoded (3 turbo
                          # frames failed); with v7.14's table and spare, 78 of 81
+SC_STEADY = True         # v7.17: with more than 2 training blocks the part is read on a steady clock, the straight line that
+                         # best fits the blocks' delays; what departs from it stays in each block's room, which the blend of
+                         # two blocks follows. On 183 recorded frames 104 decode instead of 103, none lost; of the 7 frames of
+                         # the class of 21 Oct, whose delays jumped by up to 0.9 sample, 1 instead of 0. False: v7.16, the
+                         # blocks' own delays, the time map linear between blocks
+SC_BEND = 0.75           # v7.17: the SNR after the equalizer counts the room's bend between training blocks as noise
+                         # (sc_room_bend): a segment of T symbols misses SC_BEND x s2 x T / 6, s2 the spread per symbol seen at
+                         # its inner blocks (1 for a random walk; a straight change costs nothing, the blend follows it). With
+                         # the steady clock, of 183 recorded frames 69 of the 70 whose own mode fits decoded (without it 70 of
+                         # 72), of the 7 class frames 1 of 1 (without it 1 of 5); it costs the 84 classroom frames 0.02 dB
+                         # (median). 0.5: 69 of 70, 1 of 2; 1: 68 of 69, 0 of 0. None: v7.16
 SC_NA = 1280             # TA: the first block's own training, before its TC
 SC_NC = 1280             # TC, the training block, by default (medium)
 SC_TRAIN = {"short": 640, "medium": 1280, "long": 2560}   # TC: the sender's choice; like OFDM's guard, it sets the
@@ -2363,6 +2378,10 @@ SC_RELEARN_PASSES = 4    # v7.2: at most this many more passes, the room learned
 SC_RELEARN_GAIN = 0.5    # v7.8, the second try per segment: a data segment keeps its own correction of the room only
                          # if, its taps counted, it leaves this many dB less there (None: one room for the whole part,
                          # as in v7.2)
+SC_RELEARN_FROM = 1      # v7.18: the room is learned again, as in the second try, after every pass from this one on, within
+                         # the same passes at most (the effort's, then SC_RELEARN_PASSES more). 183 recorded frames: 108
+                         # decode instead of 104, none lost; those that decode either way need 1.45 passes instead of 2.04;
+                         # a frame that fails takes 1.3 times as long. None: only after the effort's passes (v7.2 to v7.17)
 SC_REL = 1.0             # ridge prior of a training block's room: the one before, give or take its own size (a weak
                          # pull; a tight one, -20 dB, cost 2 to 7 dB on our recordings when people moved)
 SC_MAX_PPM = 500         # clock offset plus a moving phone
@@ -3004,6 +3023,29 @@ def sc_level(mf, a, b):
     return np.sqrt(sm[np.clip(np.arange(len(mf)) - a, h, b - a - 1 - h)] / np.median(sm[h:b - a - h]))
 
 
+def sc_room_bend(chs, segs, n0k, L, nt):
+    """v7.17: the noise the room's bend between training blocks adds to each data segment, as the blend of its two blocks'
+    rooms sees it (SC_BEND). Block k sits at p_k, the middle of its last nt symbols. Each inner block's room against the
+    straight line in time through its neighbours', d = c_k - ((1 - w) c_(k-1) + w c_(k+1)), less the three blocks'
+    estimation noise (each block's noise times L/(nt - L + 1), its taps over the rows a later block is fitted on, weighed
+    as in d; a still room then shows no bend), gives the spread per symbol of a random walk through
+    them, s2 = |d|^2 (Ta + Tb) / (Ta Tb), Ta and Tb its distances to its neighbours. A segment of T symbols between
+    blocks j and j + 1 misses SC_BEND x s2 x T / 6 on average, s2 the mean of its inner blocks' (1/6 exactly for a random
+    walk); a straight change costs nothing, the blend follows it. With 2 blocks no bend can be seen: 0."""
+    if not SC_BEND or len(chs) < 3:
+        return [0.0] * len(segs)
+    p = [segs[0][0] - nt / 2] + [E + nt / 2 for S, E in segs]
+    est = [L / (nt - L + 1) * v for v in n0k]
+    s2 = {}
+    for k in range(1, len(chs) - 1):
+        Ta, Tb = p[k] - p[k - 1], p[k + 1] - p[k]
+        w = Ta / (Ta + Tb)
+        d = chs[k] - ((1 - w) * chs[k - 1] + w * chs[k + 1])
+        v = float(np.vdot(d, d).real) - (est[k] + (1 - w) ** 2 * est[k - 1] + w ** 2 * est[k + 1])
+        s2[k] = max(0.0, v) * (Ta + Tb) / (Ta * Tb)
+    return [SC_BEND * float(np.mean([s2[k] for k in (j, j + 1) if k in s2])) * (p[j + 1] - p[j]) / 6 for j in range(len(segs))]
+
+
 def sc_fits(snr_eq):
     """v7.14: for each mapping, the highest LDPC rate whose need (SC_NEED) is at least SC_SPARE dB under snr_eq (the SNR
     after the equalizer), and the fastest of them (bits per symbol x rate): ([(map, rate), ...], (map, rate) or None)."""
@@ -3073,6 +3115,8 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     2. Time scale: the clean stretch of each block's TC (rows that see no data) is the same waveform each time; the
        delay of each against the first (the peak of their band-limited cross-correlation, to 1/1000 of a sample)
        gives the time map, linear between blocks: clock offset, a moving phone. The part is read on that map.
+       v7.17 (SC_STEADY): with more than 2 blocks, the map is instead the straight line that best fits the delays, a
+       steady clock; what departs from it stays in the blocks' rooms (4.), which the blend of two blocks follows.
        v5.1: the delay is also searched SC_GAP_MAX samples farther; a block that agrees clearly better there marks
        samples lost or repeated by the microphone since the block before. Their number is the jump less the clock's
        share (the clock from the nearest interval without a jump, else from the first block alone, sc_clock0),
@@ -3102,7 +3146,8 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
        v7.14: the SNR after the equalizer, what the detector sees: per segment 1/mean_f(1/(1 + |C(f)|^2/N0)) - 1 (C the
        mean of its two anchors' responses, N0 its noise as the detector takes it), combined over the segments as the
        mean of log2(1 + SNR); and the modes it fits (sc_fits). Unlike the training's SNR, it counts the room's uneven
-       response and the echo it cannot learn.
+       response and the echo it cannot learn. v7.17: plus, as noise, the room's bend between training blocks, which the
+       blend of two blocks' rooms misses (sc_room_bend, SC_BEND).
     5. Each data segment's rows, the training's echoes removed; detector (soft SMAP or linear MMSE) on each segment,
        its noise the mean of its two blocks' plus (v7.9) an error SC_FLOOR dB under its level,
        turbo decoder over the whole message, its beliefs back to the detector; stops once the decisions form a
@@ -3115,7 +3160,10 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
        v7.8, per segment: the room may change during a long frame, so for each data segment a correction of L taps
        is fitted on what the whole part's room leaves on the rows from the block before it to the end of the block
        after it (soft symbols, the same ridge); the segment keeps it only if it leaves SC_RELEARN_GAIN dB less there,
-       its taps counted (sc_relearn_seg)."""
+       its taps counted (sc_relearn_seg).
+       v7.18: the room is learned again so after every pass from pass SC_RELEARN_FROM on, within the same passes at
+       most, not only once the effort's passes have failed: after one pass the decoder's soft symbols already know
+       most of the data, and the room they give lets the next pass see the echo the training blocks cannot reach."""
     import time as _time
     t_start = _time.time()
     m = OFDM_BITS[omap]
@@ -3234,6 +3282,10 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
             gaps.append(((tg - T0) / rho - dk[-1], sz / rho))
     # the clock alone: less the jumps each block's delay holds (those of the blocks that saw them, wherever they fell)
     dcl = dk - np.array([J0(mm) + sum(g[1] for g, b in zip(gaps[len(gaps0):], ks) if b <= i) for i, mm in enumerate(mk)])
+    lin = np.polyval(np.polyfit(mk, dcl, 1), mk) if len(mk) > 2 else dcl
+    bend = float(np.max(np.abs(dcl - lin)))                 # departure from a steady clock (samples)
+    if SC_STEADY:                                          # v7.17: the steady clock, the delays' best line
+        dcl = lin
 
     def D(n):
         n = np.asarray(n, dtype=float)
@@ -3247,8 +3299,6 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
             out = out + sz * (n >= ng)
         return out
     ppm = float((dcl[-1] - dcl[0]) / (mk[-1] - mk[0]) * 1e6) if len(mk) > 1 else 0.0
-    lin = np.polyval(np.polyfit(mk, dcl, 1), mk) if len(mk) > 2 else dcl
-    bend = float(np.max(np.abs(dcl - lin)))                 # departure from a steady clock (samples)
     # 3. symbol-rate samples, row i <-> symbol i - SC_PRE at its first strong arrival
     nrows = ntot + max(max(SC_TAPS[nt]), SC_RELEARN_TAPS) - 1   # v7.2: as far as the second try's room reaches
     n = -P5 * SC_PRE + np.arange(P5 * (nrows + 2 * SC_SPAN + 2))
@@ -3341,11 +3391,15 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
                 N0s = [n + 10 ** (SC_FLOOR / 10) * (np.vdot(chs[j], chs[j]).real + np.vdot(chs[j + 1], chs[j + 1]).real) / 2
                        for j, n in enumerate(N0s)]
             Ls = Lr
-    cap = 0.0                                              # v7.14: the SNR after the equalizer (4.)
+    bn = sc_room_bend(chs, segs, n0k, L, nt)               # v7.17: the room's bend, as noise
+    cap = cap0 = 0.0                                       # v7.14: the SNR after the equalizer (4.); cap0 without the bend
     for j, (S, E) in enumerate(segs):
         Cf = (np.abs(np.fft.fft(chs[j], 4096)) ** 2 + np.abs(np.fft.fft(chs[j + 1], 4096)) ** 2) / 2
-        cap += (E - S) * np.log2(1 / np.mean(1 / (1 + Cf / N0s[j])))
-    snr_eq = float(10 * np.log10(max(2 ** (cap / sum(E - S for S, E in segs)) - 1, 1e-6)))
+        cap += (E - S) * np.log2(1 / np.mean(1 / (1 + Cf / (N0s[j] + bn[j]))))
+        cap0 += (E - S) * np.log2(1 / np.mean(1 / (1 + Cf / N0s[j])))
+    nsym = sum(E - S for S, E in segs)
+    snr_eq = float(10 * np.log10(max(2 ** (cap / nsym) - 1, 1e-6)))
+    room_bend = float(10 * np.log10(max(2 ** (cap0 / nsym) - 1, 1e-6))) - snr_eq   # v7.17: the dB the bend costs
     fits, fit_best = sc_fits(snr_eq)
     # 5. each segment: rows S .. E + Ls - 2, the training's part removed; its two anchors blended
     obs, ops = [], []
@@ -3364,6 +3418,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     flip = np.where(key == 1, -1.0, 1.0)
     lprior, xs, first, passes, hist = np.zeros(ns * m), [None] * len(segs), None, 0, []
     cw, relearn = None, None
+    r0 = npass if SC_RELEARN_FROM is None else min(npass, SC_RELEARN_FROM)   # v7.18: the first pass after which the room is learned again
     for it in range(npass + SC_RELEARN_PASSES):
         ext, q = [], 0
         for j, (S, E) in enumerate(segs):
@@ -3389,7 +3444,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
             break
         e = np.clip(app - lin_, -20, 20)
         lprior = flip * np.r_[e, np.zeros(ns * m - nc)]
-        if npass <= it + 1 < npass + SC_RELEARN_PASSES:  # v7.2: the second try (6.)
+        if r0 <= it + 1 < npass + SC_RELEARN_PASSES:  # v7.2: the second try (6.); v7.18: from pass r0 on
             L2 = SC_RELEARN_TAPS
             xm, xv = sc_soft(flip * np.r_[np.clip(app, -30, 30), np.full(ns * m - nc, -30.0)], omap)
             xsoft, vs, q = x.copy(), np.zeros(ntot), 0
@@ -3423,11 +3478,11 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
             xs = [None] * len(segs)
             relearn = dict(taps=L2, snr=float(10 * np.log10(P2 / np.mean(N0s))), own=nseg_own)
     if relearn is not None:
-        relearn["passes"] = passes - npass
+        relearn["passes"], relearn["after"] = passes - r0, r0
     out = dict(bits=bits, passes=passes, codeword=bool(np.array_equal((dec > 0).astype(int), cw)),
                chan_errors=int(np.sum(first != (cw > 0))), snr=float(np.median(snrs)), snrs=snrs,
                ppm=ppm, bend=bend, phase=phase, change=change, taps=L, train=nt, effort=effort, est=est, nseg=len(segs), T0=T0,
-               gaps=[(ng / SC_FS, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist, relearn=relearn, tail=tail, snr_eq=snr_eq, fits=fits, fit_best=fit_best)
+               gaps=[(ng / SC_FS, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist, relearn=relearn, tail=tail, snr_eq=snr_eq, room_bend=room_bend, fits=fits, fit_best=fit_best)
     if gaps and not out["codeword"] and swap is None:     # v5.1: the other size, or the runner-up place, of the least sure gap
         o2 = sc_receive(y, fs, t0, omap, code, n0, nc, det, False, nt, effort, est, swap=max(unsure)[1])
         if o2["codeword"]:
@@ -3783,7 +3838,9 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                     print(f"  long echo (v7.13): {tl['taps']} taps from all the training blocks together, the tail past {o['taps']} taps "
                           f"{-tl['tail_db']:.0f} dB under the room; the noise {-tl['noise_db']:.1f} dB lower")
                 fb = o.get("fit_best")
-                print(f"  SNR after the equalizer {o['snr_eq']:.1f} dB (v7.14: what the detector sees); with {SC_SPARE:g} dB to spare it fits "
+                print(f"  SNR after the equalizer {o['snr_eq']:.1f} dB (v7.14: what the detector sees"
+                      + (f"; the room's bend between training blocks costs {o['room_bend']:.1f} dB, v7.17" if o["room_bend"] >= 0.05 else "")
+                      + f"); with {SC_SPARE:g} dB to spare it fits "
                       + (", ".join(f"{mp.upper()} LDPC {r}" for mp, r in o["fits"]) + f", fastest {fb[0].upper()} LDPC {fb[1]}" if fb else "no mode"))
                 print(f"  {'SMAP' if det == 'smap' else 'linear MMSE'} ({effort}) and the {'LDPC' if hdr['code'] in LDPC_R else 'polar' if hdr['code'] in POLAR_R else 'turbo'} decoder: {o['passes']} pass{'es' if o['passes'] > 1 else ''}, "
                       f"{'a codeword' if o['codeword'] else 'not a codeword (some bits are wrong)'}, {o['sec']:.1f} s"
@@ -3791,7 +3848,8 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                 if o.get("relearn"):
                     r2 = o["relearn"]
                     own = f", {r2['own']} of the {o['nseg']} data segments with their own correction" if r2.get("own") else ""
-                    print(f"  second try (v7.2{', v7.8' if r2.get('own') else ''}): the room learned again from the frame, {r2['taps']} taps{own} (SNR {r2['snr']:.1f} dB), "
+                    hd = "second try (v7.2" if r2.get("after", SC_EFFORT[effort][1]) >= SC_EFFORT[effort][1] else f"after pass {r2['after']} and each later one (v7.18"
+                    print(f"  {hd}{', v7.8' if r2.get('own') else ''}): the room learned again from the frame, {r2['taps']} taps{own} (SNR {r2['snr']:.1f} dB), "
                           f"{r2['passes']} more pass{'es' if r2['passes'] > 1 else ''}: {'a codeword' if o['codeword'] else 'still not a codeword'}")
                 for tg, sz in o["gaps"]:
                     print(f"  {abs(sz):.0f} samples {'lost' if sz < 0 else 'repeated'} by the microphone {tg:.2f} s into the part, "

@@ -235,6 +235,8 @@ details .row{margin:8px 0}
     <p class="muted"><b>An honest SNR (v7.14).</b> The SNR of the symbols is measured on the training blocks: each block's room against what it leaves. The detector sees less: a room whose response is uneven across the band loses part of the signal in an equalizer, and the echo the room cannot learn adds to the noise. On our 183 recorded single-carrier frames the SNR shown was 4.7 dB above what the detector saw (median, up to 8.6 dB), and the margin a frame needed over what its mode needs in plain noise was 9 dB apart from one room to another. Since v7.14 each single-carrier frame also shows the SNR after the equalizer, what an ideal linear equalizer would leave with the receiver's own rooms and noise, and the modes it fits: for each mapping the highest LDPC rate whose need in plain noise is at least 1 dB under it, and the fastest of those. Of the frames with 1 dB to spare, 78 of 81 decoded (with the training's SNR, 90 of 118); of those short of their need by more than 3 dB, 3 of 61. It is known before decoding, so a frame that failed still tells which mode would have worked there. v7.14 also corrects the noise v7.13 assumed after the long echo with short or medium training (2 to 14 dB too low), and waits a quarter of a second after a single-carrier frame, for its echo, before decoding it, as the script does with a recording: 101 of the 183 frames decode instead of 99, none lost. Only the receiver changed: the frames are the same.</p>
     <p class="muted"><b>The long echo, always (v7.15).</b> With its noise counted right, the long echo of v7.13 seldom lowered the noise on the training by the 1 dB v7.13 asked for, so v7.14 dropped it on most frames, and two recorded frames then stood 3 dB less added noise than with v7.13. Since v7.15 every single-carrier frame with enough training uses it, its noise as measured, never raised: of our 183 recorded frames 103 decode instead of 101, none lost, 7 in fewer passes, and with added noise every frame stands as much as with v7.13. The SNR after the equalizer stays what the detector sees. Decoding takes about 4 % longer. Only the receiver changed: the frames are the same.</p>
     <p class="muted"><b>A stricter need (v7.16).</b> The tile of the SNR after the equalizer lists the modes that SNR fits. v7.14 took each mode's need as the SNR at which the mapping's mutual information per coded bit equals the code rate; one LDPC decode needed 0.05 to 0.09 bit more on the classroom measurement recordings of 19 and 20 October, so each need is now taken at 0.06 above the rate: 0.8 to 2.3 dB more, the most for 256QAM and 1024QAM at rates 1/4 and 1/3, with 0.5 dB to spare instead of 1. Choosing one mode for a whole room from the weakest of six spots, in the band and training of the frame measured, the old table would have chosen 256QAM 1/4 or 1024QAM 1/4, which only 1 to 4 of the 6 spots decoded; the new one chose modes that every spot decoded. Of 183 recorded single-carrier frames, 70 of the 73 whose own mode fits decoded (78 of 81 with the old table; the 3 that failed are the same turbo frames). Only what the page shows changed: the frames and the decoding are the same.</p>
+    <p class="muted"><b>A steady clock and the room's bend (v7.17).</b> The single carrier measures the delay of each training block against the first; v7.16 read the frame on a time map linear between blocks, so a delay measured a little off bent the map. In the class of 21 October the delays jumped by up to 0.9 sample within frames. With more than 2 training blocks, the frame is now read on the straight line that best fits the delays, a steady clock, and what departs from it stays in each block's room. Of 183 recorded single-carrier frames, 104 decode instead of 103, none lost; of the 7 class frames, 1 instead of 0. The tile of the SNR after the equalizer now also counts the room's change during the frame, but only its bend: between two training blocks the detector blends their rooms along a straight line, so a room changing at a steady pace costs nothing. Each block's room against the straight line through its neighbours' rooms, less what their noise explains, gives the bend, counted as noise (three quarters of what a random walk would leave, SC_BEND); a still room shows none. In the class of 21 October the tile said 5 frames fit their own mode and none decoded; it now says 1, which decoded. Of 183 recorded frames, 69 of the 70 whose own mode fits decoded. Only the receiver changed: the frames are the same.</p>
+    <p class="muted"><b>The room learned again after every pass (v7.18).</b> The second try (v7.2) learns a longer room from the decoder's guesses of the data, but only once the usual passes have failed. Since v7.18 the receiver does it after every pass from the first, within the same number of passes (8 at most with the fast effort): after one pass the decoder already knows most of the data, and the room it gives lets the next pass see the echo that the training blocks cannot reach. Of 183 recorded single-carrier frames, 108 decode instead of 104 and none is lost; the frames that decode either way need 1.45 passes on average instead of 2.04. With white noise added (27 frames of 14 recordings, 12 to 30 dB under the sound), every frame still decodes with as much noise as before, and one living-room frame with 3 dB more. A frame that fails takes about 1.3 times as long to give up. Only the receiver changed: the frames are the same.</p>
     <p class="muted"><b>Wide band (v7.4).</b> The single carrier can also send 13 714 symbols per second on a carrier at 11.4 kHz, which fills 2.3 to 20.5 kHz instead of 3.2 to 16 kHz: 43 % more bits per second. Room soundings in a reverberant room heard 16 to 20.5 kHz about as clearly as the usual band (the phone's speaker gives 6 to 10 dB less there, but the room's noise is as much lower, and the echo dies out fastest at high frequencies) and 2.3 to 3.2 kHz 3 to 5 dB less clearly; above 21 kHz the iPhone's microphone hears almost nothing. The training blocks have 10/7 as many symbols, so they last as long and let the receiver learn the same echoes. The pulses are made on a 96 kHz grid, 7 samples per symbol, and every other sample is played. The same loudness spread over a wider band gives each symbol about 1.5 dB less signal: in simulation through the rooms measured, it decoded wherever the usual band did up to 6 dB more noise than the room had, and failed more often beyond. LDPC or polar codes only. The header marks it as type 2 on the single carrier, which receivers older than v7.4 ignore.</p>
     <p class="muted"><b>1024QAM (v7.5).</b> The single carrier can put 10 bits on each symbol, 32 levels on each axis, instead of 256QAM's 8: 25 % more bits per second before the code. The levels are half as far apart, so it needs about 6 dB more signal than 256QAM at the same code rate; at the same information rate, 1024QAM with LDPC 2/3 carries 11 % more than 256QAM with LDPC 3/4 for about 3 dB more signal, and 1024QAM with LDPC 1/2 is no better than 256QAM with LDPC 2/3. Replaying the room and noise of one of the best recordings (phones close together and still, 29 dB on this page) with 1024QAM frames put LDPC 2/3 at the edge, and 3/4 needed about 2 dB more signal. Take it with LDPC 2/3, for phones close together in a quiet room. The header marks it with the mask of 8PSK, which the single carrier never used, so receivers older than v7.5 ignore it.</p>
     <p class="muted"><b>LDPC 5/6 (v7.6).</b> The highest rate: 5 message bits in every 6 sent, 11 % more than 3/4, for 1.5 to 2.5 dB more signal (in plain noise: 64QAM 15.5 dB with 3/4, 17 dB with 5/6; 256QAM 20 and 22.5 dB; 1024QAM 25 and 27.5 dB). 256QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 2/3 for a little less signal (22.5 against 22.9 dB in plain noise), and replaying the room and noise of one of the best recordings, it still decoded with the noise 2 dB louder than 1024QAM 2/3 could take: take it rather than 1024QAM 2/3. 64QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 1/2, for 1 dB less. 1024QAM with LDPC 5/6 failed in that replay even with the noise 8 dB quieter. It works with every modulation except OFDM with 64QAM or 256QAM: OFDM's own noise (its clipping, about 21 dB below the signal) leaves 64QAM 3 to 5 % of wrong bits on a short message even in a quiet room, more than 5/6 can correct, and 256QAM with 5/6 needs 22.5 dB. The header marks it as a text or an image with code 7, which receivers older than v7.6 ignore.</p>
@@ -2483,6 +2485,13 @@ const SC_NEED = { qpsk: [-2.8, -1.2, 1.0, 3.1, 4.2, 5.6], '16qam': [1.9, 3.5, 6.
                                // code's own loss, 0.8 to 2.3 dB (the most for 256QAM and 1024QAM at 1/4 and 1/3)
 const SC_SPARE = 0.5;         // v7.16: a mode fits if its need is this many dB under the SNR after the equalizer (v7.14: 1, over the older
                                // table). Of 183 recorded single-carrier frames, 70 of the 73 whose own mode fits decoded (3 turbo frames failed)
+const SC_STEADY = true;       // v7.17: with more than 2 training blocks the part is read on a steady clock, the straight line that best fits the
+                               // blocks' delays; what departs from it stays in each block's room. 183 recorded frames: 104 decode instead of 103, none
+                               // lost; the 7 of the class of 21 Oct, whose delays jumped by up to 0.9 sample: 1 instead of 0. false: v7.16
+const SC_BEND = 0.75;         // v7.17: the SNR after the equalizer counts the room's bend between training blocks as noise (scRoomBend): a segment of
+                               // T symbols misses SC_BEND x s2 x T / 6, s2 the spread per symbol at its inner blocks (1 for a random walk; a straight
+                               // change costs nothing). 183 frames: 69 of the 70 whose own mode fits decoded; class of 21 Oct: 1 of 1 (5 fitted, 0 decoded
+                               // with v7.16). null: v7.16
 const SC_TAIL_WAIT = 0.25;    // v7.14: seconds the receiver waits after a single-carrier part before decoding it, for the echo of its
                                // last block (SC_RELEARN_TAPS - 1 rows, 0.21 s), which the long echo's fit and the second try use as the script does
 let SC_NA = 1280;           // TA: the first block's own training, before its TC
@@ -2514,6 +2523,10 @@ const SC_RELEARN_PASSES = 4;  // v7.2: at most this many more passes, the room l
 const SC_RELEARN_GAIN = 0.5;  // v7.8, the second try per segment: a data segment keeps its own correction of the room only
                               // if, its taps counted, it leaves this many dB less there (null: one room for the whole part,
                               // as in v7.2)
+const SC_RELEARN_FROM = 1;    // v7.18: the room is learned again, as in the second try, after every pass from this one on, within
+                              // the same passes at most (the effort's, then SC_RELEARN_PASSES more). 183 recorded frames: 108
+                              // decode instead of 104, none lost; those that decode either way need 1.45 passes instead of 2.04;
+                              // a frame that fails takes 1.3 times as long. null: only after the effort's passes (v7.2 to v7.17)
 const SC_REL = 1.0;           // ridge prior of a training block's room: the one before, give or take its own size (a weak
                                // pull; a tight one, -20 dB, cost 2 to 7 dB on our recordings when people moved)
 const SC_T0_FRAC = 0.5, SC_T0_BACK = 0.015;   // timing: the earliest arrival with half the strongest's correlation, up to 15 ms before it
@@ -3140,6 +3153,8 @@ function scSplit(y, rho, t, p, u) {
 //    fitted on what the whole part's room leaves on the rows from the block before it to the end of the block after it
 //    (soft symbols, the same ridge); the segment keeps it only if it leaves SC_RELEARN_GAIN dB less there, its taps
 //    counted (scRelearnSeg).
+//    v7.18: the room is learned again so after every pass from pass SC_RELEARN_FROM on, within the same passes at most,
+//    not only once the effort's passes have failed.
 // v7.11: the gain by which each sample of the matched filter's output is divided: the square root of its power,
 // averaged over SC_LEVEL seconds around it, relative to the median over the part (samples a .. b - 1, the part's own
 // signal; beyond, the nearest whole average is held). All ones if the part is shorter than the average. As sc_level.
@@ -3189,6 +3204,21 @@ function scTail(x, yy, wr, segs, chs, n0k, L, Lr) {   // v7.13: the room's echo 
   }
   const ratio = Math.min(1, N0t * (nclean / Math.max(nclean - Lr, 1)) ** 2 / med(n0k)), noiseDb = 10 * Math.log10(ratio);
   return { tail, info: { used: nclean > 1.2 * Lr && (SC_TAIL_GATE === null || noiseDb <= -SC_TAIL_GATE), taps: Lr, tailDb: 10 * Math.log10(Math.max(cdot(tail, tail), 1e-30) / cdot(c, c)), noiseDb, ratio } };
+}
+function scRoomBend(chs, segs, n0k, L, nt) {   // v7.17: the noise the room's bend between training blocks adds to each data segment, as sc_room_bend in
+  // audiocomm_v7.py: block k at p_k, the middle of its last nt symbols; each inner block's room against the straight line in time through its
+  // neighbours', d = c_k - ((1 - w) c_(k-1) + w c_(k+1)), less the three blocks' estimation noise (each block's noise times L/(nt - L + 1), weighed as in d),
+  // gives a random walk's spread per symbol s2 = |d|^2 (Ta + Tb) / (Ta Tb); a segment of T symbols between blocks j and j + 1 misses
+  // SC_BEND x s2 x T / 6, s2 the mean of its inner blocks'. A straight change costs nothing (the blend follows it); with 2 blocks, 0.
+  if (!SC_BEND || chs.length < 3) return segs.map(() => 0);
+  const p = [segs[0][0] - nt / 2, ...segs.map(([, E]) => E + nt / 2)], est = n0k.map(v => L / (nt - L + 1) * v), s2 = {};
+  for (let k = 1; k < chs.length - 1; k++) {
+    const Ta = p[k] - p[k - 1], Tb = p[k + 1] - p[k], w = Ta / (Ta + Tb), a = chs[k - 1], b = chs[k], c = chs[k + 1];
+    let e = 0;
+    for (let q = 0; q < b.r.length; q++) { const dr = b.r[q] - ((1 - w) * a.r[q] + w * c.r[q]), di = b.i[q] - ((1 - w) * a.i[q] + w * c.i[q]); e += dr * dr + di * di; }
+    s2[k] = Math.max(0, e - (est[k] + (1 - w) ** 2 * est[k - 1] + w ** 2 * est[k + 1])) * (Ta + Tb) / (Ta * Tb);
+  }
+  return segs.map((_, j) => { const v = [j, j + 1].filter(k => k in s2).map(k => s2[k]); return SC_BEND * v.reduce((x, y) => x + y, 0) / v.length * (p[j + 1] - p[j]) / 6; });
 }
 function scFits(snrEq) {   // v7.14: for each mapping, the highest LDPC rate whose need (SC_NEED) is at least SC_SPARE dB under snrEq (the SNR after
   // the equalizer), and the fastest of them (bits per symbol x rate), as sc_fits in audiocomm_v7.py: { fits: [[map, rate], ...], best }
@@ -3308,18 +3338,21 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
   }
   const jump = t => { let a = 0; for (const [g, sz] of gaps) if (g <= t) a += sz; return a; };
   // the clock alone: less the jumps each block's delay holds (those of the blocks that saw them, wherever they fell)
-  const dcl = dk.map((d, q) => { let a = J0(mk[q]); ks.forEach((b, i) => { if (b <= q) a += gaps[gaps0.length + i][1]; }); return d - a; });
-  const K = mk.length, s0 = K > 1 ? (dcl[1] - dcl[0]) / (mk[1] - mk[0]) : 0, s1 = K > 1 ? (dcl[K - 1] - dcl[K - 2]) / (mk[K - 1] - mk[K - 2]) : 0;
-  const Dc = t => { if (K === 1) return 0; if (t <= mk[0]) return dcl[0] + s0 * (t - mk[0]); if (t >= mk[K - 1]) return dcl[K - 1] + s1 * (t - mk[K - 1]);
-    let q = 0; while (mk[q + 1] < t) q++; return dcl[q] + (dcl[q + 1] - dcl[q]) * (t - mk[q]) / (mk[q + 1] - mk[q]); };
-  const D = gaps.length ? t => Dc(t) + jump(t) : Dc;
-  const ppm = K > 1 ? (dcl[K - 1] - dcl[0]) / (mk[K - 1] - mk[0]) * 1e6 : 0;
+  let dcl = dk.map((d, q) => { let a = J0(mk[q]); ks.forEach((b, i) => { if (b <= q) a += gaps[gaps0.length + i][1]; }); return d - a; });
+  const K = mk.length;
   let bend = 0;   // departure from a steady clock (samples): the delays against their straight-line fit
   if (K > 2) {
     const ma = mk.reduce((a, b) => a + b) / K, da = dcl.reduce((a, b) => a + b) / K; let sxy = 0, sxx = 0;
     mk.forEach((v, q) => { sxy += (v - ma) * (dcl[q] - da); sxx += (v - ma) ** 2; });
-    mk.forEach((v, q) => { bend = Math.max(bend, Math.abs(dcl[q] - (da + sxy / sxx * (v - ma)))); });
+    const lin = mk.map(v => da + sxy / sxx * (v - ma));
+    mk.forEach((v, q) => { bend = Math.max(bend, Math.abs(dcl[q] - lin[q])); });
+    if (SC_STEADY) dcl = lin;   // v7.17: the steady clock, the delays' best line
   }
+  const s0 = K > 1 ? (dcl[1] - dcl[0]) / (mk[1] - mk[0]) : 0, s1 = K > 1 ? (dcl[K - 1] - dcl[K - 2]) / (mk[K - 1] - mk[K - 2]) : 0;
+  const Dc = t => { if (K === 1) return 0; if (t <= mk[0]) return dcl[0] + s0 * (t - mk[0]); if (t >= mk[K - 1]) return dcl[K - 1] + s1 * (t - mk[K - 1]);
+    let q = 0; while (mk[q + 1] < t) q++; return dcl[q] + (dcl[q + 1] - dcl[q]) * (t - mk[q]) / (mk[q + 1] - mk[q]); };
+  const D = gaps.length ? t => Dc(t) + jump(t) : Dc;
+  const ppm = K > 1 ? (dcl[K - 1] - dcl[0]) / (mk[K - 1] - mk[0]) * 1e6 : 0;
   // 3. symbol-rate samples, row i <-> symbol i - SC_PRE at its first strong arrival
   const nrows = ntot + Math.max(...SC_TAPS[nt], SC_RELEARN_TAPS) - 1, nv = P5 * (nrows + 2 * SC_SPAN + 2), n00 = -P5 * SC_PRE, zt = new Float64Array(nv);   // v7.2: as far as the second try's room reaches
   for (let k = 0; k < nv; k++) { const t = n00 + k; zt[k] = T0 + rho * (t + D(t)); }
@@ -3391,13 +3424,15 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
       Ls = Lr;
     }
   }
-  let cap = 0, nsym = 0;   // v7.14: the SNR after the equalizer (4.)
+  const bn = scRoomBend(chT, segs, n0k, L, nt);   // v7.17: the room's bend, as noise
+  let cap = 0, cap0 = 0, nsym = 0;   // v7.14: the SNR after the equalizer (4.); cap0 without the bend
   segs.forEach(([S, E], j) => {
     const P2 = [chT[j], chT[j + 1]].map(c => { Fr.fill(0); Fi.fill(0); Fr.set(c.r); Fi.set(c.i); scFFT(Fr, Fi, p4); return Float64Array.from(Fr, (v, k) => v * v + Fi[k] * Fi[k]); });
-    let s = 0; for (let k = 0; k < 4096; k++) s += 1 / (1 + (P2[0][k] + P2[1][k]) / 2 / N0s[j]);
-    cap += (E - S) * Math.log2(4096 / s); nsym += E - S;
+    let u = 0, u0 = 0; for (let k = 0; k < 4096; k++) { const g = (P2[0][k] + P2[1][k]) / 2; u += 1 / (1 + g / (N0s[j] + bn[j])); u0 += 1 / (1 + g / N0s[j]); }
+    cap += (E - S) * Math.log2(4096 / u); cap0 += (E - S) * Math.log2(4096 / u0); nsym += E - S;
   });
   const snrEq = 10 * Math.log10(Math.max(2 ** (cap / nsym) - 1, 1e-6)), { fits, best: fitBest } = scFits(snrEq);
+  const roomBend = 10 * Math.log10(Math.max(2 ** (cap0 / nsym) - 1, 1e-6)) - snrEq;   // v7.17: the dB the bend costs
   // 5. each segment: rows S .. E + Ls - 2, the training's part removed; its two anchors blended
   const obs = [], ops = [];
   segs.forEach(([S, E], j) => {
@@ -3413,6 +3448,7 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
   let nErased = 0; for (const [S, E] of segs) for (let q = S; q < E; q++) if (!good[SC_PRE + q]) nErased++;   // data symbols whose first arrival is on a masked row
   const key = prbs(ns * m), lprior = new Float64Array(ns * m), xs = segs.map(() => null);
   let first = null, passes = 0, bits = null, zc = null, relearn = null; const hist = [];
+  const r0 = SC_RELEARN_FROM === null ? npass : Math.min(npass, SC_RELEARN_FROM);   // v7.18: the first pass after which the room is learned again
   for (let it = 0; it < npass + SC_RELEARN_PASSES; it++) {
     const ext = new Float64Array(ns * m); let q = 0;
     segs.forEach(([S, E], j) => {
@@ -3434,10 +3470,10 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
     const dec = d.post || d.app;   // v7: the LDPC (v7.3: polar) decoder's own decisions
     for (let i = 0; i < nc; i++) bad += (dec[i] > 0 ? 1 : 0) !== cw[i];   // coded bits that disagree with the decided message
     hist.push(bad);
-    if (onPass) onPass({ pass: passes, bad, nc, npass: relearn ? npass + SC_RELEARN_PASSES : npass, relearn: !!relearn });
+    if (onPass) onPass({ pass: passes, bad, nc, npass: relearn || r0 < npass ? npass + SC_RELEARN_PASSES : npass, relearn: !!relearn && r0 >= npass });
     if (bad === 0) break;
     for (let i = 0; i < ns * m; i++) lprior[i] = i < nc ? (key[i] ? -1 : 1) * Math.max(-20, Math.min(20, d.app[i] - lin[i])) : 0;
-    if (it + 1 >= npass && it + 1 < npass + SC_RELEARN_PASSES) {   // v7.2: the second try (6.)
+    if (it + 1 >= r0 && it + 1 < npass + SC_RELEARN_PASSES) {   // v7.2: the second try (6.); v7.18: from pass r0 on
       const L2 = SC_RELEARN_TAPS, R2 = ntot + L2 - 1;
       const lpost = Float64Array.from({ length: ns * m }, (_, i) => (key[i] ? -1 : 1) * (i < nc ? Math.max(-30, Math.min(30, d.app[i])) : -30));
       const sm = scSoft(lpost, ax), xsoft = { r: Float64Array.from(x.r), i: Float64Array.from(x.i) }, vs = new Float64Array(ntot);
@@ -3468,12 +3504,12 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
       relearn = { taps: L2, snr: 10 * Math.log10(P2 / (N0s.reduce((a, b) => a + b, 0) / N0s.length)), own };
     }
   }
-  if (relearn) relearn.passes = passes - npass;
+  if (relearn) { relearn.passes = passes - r0; relearn.after = r0; }
   const cw = encodeFEC(code, bits); let chErr = 0;
   for (let i = 0; i < nc; i++) chErr += (first[i] > 0 ? 1 : 0) !== (cw[i] ^ key[i]);
   const h = Float32Array.from(c0.r, (v, k) => v * v + c0.i[k] * c0.i[k]), step = Math.max(1, Math.floor(zc.r.length / 5000));
   const out = { bits: Uint8Array.from(bits), passes, codeword: hist[hist.length - 1] === 0, chErr, snr: snrMed, snrs, ppm, bend, phase, change, nseg: segs.length, taps: L, train: nt, effort, npass, est,
-           T0, sec: (now() - tStart) / 1000, det, hist, relearn, tail, snrEq, fits, fitBest, llr: Float32Array.from(first), h, map, gaps: gaps.map(([g, sz]) => [g / SC_FS, sz]), erased: nErased, swap, rs: SC_RS, wide: scWideOf(nt),
+           T0, sec: (now() - tStart) / 1000, det, hist, relearn, tail, snrEq, roomBend, fits, fitBest, llr: Float32Array.from(first), h, map, gaps: gaps.map(([g, sz]) => [g / SC_FS, sz]), erased: nErased, swap, rs: SC_RS, wide: scWideOf(nt),
            zr: Float32Array.from({ length: Math.ceil(zc.r.length / step) }, (_, k) => zc.r[k * step]), zi: Float32Array.from({ length: Math.ceil(zc.r.length / step) }, (_, k) => zc.i[k * step]) };
   if (gaps.length && !out.codeword && swap === null) {   // v5.1: the other size, or the runner-up place, of the least sure gap
     const o2 = scReceive(y, fs, t0, map, code, n0, nc, det, onPass, nt, effort, est, unsure.reduce((a, b) => b[0] > a[0] ? b : a)[1]);
@@ -4546,16 +4582,16 @@ function showStats(res) {
   }
   if (h.sc) {   // v5, single carrier
     const o = res.sc, dn = detName(o.det);
-    if (o.snrEq !== undefined) st.push([`${o.snrEq.toFixed(1)} dB`, 'SNR after the equalizer', `what the detector sees (v7.14): the room's uneven response and the echo it cannot learn count against it, unlike the training's SNR. With ${SC_SPARE} dB to spare it fits ${o.fits.length ? o.fits.map(([mp, r]) => `${OFDM_NAMES[mp]} LDPC ${r}`).join(', ') + `; the fastest is ${OFDM_NAMES[o.fitBest[0]]} LDPC ${o.fitBest[1]}` : 'no mode'} (v7.16: 70 of 73 such recorded frames decoded)`]);
+    if (o.snrEq !== undefined) st.push([`${o.snrEq.toFixed(1)} dB`, 'SNR after the equalizer', `what the detector sees (v7.14): the room's uneven response and the echo it cannot learn count against it, unlike the training's SNR.${o.roomBend >= 0.05 ? ` The room's bend between training blocks, which the blend of two blocks' rooms misses, costs ${o.roomBend.toFixed(1)} dB of it (v7.17).` : ''} With ${SC_SPARE} dB to spare it fits ${o.fits.length ? o.fits.map(([mp, r]) => `${OFDM_NAMES[mp]} LDPC ${r}`).join(', ') + `; the fastest is ${OFDM_NAMES[o.fitBest[0]]} LDPC ${o.fitBest[1]}` : 'no mode'} (v7.17: 69 of 70 such recorded frames decoded)`]);
     st.push([`${o.snr.toFixed(1)} dB`, 'SNR of the symbols', `the median over the training blocks (${o.snrs.map(v => v.toFixed(1)).join(' / ')} dB), each with its own room: the noise, plus the echo beyond the ${o.taps} taps (${Math.round((o.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms after the first strong arrival) and the room's drift`]);
     st.push([o.taps, 'taps of the room', o.est === 'mmse' ? `by MMSE, the most the ${scTrainName(o.train)} training allows: each tap weighed by the room's power at its delay` : scBand(o.train).taps[o.train].length > 1 ? `the ${scTrainName(o.train)} training allows ${scBand(o.train).taps[o.train].join(' or ')}: the receiver keeps the one that fits better` : `what the ${scTrainName(o.train)} training allows`]);
     if (o.tail && o.tail.used) st.push([o.tail.taps, 'taps with the long echo', `the echo past the ${o.taps} taps, up to ${o.tail.taps} (${Math.round((o.tail.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms after the first strong arrival), learned from all the training blocks together and added to each block's room: the noise on the training ${(-o.tail.noiseDb).toFixed(1)} dB lower (v7.13)`]);
-    if (o.relearn) st.push([res.codeword ? '✓ decoded' : '✗ failed', 'second try', `the ${o.npass} passes ended without a codeword, so the room was learned again from the whole frame, its data as the decoder's soft symbols: ${o.relearn.taps} taps (${Math.round((o.relearn.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms of echo) instead of ${o.taps}${o.relearn.own ? `, ${o.relearn.own} of the ${o.nseg} data segments with their own correction of ${o.taps} taps (the room changed during the frame)` : ''}, SNR ${o.relearn.snr.toFixed(1)} dB; then ${o.relearn.passes} more pass${o.relearn.passes > 1 ? 'es' : ''} (v7.2${o.relearn.own ? ', v7.8' : ''})`]);
-    st.push([o.passes, `pass${o.passes > 1 ? 'es' : ''}, ${dn} ↔ ${LDPC_R[code] ? 'LDPC' : POLAR_R[code] ? 'polar' : 'turbo'}`, `turbo equalization, at most ${o.npass} passes (${o.effort} effort)${SC_RELEARN_PASSES ? `, then up to ${SC_RELEARN_PASSES} more for the second try` : ''}; it stops once the decisions form a codeword. Coded bits in doubt after each pass: ${o.hist.join(' → ')}`]);
+    if (o.relearn) st.push([res.codeword ? '✓ decoded' : '✗ failed', o.relearn.after < o.npass ? 'room learned again' : 'second try', `${o.relearn.after < o.npass ? `after pass ${o.relearn.after} and each later one (v7.18),` : `the ${o.npass} passes ended without a codeword, so`} the room was learned again from the whole frame, its data as the decoder's soft symbols: ${o.relearn.taps} taps (${Math.round((o.relearn.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms of echo) instead of ${o.taps}${o.relearn.own ? `, ${o.relearn.own} of the ${o.nseg} data segments with their own correction of ${o.taps} taps (the room changed during the frame)` : ''}, SNR ${o.relearn.snr.toFixed(1)} dB; then ${o.relearn.passes} more pass${o.relearn.passes > 1 ? 'es' : ''} (v7.2${o.relearn.own ? ', v7.8' : ''})`]);
+    st.push([o.passes, `pass${o.passes > 1 ? 'es' : ''}, ${dn} ↔ ${LDPC_R[code] ? 'LDPC' : POLAR_R[code] ? 'polar' : 'turbo'}`, `turbo equalization, ${SC_RELEARN_PASSES && SC_RELEARN_FROM !== null && SC_RELEARN_FROM < o.npass ? `at most ${o.npass + SC_RELEARN_PASSES} passes (${o.effort} effort), the room learned again after each one from pass ${SC_RELEARN_FROM} on (v7.18)` : `at most ${o.npass} passes (${o.effort} effort)${SC_RELEARN_PASSES ? `, then up to ${SC_RELEARN_PASSES} more for the second try` : ''}`}; it stops once the decisions form a codeword. Coded bits in doubt after each pass: ${o.hist.join(' → ')}`]);
     st.push([`${o.sec.toFixed(1)} s`, 'to decode', `${dn}, ${o.effort} effort, in the background: listening went on`]);
     st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset', `time scale Rx vs Tx (clock offset, or a moving phone), from the ${o.nseg + 1} training blocks`]);
     if (o.change.length) st.push([`${Math.max(...o.change).toFixed(0)} dB`, 'room change', 'the largest change of the room from one training block to the next (0.5 s apart), relative to the room. In our recordings: −14 to −20 dB in a still room, −6 to −9 dB when people moved.']);
-    if (o.bend > 1) st.push([o.bend.toFixed(1), 'clock wander, samples', 'samples by which the clock departs from a steady one (a moving phone, or samples lost)']);
+    if (o.bend > 1) st.push([o.bend.toFixed(1), 'clock wander, samples', 'samples by which the training blocks\' delays depart from a steady clock (a moving phone, or samples lost); the frame is read on the steady clock, each block\'s room takes the rest (v7.17)']);
     if (o.gaps && o.gaps.length) st.push([o.gaps.map(([, d]) => Math.abs(d).toFixed(0)).join(' + '), `samples ${o.gaps.every(([, d]) => d < 0) ? 'lost' : 'lost or repeated'}`, `by the microphone in the middle of the part (${o.gaps.map(([t]) => `${t.toFixed(2)} s`).join(', ')} into it); the part was read again after the gap${o.erased ? `, and the ${o.erased} data symbols around it were erased and left to the code` : ''} (v5.1)`]);
   } else if (h.ofdm) {
     const o = res.ofdm, sn = [...o.snr].sort((a, b) => a - b), med = sn[Math.floor(sn.length / 2)];
