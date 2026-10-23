@@ -21,7 +21,11 @@ information per coded bit 0.06 above the code rate), with 0.5 dB to spare. v7.17
 a steady clock (the straight line through its training blocks' delays), and the SNR after the equalizer counts the
 room's bend between training blocks as noise, so a room that changes during the frame lists slower modes. v7.18: the
 single carrier learns the room again from the decoder's soft symbols after every pass from the first, not only in the
-second try once the usual passes have failed (the same passes at most).
+second try once the usual passes have failed (the same passes at most). v7.19: a third band for the single carrier, the
+fast wide band: 16 000 symbols/s in the wide band's 2.3 to 20.5 kHz (roll-off 1/7 instead of 1/3), 17 % more symbols
+for about 0.6 dB less SNR after the equalizer; on 13 recorded rooms the fastest mode that decodes is 10 % faster in all.
+v7.20: the single carrier learns the long echo (v7.13) only if a first pass without it fails, so a frame that decodes at
+once (close by, a long file) takes a quarter of the time.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -37,7 +41,8 @@ decoded by the other. The receiver needs no settings: they travel in the header.
   or, with a single carrier (v5; its control part always hops):
     0.1 s silence | TA (1280 QPSK symbols) TC | data | TC | data | ... | TC, the training TC of 640, 1280 or 2560
     symbols (short, medium or long: the longest echo it lets the receiver learn, 20, 47 or 100 ms after the first strong arrival;
-    v7.4, the wide band: TA 1792, TC 896, 1792 or 3584, about the same durations)
+    v7.4, the wide band: TA 1792, TC 896, 1792 or 3584, about the same durations; v7.19, the fast wide band: TA 2080,
+    TC 1056, 2080 or 4192)
   v6, the short control part of the OFDM and single-carrier frames (their default; the 400 bit/s one remains, for range
     and for v5 receivers, which do not read the short one):
     P P P | H, 0.192 s: three periods of P, 2048 samples at 48 kHz (OFDM's reference symbol for N = 2048 with its
@@ -77,6 +82,9 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            v7.7: JPEG_MAX = 261 632 bytes (20 480 before), the most the single carrier's header can say (a <= 1023), and
            the file may be in any picture format (file_kind tells it); receivers older than v7.7 ignore files over 20 480
            bytes
+           v7.19: on the single carrier's wide band (type 2, or LDPC 5/6 with the code field 2), the mask xor SC_FAST_MASK
+           (0x1D) = the fast wide band, 16 000 symbols/s (SC_BANDS[2]); its 10 masks are 2 bits or more from the 12
+           others; receivers older than v7.19 ignore it
   code   : 0 none, 1 Hamming (7,4) + interleaver (until v6; v7 neither sends nor reads it), 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
@@ -118,6 +126,8 @@ decoded by the other. The receiver needs no settings: they travel in the header.
   single carrier (v5): 9600 symbols/s at 9.6 kHz, root-raised-cosine pulses of roll-off 1/3 (3.2 to 16 kHz), rms 0.45;
            v7.4, the wide band: 96000 / 7 = 13 714 symbols/s at 11.4 kHz (2.3 to 20.5 kHz), 7 samples per symbol at 96 kHz,
            sent as every other sample (3.5 samples per symbol at 48 kHz); training 10/7 longer in symbols;
+           v7.19, the fast wide band: 16 000 symbols/s at 11.4 kHz, roll-off 1/7 (the same 2.3 to 20.5 kHz), 6 samples
+           per symbol at 96 kHz, pulses 24 symbols on each side of their peak; training 7/6 the wide band's in symbols;
            points as OFDM's coherent mappings; the training blocks are QPSK exp(j pi/2 (q + 1/2)), q the top 2 bits of
            xorshift32 (seeds 0x5C0A for TA, 0x5C0C for TC); the first block is TA TC, every later one TC, after at most
            4800 data symbols; channel bits: the code's output padded with 0, scrambled. The receiver
@@ -130,6 +140,7 @@ Usage
   python audiocomm_v7.py tx --image greatwave_80x54.png -o img.wav   # the page's demo image (Hokusai's Great Wave); greatwave_160x108.png: the large one
   python audiocomm_v7.py tx --image greatwave_320x216.png --mod ofdm --map 256qam --code turbo -o big.wav   # the 4x one
   python audiocomm_v7.py tx --text "Hello" --mod sc --map 64qam --code ldpc --wide -o wide.wav   # v7.4: 2.3 to 20.5 kHz
+  python audiocomm_v7.py tx --text "Hello" --mod sc --map 64qam --code ldpc --fast -o fast.wav   # v7.19: 16 000 symbols/s
   python audiocomm_v7.py tx --image greatwave_160x108.png --mod sc --map 1024qam --code ldpc23 -o q1024.wav   # v7.5: 1024QAM
   python audiocomm_v7.py tx --image greatwave_160x108.png --mod sc --map 256qam --code ldpc56 -o r56.wav   # v7.6: LDPC 5/6
   (the earlier demo image: --image ../../Lab/bartS.png --step 2, without --step, or with --up 2 for the large and 4x ones)
@@ -1383,7 +1394,8 @@ def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=F
     v = (msb(typ, 2) + msb(a, 11) + msb(b, 11) + msb(c & 3, 2) + msb(r, 2)
          + msb(3 if four else t, 2) + msb(t if four else 0, 2))   # 4 tones: tones 3, the tone set in the last two bits
     slot = SC_SLOT.get(omap, omap) if sc else omap   # v7.5: 1024QAM in 8PSK's place
-    mask = msb((0xFF if c >> 2 else 0) ^ (OFDM_MASKS[OFDM_MAPS.index(slot)] if ofdm is not None or sc else 0), 8)
+    mask = msb((0xFF if c >> 2 else 0) ^ (OFDM_MASKS[OFDM_MAPS.index(slot)] if ofdm is not None or sc else 0)
+               ^ (SC_FAST_MASK if sc and wide == 2 else 0), 8)   # v7.19: the fast wide band
     return encode_fec("conv", np.array(v + [x ^ k for x, k in zip(crc8(v), mask)]))
 
 
@@ -2302,6 +2314,14 @@ SC_BANDS = {False: (9600, 5, 9600, 1), True: (96000 / 7, 7, 11400, 2)}   # v7.4:
                          # 16 to 20.5 kHz as clearly as the usual band (the phone's speaker 6 to 10 dB weaker there, the
                          # noise as much lower), its echo die out fastest, and 2.3 to 3.2 kHz 3 to 5 dB less clearly; the
                          # iPhone's microphone stops at 21 kHz
+SC_BANDS[2] = (16000, 6, 11400, 2)   # v7.19: the fast wide band, the same 2.3 to 20.5 kHz at roll-off 1/7 (SC_PULSES)
+SC_PULSES = {False: (1 / 3, 12), True: (1 / 3, 12), 2: (1 / 7, 24)}   # v7.19: each band's roll-off and pulse half length
+                         # (symbols). 1/7 carries 17 % more symbols than 1/3 in the same band; its tails are longer (24
+                         # symbols: interference -55 dB, leakage outside the band -54 dB) and its peaks higher (the
+                         # clipping's distortion -35 dB instead of -37.6 dB at 256QAM). Replays of 13 recorded rooms
+                         # (classroom spots from 30 cm to 7 m, and phones close together): 0.6 dB less SNR after the
+                         # equalizer (median), the fastest mode that decodes 9.9 % faster in all; 1024QAM 5/6 close
+                         # together fails, 3/4 decodes. Roll-off 0.24 (14 769 symbols/s, 192 kHz grid): +5.4 %
 SC_RMS = 0.45            # rms at the speaker, as OFDM's; the peaks above 0.9 are clipped (1.5 % of the samples; in the
                          # band the distortion is 32 dB under the data, 47 dB under the training, whose peaks are low)
 SC_QUIET = {"256qam": -1.0, "1024qam": -1.0}   # v7.9: these mappings send their part this many dB quieter. The clipping
@@ -2366,6 +2386,9 @@ SC_BOX = True            # v7.10: SMAP's search stays inside the constellation, 
                          # (against v7.9, on 94 recorded frames: the same 67 decode, 11 in one pass fewer; False: v7.9)
 SC_SLOT = {"1024qam": "8psk"}   # v7.5: the header mask a single-carrier mapping borrows (8PSK is never sent on the single
                          # carrier, and every older receiver rejects it there, so they ignore 1024QAM frames)
+SC_FAST_MASK = 0x1D      # v7.19: xored onto the header's mask on the fast wide band; the 10 masks it makes are 2 bits or
+                         # more from the 12 others (no 22 masks of 8 bits are all 3 apart), and the CRC fails for every
+                         # older receiver, so they ignore fast frames
 SC_PASSES = 8            # turbo equalization: at most this many detector <-> decoder passes (full effort)
 SC_EFFORT = {"fast": ((30, 20), 4), "full": ((150, 100), SC_PASSES)}   # the receiver's choice: SMAP's steps (first pass,
                          # later ones) and the passes; fast costs at most 1 dB at the threshold on our recordings, and
@@ -2382,6 +2405,10 @@ SC_RELEARN_FROM = 1      # v7.18: the room is learned again, as in the second tr
                          # the same passes at most (the effort's, then SC_RELEARN_PASSES more). 183 recorded frames: 108
                          # decode instead of 104, none lost; those that decode either way need 1.45 passes instead of 2.04;
                          # a frame that fails takes 1.3 times as long. None: only after the effort's passes (v7.2 to v7.17)
+SC_TAIL_LAZY = True      # v7.20: the long echo (SC_TAIL) only if a first pass without it, and without the room learned
+                         # again, fails; then the frame is decoded as without this switch. 190 frames: the same 109
+                         # decode with the same passes; a frame that decodes in that first pass takes 0.9 of the time
+                         # (100 kB close by: 0.25 on the page), one that needs more 1.16. False: the tail always (v7.13)
 SC_REL = 1.0             # ridge prior of a training block's room: the one before, give or take its own size (a weak
                          # pull; a tight one, -20 dB, cost 2 to 7 dB on our recordings when people moved)
 SC_MAX_PPM = 500         # clock offset plus a moving phone
@@ -2415,23 +2442,27 @@ def sc_rrc(beta=SC_BETA, sps=SC_SPS, span=SC_SPAN):
 
 SC_G = sc_rrc()
 SC_DLY = SC_SPAN * SC_SPS          # 60 samples: the pulse's peak after its start
-SC_GS = {w: sc_rrc(sps=v[1]) for w, v in SC_BANDS.items()}
+SC_GS = {w: sc_rrc(beta=SC_PULSES[w][0], sps=v[1], span=SC_PULSES[w][1]) for w, v in SC_BANDS.items()}
 # v7.4: TA, the training blocks, the rooms fitted, the data between blocks and the second try's room, in symbols, then
 # the gap search's reach and margin in samples of SC_FS, for each band; the wide band's last about as long as the usual
 # ones (10/7 the symbols, rooms in multiples of 64 taps): with 3.2 to 19.2 kHz in Impasse Carnot's echo (rooms measured
-# by sounding), the same symbols lost 1.7 to 3.3 dB of SNR, the same durations gained 0.9 to 2.9 dB over the usual band
+# by sounding), the same symbols lost 1.7 to 3.3 dB of SNR, the same durations gained 0.9 to 2.9 dB over the usual band;
+# v7.19, the fast wide band (2): 7/6 the wide band's symbols, in multiples of 32
 SC_SIZES = {False: (SC_NA, SC_NC, SC_TRAIN, SC_TCODE, SC_TAPS, SC_D, SC_RELEARN_TAPS, SC_GAP_MAX, SC_GAP_EDGE),
             True: (1792, 1792, {"short": 896, "medium": 1792, "long": 3584}, {1792: 0, 896: 1, 3584: 2},
-                   {896: (352,), 1792: (704,), 3584: (704, 1408)}, 6720, 2944, 2048, 1200)}
+                   {896: (352,), 1792: (704,), 3584: (704, 1408)}, 6720, 2944, 2048, 1200),
+            2: (2080, 2080, {"short": 1056, "medium": 2080, "long": 4192}, {2080: 0, 1056: 1, 4192: 2},
+                {1056: (416,), 2080: (832,), 4192: (832, 1632)}, 7840, 3424, 2048, 1200)}
 
 
 def sc_set_band(wide):
     """v7.4: the band of the single-carrier frame about to be built or read (wide: 13 714 symbols/s at 11.4 kHz, on
-    a 96 kHz grid), and its sizes (SC_SIZES)."""
+    a 96 kHz grid; v7.19, wide = 2: the fast wide band, 16 000 symbols/s at roll-off 1/7), and its sizes (SC_SIZES)."""
     global SC_RS, SC_SPS, SC_FC, SC_FS, SC_G, SC_DLY, SC_GAP_SPAN, SC_NA, SC_NC, SC_TRAIN, SC_TCODE, SC_TAPS, SC_D, \
-        SC_RELEARN_TAPS, SC_GAP_MAX, SC_GAP_EDGE
-    wide = bool(wide)
+        SC_RELEARN_TAPS, SC_GAP_MAX, SC_GAP_EDGE, SC_BETA, SC_SPAN
+    wide = 2 if wide == 2 else bool(wide)
     SC_RS, SC_SPS, SC_FC, u = SC_BANDS[wide]
+    SC_BETA, SC_SPAN = SC_PULSES[wide]                     # v7.19: the band's pulse
     SC_FS, SC_G, SC_DLY, SC_GAP_SPAN = FS_TX * u, SC_GS[wide], SC_SPAN * SC_SPS, SC_SPAN * SC_SPS + 8
     SC_NA, SC_NC, SC_TRAIN, SC_TCODE, SC_TAPS, SC_D, SC_RELEARN_TAPS, SC_GAP_MAX, SC_GAP_EDGE = SC_SIZES[wide]
 
@@ -3108,7 +3139,7 @@ def sc_tail(x, yy, wr, segs, chs, n0k, L, Lr):
                       noise_db=float(10 * np.log10(ratio)), ratio=ratio)
 
 
-def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_NC, effort="fast", est="ls", swap=None):
+def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_NC, effort="fast", est="ls", swap=None, quick=False):
     """The single-carrier part of a frame whose control part ends near sample t0 of the recording y.
     1. Timing: the first strong arrival of the first training block (its correlation with the waveform sent): the
        earliest peak with at least half the strongest's, up to 15 ms before it (a later echo can be the strongest).
@@ -3163,9 +3194,18 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
        its taps counted (sc_relearn_seg).
        v7.18: the room is learned again so after every pass from pass SC_RELEARN_FROM on, within the same passes at
        most, not only once the effort's passes have failed: after one pass the decoder's soft symbols already know
-       most of the data, and the room they give lets the next pass see the echo the training blocks cannot reach."""
+       most of the data, and the room they give lets the next pass see the echo the training blocks cannot reach.
+       v7.20 (SC_TAIL_LAZY): first one pass without the long echo and without the room learned again (quick=True);
+       only if it fails is the frame decoded as above. The long echo takes most of the time of a frame that decodes in
+       one pass, and such frames (close by) seldom need it."""
     import time as _time
     t_start = _time.time()
+    if SC_TAIL and SC_TAIL_LAZY and not quick and swap is None:
+        o1 = sc_receive(y, fs, t0, omap, code, n0, nc, det, False, nt, effort, est, None, True)
+        if o1["codeword"]:
+            if verbose:
+                print(o1)
+            return o1
     m = OFDM_BITS[omap]
     ns = -(-nc // m)
     blocks, segs, ntot = sc_layout(ns, nt)
@@ -3173,6 +3213,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     ta, tc = sc_training(nt)
     x = sc_symbols(np.zeros(ns * m, dtype=int), omap, nt)
     steps, npass = SC_EFFORT[effort]
+    nmax = 1 if quick else npass + SC_RELEARN_PASSES      # v7.20: the first pass alone
     known = np.ones(ntot, dtype=bool)
     for a, b in segs:
         x[a:b], known[a:b] = 0, False
@@ -3379,7 +3420,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
         N0s = [n + 10 ** (SC_FLOOR / 10) * (np.vdot(chs[j], chs[j]).real + np.vdot(chs[j + 1], chs[j + 1]).real) / 2
                for j, n in enumerate(N0s)]
     Ls, tail = L, None                                     # v7.13: the segments' rooms, L taps or Lr with the long tail
-    if SC_TAIL:
+    if SC_TAIL and not quick:
         Lr = max(SC_RELEARN_TAPS, L)
         ins = tpos < len(y) - 8                            # the rows the recording holds
         wr = good[:ntot + Lr - 1] * ins[np.minimum(2 * SC_DLY + phase + P5 * np.arange(ntot + Lr - 1), len(ins) - 1)]
@@ -3419,7 +3460,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     lprior, xs, first, passes, hist = np.zeros(ns * m), [None] * len(segs), None, 0, []
     cw, relearn = None, None
     r0 = npass if SC_RELEARN_FROM is None else min(npass, SC_RELEARN_FROM)   # v7.18: the first pass after which the room is learned again
-    for it in range(npass + SC_RELEARN_PASSES):
+    for it in range(nmax):
         ext, q = [], 0
         for j, (S, E) in enumerate(segs):
             lp = lprior[q * m:(q + E - S) * m]
@@ -3444,7 +3485,7 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
             break
         e = np.clip(app - lin_, -20, 20)
         lprior = flip * np.r_[e, np.zeros(ns * m - nc)]
-        if r0 <= it + 1 < npass + SC_RELEARN_PASSES:  # v7.2: the second try (6.); v7.18: from pass r0 on
+        if r0 <= it + 1 < nmax:                      # v7.2: the second try (6.); v7.18: from pass r0 on
             L2 = SC_RELEARN_TAPS
             xm, xv = sc_soft(flip * np.r_[np.clip(app, -30, 30), np.full(ns * m - nc, -30.0)], omap)
             xsoft, vs, q = x.copy(), np.zeros(ntot), 0
@@ -3482,11 +3523,14 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
     out = dict(bits=bits, passes=passes, codeword=bool(np.array_equal((dec > 0).astype(int), cw)),
                chan_errors=int(np.sum(first != (cw > 0))), snr=float(np.median(snrs)), snrs=snrs,
                ppm=ppm, bend=bend, phase=phase, change=change, taps=L, train=nt, effort=effort, est=est, nseg=len(segs), T0=T0,
-               gaps=[(ng / SC_FS, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist, relearn=relearn, tail=tail, snr_eq=snr_eq, room_bend=room_bend, fits=fits, fit_best=fit_best)
-    if gaps and not out["codeword"] and swap is None:     # v5.1: the other size, or the runner-up place, of the least sure gap
+               gaps=[(ng / SC_FS, sz) for ng, sz in gaps], erased=int(sum(np.sum(good[SC_PRE + a:SC_PRE + b] == 0) for a, b in segs)), swap=swap, sec=_time.time() - t_start, det=det, hist=hist, relearn=relearn, tail=tail,
+               quick=("decoded" if quick else None) if hist[-1] == 0 else ("failed" if quick else None), snr_eq=snr_eq, room_bend=room_bend, fits=fits, fit_best=fit_best)
+    if gaps and not out["codeword"] and swap is None and not quick:   # v5.1: the other size, or the runner-up place, of the least sure gap
         o2 = sc_receive(y, fs, t0, omap, code, n0, nc, det, False, nt, effort, est, swap=max(unsure)[1])
         if o2["codeword"]:
             out = dict(o2, sec=_time.time() - t_start)
+    if SC_TAIL and SC_TAIL_LAZY and not quick and swap is None:
+        out["quick"] = "failed"                           # v7.20: the time counts the first pass without the long echo
     if verbose:
         print(out)
     return out
@@ -3494,10 +3538,11 @@ def sc_receive(y, fs, t0, omap, code, n0, nc, det="smap", verbose=False, nt=SC_N
 
 def sc_desc(omap, nt=SC_NC, wide=False):
     rs, _, fc, _ = SC_BANDS[wide]
+    beta = SC_PULSES[wide][0]                    # v7.19: the band's roll-off
     train, taps, d = (SC_SIZES[wide][k] for k in (2, 4, 5))
     name = [k for k, v in train.items() if v == nt][0]
-    return (f"single carrier at {fc / 1000:g} kHz, {rs:.0f} symbols/s (roll-off {SC_BETA:.2f}, {fc - rs * (1 + SC_BETA) / 2:.0f} to "
-            f"{fc + rs * (1 + SC_BETA) / 2:.0f} Hz), {OFDM_NAMES[omap]}, {name} training ({nt} symbols, rooms up to "
+    return (f"single carrier at {fc / 1000:g} kHz, {rs:.0f} symbols/s (roll-off {beta:.2f}, {fc - rs * (1 + beta) / 2:.0f} to "
+            f"{fc + rs * (1 + beta) / 2:.0f} Hz), {OFDM_NAMES[omap]}, {name} training ({nt} symbols, rooms up to "
             f"{max(taps[nt]) - SC_PRE} taps after the first strong arrival, {(max(taps[nt]) - SC_PRE) / rs * 1000:.0f} ms) every "
             f"{d / rs:.1f} s, {sc_rate(omap, nt, wide):.0f} bit/s before the code")
 
@@ -3646,6 +3691,11 @@ def parse_header(hb):
     crc, rx = crc8(hb[:32]), [int(x) for x in hb[32:40]]
     x = int("".join(str(c ^ r) for c, r in zip(crc, rx)), 2)   # the mask: 0xFF for codes 4 to 7, xor that of a coherent OFDM mapping
     ext, mi = next(((e, i) for i, mk in enumerate(OFDM_MASKS) for e in (0, 1) if x == mk ^ (0xFF * e)), (None, None))
+    fast = False
+    if ext is None:                              # v7.19: the fast wide band's masks, xor SC_FAST_MASK
+        ext, mi = next(((e, i) for i, mk in enumerate(OFDM_MASKS) for e in (0, 1) if x == mk ^ (0xFF * e) ^ SC_FAST_MASK),
+                       (None, None))
+        fast = ext is not None
     if ext is None:
         return None
     val = lambda s, n: int("".join(map(str, hb[s:s + n])), 2)
@@ -3670,6 +3720,10 @@ def parse_header(hb):
     code = codes[c] if c < len(codes) else None
     if typ < 2 and (c == 7 or sc and c == 2):    # v7.6: LDPC 5/6, type 0 or 1 with the code 7 (the single carrier's wide band: 2)
         code, wide = LDPC56, sc and c == 2
+    if fast:                                     # v7.19: only on the single carrier's wide band
+        if not wide:
+            return None
+        wide = 2
     omap = OFDM_MAPS[mi]
     if sc:                                       # v7.5: 8PSK's mask = 1024QAM
         omap = next((k for k, v in SC_SLOT.items() if v == omap), omap)
@@ -3833,17 +3887,22 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                 print(f"  SNR {o['snr']:.1f} dB, the median of the training blocks ({' / '.join(f'{v:.1f}' for v in o['snrs'])} dB: each block's room, {o['taps']} taps, against what it leaves"
                       f"{', MMSE' if est == 'mmse' else ''}), "
                       f"room change at each later block {ch} dB, sampling phase {o['phase']}")
+                if o.get("quick") == "decoded":
+                    print("  long echo (v7.13) not learned: the first pass decoded without it (v7.20)")
                 if o.get("tail") and o["tail"]["used"]:
                     tl = o["tail"]
                     print(f"  long echo (v7.13): {tl['taps']} taps from all the training blocks together, the tail past {o['taps']} taps "
                           f"{-tl['tail_db']:.0f} dB under the room; the noise {-tl['noise_db']:.1f} dB lower")
                 fb = o.get("fit_best")
                 print(f"  SNR after the equalizer {o['snr_eq']:.1f} dB (v7.14: what the detector sees"
+                      + ("; measured without the long echo, which this frame did not need: with it, it can be higher and faster "
+                         "modes fit, v7.20" if o.get("quick") == "decoded" else "")
                       + (f"; the room's bend between training blocks costs {o['room_bend']:.1f} dB, v7.17" if o["room_bend"] >= 0.05 else "")
                       + f"); with {SC_SPARE:g} dB to spare it fits "
                       + (", ".join(f"{mp.upper()} LDPC {r}" for mp, r in o["fits"]) + f", fastest {fb[0].upper()} LDPC {fb[1]}" if fb else "no mode"))
                 print(f"  {'SMAP' if det == 'smap' else 'linear MMSE'} ({effort}) and the {'LDPC' if hdr['code'] in LDPC_R else 'polar' if hdr['code'] in POLAR_R else 'turbo'} decoder: {o['passes']} pass{'es' if o['passes'] > 1 else ''}, "
                       f"{'a codeword' if o['codeword'] else 'not a codeword (some bits are wrong)'}, {o['sec']:.1f} s"
+                      + (" (after a first pass without the long echo, v7.20)" if o.get("quick") == "failed" else "")
                       + (f"; the clock wanders by {o['bend']:.1f} samples (samples lost or repeated?)" if o["bend"] > 1 else ""))
                 if o.get("relearn"):
                     r2 = o["relearn"]
@@ -4240,9 +4299,12 @@ def main():
                                 "single carrier: QPSK, 16QAM, 64QAM, 256QAM (the default) or 1024QAM (v7.5, phones close together in a quiet room)")
             p.add_argument("--tones", choices=TONE_SETS, default="low", help="hop: tone hopping, for reverberant rooms")
             p.add_argument("--train", choices=list(SC_TRAIN), default="medium",
-                           help="single carrier: training of 640, 1280 or 2560 symbols (wide band: 896, 1792, 3584), echoes up to 20, 47 or 100 ms (as OFDM's guard)")
+                           help="single carrier: training of 640, 1280 or 2560 symbols (wide band: 896, 1792, 3584; fast: 1056, 2080, 4192), echoes up to 20, 47 or 100 ms (as OFDM's guard)")
             p.add_argument("--wide", action="store_true",
                            help="v7.4, single carrier: the wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (an LDPC or a polar code; receivers before v7.4 ignore it)")
+            p.add_argument("--fast", action="store_true",
+                           help="v7.19, single carrier: the fast wide band, 16 000 symbols/s from 2.3 to 20.5 kHz (roll-off 1/7: 17 %% more symbols "
+                                "than --wide for about 0.6 dB less SNR; an LDPC or a polar code; receivers before v7.19 ignore it)")
             p.add_argument("--pre", type=int, choices=sorted(PILOTS), default=127, help="preamble length, longer reaches farther")
             p.add_argument("--control", choices=("short", "long"), default="short",
                            help="OFDM and single carrier: the short control part (v6, 0.19 s; v5 receivers do not read it) "
@@ -4317,15 +4379,16 @@ def main():
         sound = (a.order, a.periods) if a.sound else None
         mod = a.mod if a.mod in ("ofdm", "sc") else int(a.mod)
         omap = a.map or ("256qam" if mod == "sc" else "dqpsk")
-        code = ("ldpc" if a.wide else "turbo") if mod == "sc" and a.code == "none" else a.code   # single carrier: turbo, LDPC or polar codes (wide: LDPC or polar)
+        wide = (2 if a.fast else a.wide) if mod == "sc" else False   # v7.19: 2, the fast wide band
+        code = ("ldpc" if wide else "turbo") if mod == "sc" and a.code == "none" else a.code   # single carrier: turbo, LDPC or polar codes (wide: LDPC or polar)
         segs, data = build_frame(text=a.text if img is None and jpeg is None else None, img=img, code=code, rate=a.rate, tones=a.tones, pre=a.pre, sound=sound,
-                                 mod=mod, guard=a.guard, omap=omap, train=a.train, control=a.control, jpeg=jpeg, wide=a.wide and mod == "sc")
+                                 mod=mod, guard=a.guard, omap=omap, train=a.train, control=a.control, jpeg=jpeg, wide=wide)
         x = modulate(segs)
         write_wav(a.out, x, FS_TX)
         if sound:
             print(f"room sounding: MLS of {2 ** a.order - 1} samples x {a.periods + 1}, preamble {a.pre}, {len(x) / FS_TX:.1f} s -> {a.out}")
         else:
-            how = ofdm_desc(ofdm_mode(a.guard), omap) if mod == "ofdm" else sc_desc(omap, SC_SIZES[a.wide][2][a.train], a.wide) if mod == "sc" else f"{mod} tones"
+            how = ofdm_desc(ofdm_mode(a.guard), omap) if mod == "ofdm" else sc_desc(omap, SC_SIZES[wide][2][a.train], wide) if mod == "sc" else f"{mod} tones"
             if mod in ("ofdm", "sc"):
                 how += ", the short control part (v6)" if a.control == "short" else f", preamble {a.pre}"
             what = (f"a JPEG file of {len(jpeg)} bytes ({os.path.splitext(a.out)[0]}.jpg) and its CRC-32: " if not a.jpeg else

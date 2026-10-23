@@ -180,7 +180,7 @@ details .row{margin:8px 0}
     <span class="muted mo of">Mapping</span><span class="seg mo of" id="mapSeg"><button class="xsc" data-v="dqpsk">DQPSK</button><button data-v="qpsk">QPSK</button><button class="xsc" data-v="8psk">8PSK</button><button data-v="16qam">16QAM</button><button data-v="64qam">64QAM</button><button data-v="256qam">256QAM</button><button class="sco" data-v="1024qam">1024QAM</button></span>
     <span class="muted mo of nsc">Guard interval</span><span class="seg mo of nsc" id="guardSeg"><button data-v="long">21 ms · 17 kbit/s</button><button data-v="short">5 ms · 20 kbit/s</button></span>
     <span class="muted mo sco">Training, longest echo</span><span class="seg mo sco" id="trainSeg"><button data-v="short">20 ms · 68 kbit/s</button><button data-v="medium">47 ms · 61 kbit/s</button><button data-v="long">100 ms · 50 kbit/s</button></span>
-    <span class="muted mo sco">Band</span><span class="seg mo sco" id="bandSeg"><button data-v="usual">3.2–16 kHz · 61 kbit/s</button><button data-v="wide">2.3–20.5 kHz · 87 kbit/s</button></span>
+    <span class="muted mo sco">Band</span><span class="seg mo sco" id="bandSeg"><button data-v="usual">3.2–16 kHz · 61 kbit/s</button><button data-v="wide">2.3–20.5 kHz · 87 kbit/s</button><button data-v="fast" title="v7.19: 16 000 symbols/s, roll-off 1/7">2.3–20.5 kHz, roll-off 1/7 · 101 kbit/s</button></span>
     <span class="muted so">Period</span><span class="seg so" id="ordSeg"><button data-v="14">0.34 s</button><button data-v="15">0.68 s</button><button data-v="16">1.37 s</button></span>
     <span class="muted so">Periods averaged</span><span class="seg so" id="perSeg"><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button></span>
     <span class="muted mo of">Control part</span><span class="seg mo of" id="ctlSeg"><button data-v="short">Short · 0.19 s</button><button data-v="long">Long · 0.65 s, for v5 receivers</button></span>
@@ -238,6 +238,8 @@ details .row{margin:8px 0}
     <p class="muted"><b>A steady clock and the room's bend (v7.17).</b> The single carrier measures the delay of each training block against the first; v7.16 read the frame on a time map linear between blocks, so a delay measured a little off bent the map. In the class of 21 October the delays jumped by up to 0.9 sample within frames. With more than 2 training blocks, the frame is now read on the straight line that best fits the delays, a steady clock, and what departs from it stays in each block's room. Of 183 recorded single-carrier frames, 104 decode instead of 103, none lost; of the 7 class frames, 1 instead of 0. The tile of the SNR after the equalizer now also counts the room's change during the frame, but only its bend: between two training blocks the detector blends their rooms along a straight line, so a room changing at a steady pace costs nothing. Each block's room against the straight line through its neighbours' rooms, less what their noise explains, gives the bend, counted as noise (three quarters of what a random walk would leave, SC_BEND); a still room shows none. In the class of 21 October the tile said 5 frames fit their own mode and none decoded; it now says 1, which decoded. Of 183 recorded frames, 69 of the 70 whose own mode fits decoded. Only the receiver changed: the frames are the same.</p>
     <p class="muted"><b>The room learned again after every pass (v7.18).</b> The second try (v7.2) learns a longer room from the decoder's guesses of the data, but only once the usual passes have failed. Since v7.18 the receiver does it after every pass from the first, within the same number of passes (8 at most with the fast effort): after one pass the decoder already knows most of the data, and the room it gives lets the next pass see the echo that the training blocks cannot reach. Of 183 recorded single-carrier frames, 108 decode instead of 104 and none is lost; the frames that decode either way need 1.45 passes on average instead of 2.04. With white noise added (27 frames of 14 recordings, 12 to 30 dB under the sound), every frame still decodes with as much noise as before, and one living-room frame with 3 dB more. A frame that fails takes about 1.3 times as long to give up. Only the receiver changed: the frames are the same.</p>
     <p class="muted"><b>Wide band (v7.4).</b> The single carrier can also send 13 714 symbols per second on a carrier at 11.4 kHz, which fills 2.3 to 20.5 kHz instead of 3.2 to 16 kHz: 43 % more bits per second. Room soundings in a reverberant room heard 16 to 20.5 kHz about as clearly as the usual band (the phone's speaker gives 6 to 10 dB less there, but the room's noise is as much lower, and the echo dies out fastest at high frequencies) and 2.3 to 3.2 kHz 3 to 5 dB less clearly; above 21 kHz the iPhone's microphone hears almost nothing. The training blocks have 10/7 as many symbols, so they last as long and let the receiver learn the same echoes. The pulses are made on a 96 kHz grid, 7 samples per symbol, and every other sample is played. The same loudness spread over a wider band gives each symbol about 1.5 dB less signal: in simulation through the rooms measured, it decoded wherever the usual band did up to 6 dB more noise than the room had, and failed more often beyond. LDPC or polar codes only. The header marks it as type 2 on the single carrier, which receivers older than v7.4 ignore.</p>
+    <p class="muted"><b>Fast wide band (v7.19).</b> The pulses' roll-off sets how much band each symbol takes beyond the symbol rate: 1/3 in the usual and wide bands, so 13 714 symbols per second fill 2.3 to 20.5 kHz. With a roll-off of 1/7 the same band carries 16 000 symbols per second, 17 % more. The price: the pulses ring longer (24 symbols on each side instead of 12) and their peaks are higher, so the speaker clips a little more, and the receiver sees about 0.6 dB less SNR after the equalizer. Replayed through 13 rooms recorded in two classrooms and with phones close together, the fastest mode that decoded was 10 % faster in all; close together, 1024QAM 5/6 failed where the wide band decodes it (3/4 still decoded). The training blocks have 7/6 as many symbols as the wide band's, so they last as long. LDPC or polar codes only. The header's check bits are flipped in a new pattern, which receivers older than v7.19 do not accept, so they ignore these frames.</p>
+    <p class="muted"><b>The long echo only when needed (v7.20).</b> Learning the long echo (v7.13) from all the training blocks takes most of the time of a frame that decodes in one pass: for a 100 kB file sent close by, about three quarters of this page's decoding time. Since v7.20 the receiver first tries one pass without it, and without learning the room again; only if that pass fails does it decode the frame as before. Of our 190 recorded single-carrier frames the same 109 decode, with the same passes. A frame that decodes in that first pass takes about 0.9 of the time, and a 100 kB file sent close by about a quarter; a frame that needs more passes takes up to 1.16 times as long, for the extra pass. The fast wide band (v7.19) needs the long echo more often: replayed through 13 recorded rooms, the same 27 of 38 frames decode, 10 of them in the first pass, the others about 1.2 times as long; a 100 kB file sent close by decodes in a sixth of the time. When the first pass decodes, the tile of the SNR after the equalizer says so: measured without the long echo, it can be lower than with it. Only the receiver changed: the frames are the same.</p>
     <p class="muted"><b>1024QAM (v7.5).</b> The single carrier can put 10 bits on each symbol, 32 levels on each axis, instead of 256QAM's 8: 25 % more bits per second before the code. The levels are half as far apart, so it needs about 6 dB more signal than 256QAM at the same code rate; at the same information rate, 1024QAM with LDPC 2/3 carries 11 % more than 256QAM with LDPC 3/4 for about 3 dB more signal, and 1024QAM with LDPC 1/2 is no better than 256QAM with LDPC 2/3. Replaying the room and noise of one of the best recordings (phones close together and still, 29 dB on this page) with 1024QAM frames put LDPC 2/3 at the edge, and 3/4 needed about 2 dB more signal. Take it with LDPC 2/3, for phones close together in a quiet room. The header marks it with the mask of 8PSK, which the single carrier never used, so receivers older than v7.5 ignore it.</p>
     <p class="muted"><b>LDPC 5/6 (v7.6).</b> The highest rate: 5 message bits in every 6 sent, 11 % more than 3/4, for 1.5 to 2.5 dB more signal (in plain noise: 64QAM 15.5 dB with 3/4, 17 dB with 5/6; 256QAM 20 and 22.5 dB; 1024QAM 25 and 27.5 dB). 256QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 2/3 for a little less signal (22.5 against 22.9 dB in plain noise), and replaying the room and noise of one of the best recordings, it still decoded with the noise 2 dB louder than 1024QAM 2/3 could take: take it rather than 1024QAM 2/3. 64QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 1/2, for 1 dB less. 1024QAM with LDPC 5/6 failed in that replay even with the noise 8 dB quieter. It works with every modulation except OFDM with 64QAM or 256QAM: OFDM's own noise (its clipping, about 21 dB below the signal) leaves 64QAM 3 to 5 % of wrong bits on a short message even in a quiet room, more than 5/6 can correct, and 256QAM with 5/6 needs 22.5 dB. The header marks it as a text or an image with code 7, which receivers older than v7.6 ignore.</p>
   </details>
@@ -1355,6 +1357,8 @@ function drawQR(cv, text, px = 8) {
 // v7.6: type 0 or 1 with the code field 7 (3 with the CRC inverted), which no receiver accepted, is LDPC 5/6; on the single
 // carrier's wide band (type 2 has no code left), type 0 or 1 with the code field 2 (convolutional, which the single carrier
 // never takes). Receivers older than v7.6 ignore it.
+// v7.19: on the single carrier's wide band, the CRC's mask xor SC_FAST_MASK (0x1D) is the fast wide band (SC_BANDS[2]).
+// Receivers older than v7.19 ignore it.
 const CTRL = { tones: 'low', rate: 400 };
 const RATES = [200, 400, 800, 1600], TONE_SETS = ['low', 'high', 'hop'], RATES4 = [400, 800, 1600, 3200];
 // 6400 bit/s, 4 tones only: one group of 4 tones spaced 3.2 kHz fills the band 3.2-12.8 kHz, so there is nothing left to
@@ -1370,10 +1374,10 @@ function headerBits(h) {   // 6400 bit/s: tone set 3, rate field 3; OFDM: tone s
   const ld = TYPE3_CODES.indexOf(h.code), c = ld >= 0 ? ld : h.code === LDPC56 ? (h.sc && h.wide ? 2 : 7) : CODES.indexOf(h.code), type = ld >= 0 ? (h.sc && h.wide ? 2 : 3) : h.type, om = h.ofdm ? OFDM_MODES.findIndex(m => m.name === h.ofdm) : -1, wide = h.rate === RATE_WIDE, coh = om >= 0 || !!h.sc;
   const t = wide || coh ? 3 : TONE_SETS.indexOf(h.tones), four = h.mod === 4 || coh;
   if (h.sc && h.wide && ld < 0 && h.code !== LDPC56) throw new Error('the wide band takes an LDPC or a polar code');   // v7.4
-  const B = SC_BANDS[+!!(h.sc && h.wide)], T = h.sc ? B.tcode[h.train || B.nc] : 0;   // v5, single carrier: the training length, 0 medium, 1 short, 2 long
+  const B = SC_BANDS[h.sc ? scBandIx(h.wide) : 0], T = h.sc ? B.tcode[h.train || B.nc] : 0;   // v5, single carrier: the training length, 0 medium, 1 short, 2 long
   const v = [...msb(type, 2), ...msb(h.a | (T >> 1) << 10, 11), ...msb(h.b | (T & 1) << 10, 11), ...msb(c & 3, 2),
              ...msb(h.sc ? SC_FIELD : om >= 0 ? om : wide ? 3 : (four ? RATES4 : RATES).indexOf(h.rate), 2), ...msb(four ? 3 : t, 2), ...msb(four ? t : 0, 2)];
-  const mask = (c >> 2 ? 0xff : 0) ^ (coh ? OFDM_MASKS[Math.max(0, OFDM_MAPS.indexOf(h.sc ? SC_SLOT[h.map] || h.map : h.map))] : 0);   // v4: the mapping's mask (OFDM, and the single carrier in v5; v7.5: 1024QAM in 8PSK's place)
+  const mask = (c >> 2 ? 0xff : 0) ^ (coh ? OFDM_MASKS[Math.max(0, OFDM_MAPS.indexOf(h.sc ? SC_SLOT[h.map] || h.map : h.map))] : 0) ^ (h.sc && h.wide === 2 ? SC_FAST_MASK : 0);   // v7.19: the fast wide band   // v4: the mapping's mask (OFDM, and the single carrier in v5; v7.5: 1024QAM in 8PSK's place)
   return encodeFEC('conv', lastHb = [...v, ...crc8(v).map((b, i) => b ^ ((mask >> (7 - i)) & 1))]);
 }
 // ---- v7.1: JPEG pictures ----
@@ -1515,7 +1519,7 @@ function buildFrame(msg, cfg) {   // cfg.control (v6), OFDM and single carrier: 
   else if (msg.type === 'jpeg') { type = 1; [a, b] = jpegFields(msg.file.length); data = jpegPayload(msg.file); }   // v7.1: the file, then its CRC-32
   else { type = 1; a = msg.h; b = msg.w; data = Array.from(msg.pixels); }
   if (cfg.mod === 'sc') {   // v5, single carrier: a hopping control part, then the single-carrier part (turbo codes only: turbo equalization)
-    const wide = cfg.band === 'wide'; scSetBand(wide);   // v7.4: the wide band (cfg.band 'wide'), LDPC or polar codes only
+    const wide = cfg.band === 'fast' ? 2 : cfg.band === 'wide'; scSetBand(wide);   // v7.4: the wide band (cfg.band 'wide'; v7.19: 'fast', wide = 2), LDPC or polar codes only
     const map = SC_MAPS.includes(cfg.map) ? cfg.map : '256qam', sc = wide ? (WIDE_CODES.includes(code) ? code : 'ldpc') : SC_CODES.includes(code) ? code : 'turbo', train = SC_TRAINS[cfg.train] || SC_NC, hdr = headerBits({ type, a, b, code: sc, sc: true, map, train, wide });
     const { bits, nc, ns } = scChannelBits(sc, data, map), wave = scPart(bits, map, train);
     if (cfg.control !== 'long') return { segs: [{ wave: c6Wave(hdr) }, { wave }], bits: [], data, n0: data.length, nc, warm: 0, ctl: 'short',   // v6: the short control part
@@ -1567,19 +1571,20 @@ function modulate(frame, fs = FS_TX) {
 }
 function parseHeader(hb) {   // hb: the 40 decoded header bits; null unless the CRC and the fields are valid
   const crc = crc8(hb.slice(0, 32)), x = crc.reduce((v, b, i) => 2 * v + (b ^ hb[32 + i]), 0);   // the mask: 0xFF for codes 4 to 7, xor that of a coherent OFDM mapping (v4)
-  let ext = -1, mi = 0;
+  let ext = -1, mi = 0, fast = false;
   OFDM_MASKS.forEach((mk, i) => [0, 1].forEach(e => { if (ext < 0 && x === (mk ^ (0xff * e))) { ext = e; mi = i; } }));
+  if (ext < 0) OFDM_MASKS.forEach((mk, i) => [0, 1].forEach(e => { if (ext < 0 && x === (mk ^ (0xff * e) ^ SC_FAST_MASK)) { ext = e; mi = i; fast = true; } }));   // v7.19: the fast wide band
   if (ext < 0) return null;   // none of the masks
   const val = (s, n) => hb.slice(s, s + n).reduce((v, x) => 2 * v + x, 0);
   const tf = val(28, 2), four = tf === 3, M = four ? 4 : 2;   // tones 3: 4-FSK, its tone set in the last two bits
   // tone set 3: 6400 bit/s, one hopping group over the whole band (rate field 3), or OFDM (v3, rate field 0 or 1)
   const set3 = four && val(30, 2) === 3, ofdm = set3 ? OFDM_MODES[val(26, 2)] : null, sc = set3 && val(26, 2) === SC_FIELD;   // v5: rate field 2, the single carrier
   const c = val(24, 2) + 4 * ext, l56 = val(0, 2) < 2 && (c === 7 || sc && c === 2);   // v7.6: LDPC 5/6, type 0 or 1 with the code 7 (the single carrier's wide band: 2)
-  const t3 = val(0, 2) === 3 || sc && val(0, 2) === 2, scw = sc && (val(0, 2) === 2 || l56 && c === 2), T = sc ? 2 * val(2, 1) + val(13, 1) : 0, a = sc ? val(3, 10) : val(2, 11), b = sc ? val(14, 10) : val(13, 11), code = l56 ? LDPC56 : (t3 ? TYPE3_CODES : CODES)[c];   // v5: T, the single carrier's training
+  const t3 = val(0, 2) === 3 || sc && val(0, 2) === 2, scw = sc && (val(0, 2) === 2 || l56 && c === 2) && (fast ? 2 : true), T = sc ? 2 * val(2, 1) + val(13, 1) : 0, a = sc ? val(3, 10) : val(2, 11), b = sc ? val(14, 10) : val(13, 11), code = l56 ? LDPC56 : (t3 ? TYPE3_CODES : CODES)[c];   // v5: T, the single carrier's training
   const type = t3 ? (b === 0 ? 0 : 1) : val(0, 2);   // v7: type 3, an LDPC (v7.3: or polar) code; a text if b = 0, else an image
   const rate = ofdm ? ofdmRate(ofdm) : sc ? 1 : set3 ? (val(26, 2) === 3 ? RATE_WIDE : 0) : (four ? RATES4 : RATES)[val(26, 2)];
   const tones = ofdm ? 'ofdm' : sc ? 'sc' : set3 ? 'hop' : TONE_SETS[four ? val(30, 2) : tf];
-  if (!tones || !rate || !code || (!four && val(30, 2)) || (mi && !ofdm && !sc)) return null;   // a mapping mask on anything but OFDM or the single carrier: not ours
+  if (!tones || !rate || !code || (!four && val(30, 2)) || (mi && !ofdm && !sc) || (fast && !scw)) return null;   // a mapping mask on anything but OFDM or the single carrier: not ours
   const scMap = Object.keys(SC_SLOT).find(k => SC_SLOT[k] === OFDM_MAPS[mi]) || OFDM_MAPS[mi];   // v7.5: on the single carrier, 8PSK's mask = 1024QAM
   if (sc && (T === 3 || !SC_MAPS.includes(scMap) || !SC_CODES.includes(code))) return null;   // the single carrier: QPSK to 1024QAM, turbo, LDPC or polar codes
   let h = null;
@@ -2458,8 +2463,10 @@ function c6Read(x, n) {
 // v7.4, the wide band: 96000 / 7 = 13 714 symbols/s on a carrier at 11.4 kHz (2.3 to 20.5 kHz), the pulses 7 samples
 // apart on a 96 kHz grid (SC_FS) whose every other sample is played, the training 10/7 as many symbols (SC_BANDS). The
 // constants below that depend on the band are those of the band scSetBand chose last (buildFrame, scReceive).
+// v7.19, the fast wide band: 16 000 symbols/s at roll-off 1/7 in the same 2.3 to 20.5 kHz, 6 samples per symbol, the
+// pulses 24 symbols on each side of their peak, the training 7/6 the wide band's symbols (SC_BANDS[2]).
 let SC_RS = 9600, SC_SPS = 5, SC_FC = 9600;   // baud, samples per symbol, carrier
-const SC_BETA = 1 / 3, SC_SPAN = 12;   // roll-off, pulse half length (symbols)
+let SC_BETA = 1 / 3, SC_SPAN = 12;   // roll-off, pulse half length (symbols; v7.19: the band's)
 let SC_FS = FS_TX, SC_FPER = 5;   // v7.4: the single carrier's sampling rate (its pulses, carrier and time map), the carrier's period in its samples
 const SC_RMS = 0.45;          // rms at the speaker, as OFDM's; the peaks above 0.9 are clipped (1.5 % of the samples; in the
                                // band the distortion is 32 dB under the data, 47 dB under the training, whose peaks are low)
@@ -2511,6 +2518,8 @@ const SC_BOX = true;          // v7.10: SMAP's search stays inside the constella
                               // (against v7.9, on 94 recorded frames: the same 67 decode, 11 in one pass fewer; false: v7.9)
 const SC_SLOT = { '1024qam': '8psk' };   // v7.5: the header mask a single-carrier mapping borrows (8PSK is never sent on the single
                                          // carrier, and every older receiver rejects it there, so they ignore 1024QAM frames)
+const SC_FAST_MASK = 0x1d;    // v7.19: xored onto the header's mask on the fast wide band; the 10 masks it makes are 2 bits or more
+                               // from the 12 others (no 22 masks of 8 bits are all 3 apart), and every older receiver's CRC fails
 const SC_PASSES = 8;          // turbo equalization: at most this many detector <-> decoder passes (full effort)
 const SC_EFFORT = { fast: [[30, 20], 4], full: [[150, 100], SC_PASSES] };   // the receiver's choice: SMAP's steps (first pass,
                                // later ones) and the passes; fast costs at most 1 dB at the threshold on our recordings, and
@@ -2527,6 +2536,10 @@ const SC_RELEARN_FROM = 1;    // v7.18: the room is learned again, as in the sec
                               // the same passes at most (the effort's, then SC_RELEARN_PASSES more). 183 recorded frames: 108
                               // decode instead of 104, none lost; those that decode either way need 1.45 passes instead of 2.04;
                               // a frame that fails takes 1.3 times as long. null: only after the effort's passes (v7.2 to v7.17)
+const SC_TAIL_LAZY = true;    // v7.20: the long echo (SC_TAIL) only if a first pass without it, and without the room learned
+                              // again, fails; then the frame is decoded as without this switch. 190 frames: the same 109
+                              // decode with the same passes; a frame that decodes in that first pass takes 0.9 of the time
+                              // (100 kB close by: 0.25), one that needs more 1.16. false: the tail always (v7.13)
 const SC_REL = 1.0;           // ridge prior of a training block's room: the one before, give or take its own size (a weak
                                // pull; a tight one, -20 dB, cost 2 to 7 dB on our recordings when people moved)
 const SC_T0_FRAC = 0.5, SC_T0_BACK = 0.015;   // timing: the earliest arrival with half the strongest's correlation, up to 15 ms before it
@@ -2565,15 +2578,24 @@ let SC_G = scRRC(), SC_DLY = SC_SPAN * SC_SPS;   // 60 samples: the pulse's peak
 // fastest, and 2.3 to 3.2 kHz 3 to 5 dB less clearly; the iPhone's microphone stops at 21 kHz. The wide band's training
 // lasts as long as the usual one (10/7 the symbols, rooms in multiples of 64 taps): with 3.2 to 19.2 kHz in that room's echo
 // (rooms measured by sounding), the same symbols lost 1.7 to 3.3 dB of SNR, the same durations gained 0.9 to 2.9 dB.
+// v7.19, the fast wide band: roll-off 1/7 carries 17 % more symbols than 1/3 in the same band; its tails are longer (24
+// symbols: interference -55 dB, leakage outside the band -54 dB) and its peaks higher (the clipping's distortion -35 dB
+// instead of -37.6 dB at 256QAM). Replays of 13 recorded rooms (classroom spots from 30 cm to 7 m, and phones close
+// together): 0.6 dB less SNR after the equalizer (median), the fastest mode that decodes 9.9 % faster in all; 1024QAM 5/6
+// close together fails, 3/4 decodes. Its sizes are 7/6 the wide band's, in multiples of 32.
 const SC_BANDS = [
-  { rs: SC_RS, sps: SC_SPS, fc: SC_FC, u: 1, g: SC_G, na: SC_NA, nc: SC_NC, trains: SC_TRAINS, tcode: SC_TCODE, taps: SC_TAPS, d: SC_D, relearn: SC_RELEARN_TAPS, gapMax: SC_GAP_MAX, gapEdge: SC_GAP_EDGE },
-  { rs: 96000 / 7, sps: 7, fc: 11400, u: 2, g: scRRC(SC_BETA, 7), na: 1792, nc: 1792, trains: { short: 896, medium: 1792, long: 3584 }, tcode: { 1792: 0, 896: 1, 3584: 2 },
-    taps: { 896: [352], 1792: [704], 3584: [704, 1408] }, d: 6720, relearn: 2944, gapMax: 2048, gapEdge: 1200 }];
-const scWideOf = nt => SC_BANDS[1].tcode[nt] !== undefined;   // v7.4: whether a TC of nt symbols is the wide band's (the two bands' TCs differ)
+  { rs: SC_RS, sps: SC_SPS, fc: SC_FC, u: 1, beta: SC_BETA, span: SC_SPAN, ro: '1/3', g: SC_G, na: SC_NA, nc: SC_NC, trains: SC_TRAINS, tcode: SC_TCODE, taps: SC_TAPS, d: SC_D, relearn: SC_RELEARN_TAPS, gapMax: SC_GAP_MAX, gapEdge: SC_GAP_EDGE },
+  { rs: 96000 / 7, sps: 7, fc: 11400, u: 2, beta: 1 / 3, span: 12, ro: '1/3', g: scRRC(SC_BETA, 7), na: 1792, nc: 1792, trains: { short: 896, medium: 1792, long: 3584 }, tcode: { 1792: 0, 896: 1, 3584: 2 },
+    taps: { 896: [352], 1792: [704], 3584: [704, 1408] }, d: 6720, relearn: 2944, gapMax: 2048, gapEdge: 1200 },
+  { rs: 16000, sps: 6, fc: 11400, u: 2, beta: 1 / 7, span: 24, ro: '1/7', g: scRRC(1 / 7, 6, 24), na: 2080, nc: 2080, trains: { short: 1056, medium: 2080, long: 4192 }, tcode: { 2080: 0, 1056: 1, 4192: 2 },
+    taps: { 1056: [416], 2080: [832], 4192: [832, 1632] }, d: 7840, relearn: 3424, gapMax: 2048, gapEdge: 1200 }];   // v7.19
+const BAND_IX = { usual: 0, wide: 1, fast: 2 };   // v7.19: cfg.band -> SC_BANDS
+const scWideOf = nt => Math.max(0, SC_BANDS.findIndex(B => B.tcode[nt] !== undefined));   // v7.4: whether a TC of nt symbols is the wide band's (the bands' TCs differ; v7.19: the band's index, 2 the fast wide band)
+const scBandIx = wide => wide === 2 ? 2 : +!!wide;   // v7.19: wide (false, true or 2) -> SC_BANDS
 function scSetBand(wide) {   // v7.4: the band of the single-carrier frame about to be built or read
-  const B = SC_BANDS[+!!wide], gcd = (a, b) => b ? gcd(b, a % b) : a;
+  const B = SC_BANDS[scBandIx(wide)], gcd = (a, b) => b ? gcd(b, a % b) : a;
   ({ rs: SC_RS, sps: SC_SPS, fc: SC_FC, g: SC_G, na: SC_NA, nc: SC_NC, trains: SC_TRAINS, tcode: SC_TCODE, taps: SC_TAPS, d: SC_D, relearn: SC_RELEARN_TAPS, gapMax: SC_GAP_MAX, gapEdge: SC_GAP_EDGE } = B);
-  SC_FS = FS_TX * B.u; SC_FPER = SC_FS / gcd(SC_FS, SC_FC); SC_DLY = SC_SPAN * SC_SPS; SC_GAP_SPAN = SC_SPAN * SC_SPS + 8;
+  SC_BETA = B.beta; SC_SPAN = B.span; SC_FS = FS_TX * B.u; SC_FPER = SC_FS / gcd(SC_FS, SC_FC); SC_DLY = SC_SPAN * SC_SPS; SC_GAP_SPAN = SC_SPAN * SC_SPS + 8;
 }
 function xorshift32(seed, n) { const o = new Uint32Array(n); let x = (seed >>> 0) || 1; for (let i = 0; i < n; i++) { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; o[i] = x; } return o; }
 const SC_TSEQ = new Map();
@@ -2603,8 +2625,8 @@ const scRate = (map, nt = SC_NC, wide = scWideOf(nt)) => { const B = SC_BANDS[+w
 const scSeconds = (ns, nt = SC_NC) => { const B = scBand(nt); return SC_GAP + (scLayout(ns, nt).n * B.sps + B.g.length - 1) / (FS_TX * B.u); };
 const scEcho = nt => { const B = scBand(nt); return Math.round((Math.max(...B.taps[nt]) - SC_PRE) / B.rs * 1000); };   // ms: the longest echo after the first strong arrival the receiver can learn
 const scTrainName = nt => { const t = scBand(nt).trains; return Object.keys(t).find(k => t[k] === nt); };
-const scEdges = B => [B.fc - B.rs * (1 + SC_BETA) / 2, B.fc + B.rs * (1 + SC_BETA) / 2];   // v7.4: the band's edges, Hz
-const scDesc = (map, nt = SC_NC) => { const B = scBand(nt), [lo, hi] = scEdges(B); return `single carrier at ${B.fc / 1000} kHz, ${Math.round(B.rs)} symbols/s (roll-off 1/3, ${+(lo / 1000).toFixed(1)} to ${+(hi / 1000).toFixed(1)} kHz), ${OFDM_NAMES[map]}, ${scTrainName(nt)} training (${nt} symbols, echoes up to ${scEcho(nt)} ms) every ${+(B.d / B.rs).toFixed(2)} s`; };
+const scEdges = B => [B.fc - B.rs * (1 + B.beta) / 2, B.fc + B.rs * (1 + B.beta) / 2];   // v7.4: the band's edges, Hz
+const scDesc = (map, nt = SC_NC) => { const B = scBand(nt), [lo, hi] = scEdges(B); return `single carrier at ${B.fc / 1000} kHz, ${Math.round(B.rs)} symbols/s (roll-off ${B.ro}, ${+(lo / 1000).toFixed(1)} to ${+(hi / 1000).toFixed(1)} kHz), ${OFDM_NAMES[map]}, ${scTrainName(nt)} training (${nt} symbols, echoes up to ${scEcho(nt)} ms) every ${+(B.d / B.rs).toFixed(2)} s`; };
 function scSymbols(bits, map, nt = SC_NC) {   // channel bits (padded, scrambled) -> every symbol of the part: training blocks and data
   const [pr, pim, lab] = ofdmPoints(map), m = OFDM_BITS[map], inv = []; lab.forEach((l, p) => { inv[l] = p; });
   const ns = Math.floor(bits.length / m), [ta, tc] = scTraining(nt), { blocks, segs, n } = scLayout(ns, nt), r = new Float64Array(n), i = new Float64Array(n);
@@ -3155,6 +3177,9 @@ function scSplit(y, rho, t, p, u) {
 //    counted (scRelearnSeg).
 //    v7.18: the room is learned again so after every pass from pass SC_RELEARN_FROM on, within the same passes at most,
 //    not only once the effort's passes have failed.
+//    v7.20 (SC_TAIL_LAZY): first one pass without the long echo and without the room learned again (quick = true);
+//    only if it fails is the frame decoded as above. The long echo takes most of the time of a frame that decodes in one
+//    pass, and such frames (close by) seldom need it.
 // v7.11: the gain by which each sample of the matched filter's output is divided: the square root of its power,
 // averaged over SC_LEVEL seconds around it, relative to the median over the part (samples a .. b - 1, the part's own
 // signal; beyond, the nearest whole average is held). All ones if the part is shorter than the average. As sc_level.
@@ -3240,11 +3265,15 @@ function scLevel(vr, vi, a, b, nv) {
   return g;
 }
 
-function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt = SC_NC, effort = 'fast', est = 'ls', swap = null) {
+function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt = SC_NC, effort = 'fast', est = 'ls', swap = null, quick = false) {
   scSetBand(scWideOf(nt));   // v7.4: the band of a TC of nt symbols
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()), tStart = now();
+  if (SC_TAIL && SC_TAIL_LAZY && !quick && swap === null) {   // v7.20: one pass without the long echo first
+    const o1 = scReceive(y, fs, t0, map, code, n0, nc, det, onPass, nt, effort, est, null, true);
+    if (o1.codeword) return o1;
+  }
   const m = OFDM_BITS[map], ns = Math.ceil(nc / m), { blocks, segs, n: ntot } = scLayout(ns, nt), rho = fs / SC_FS, P5 = SC_SPS, ax = scAxis(map);
-  const [steps, npass] = SC_EFFORT[effort] || SC_EFFORT.fast;
+  const [steps, npass] = SC_EFFORT[effort] || SC_EFFORT.fast, nmax = quick ? 1 : npass + SC_RELEARN_PASSES;   // v7.20: the first pass alone
   let L = SC_TAPS[nt][0];
   const [ta, tc] = scTraining(nt), x = cvec(ntot);
   x.r.set(ta.r, 0); x.i.set(ta.i, 0); for (const [b] of [[SC_NA], ...blocks.slice(1)]) { x.r.set(tc.r, b); x.i.set(tc.i, b); }
@@ -3414,7 +3443,7 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
   const N0s = segs.map((_, j) => (n0k[j] + n0k[j + 1]) / 2 + (SC_FLOOR === null ? 0 : 10 ** (SC_FLOOR / 10) * (en(chs[j]) + en(chs[j + 1])) / 2));   // v7.9: plus the error floor
   const srt = [...snrs].sort((a, b) => a - b), nb = srt.length, snrMed = nb % 2 ? srt[(nb - 1) / 2] : (srt[nb / 2 - 1] + srt[nb / 2]) / 2;
   let Ls = L, chT = chs, tail = null;   // v7.13: the segments' rooms, L taps or Lr with the long tail
-  if (SC_TAIL) {
+  if (SC_TAIL && !quick) {
     const Lr = Math.max(SC_RELEARN_TAPS, L), R = ntot + Lr - 1, wr = new Float64Array(R);
     for (let r = 0; r < R; r++) wr[r] = good[r] * (zt[Math.min(2 * SC_DLY + phase + P5 * r, nv - 1)] < y.length - 8 ? 1 : 0);   // the rows the recording holds, but for gaps
     const t = scTail(x, yy, wr, segs, chs, n0k, L, Lr); tail = t.info;
@@ -3449,7 +3478,7 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
   const key = prbs(ns * m), lprior = new Float64Array(ns * m), xs = segs.map(() => null);
   let first = null, passes = 0, bits = null, zc = null, relearn = null; const hist = [];
   const r0 = SC_RELEARN_FROM === null ? npass : Math.min(npass, SC_RELEARN_FROM);   // v7.18: the first pass after which the room is learned again
-  for (let it = 0; it < npass + SC_RELEARN_PASSES; it++) {
+  for (let it = 0; it < nmax; it++) {
     const ext = new Float64Array(ns * m); let q = 0;
     segs.forEach(([S, E], j) => {
       const lp = lprior.subarray(q * m, (q + E - S) * m);
@@ -3470,10 +3499,10 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
     const dec = d.post || d.app;   // v7: the LDPC (v7.3: polar) decoder's own decisions
     for (let i = 0; i < nc; i++) bad += (dec[i] > 0 ? 1 : 0) !== cw[i];   // coded bits that disagree with the decided message
     hist.push(bad);
-    if (onPass) onPass({ pass: passes, bad, nc, npass: relearn || r0 < npass ? npass + SC_RELEARN_PASSES : npass, relearn: !!relearn && r0 >= npass });
+    if (onPass) onPass({ pass: passes, bad, nc, npass: quick ? 1 : relearn || r0 < npass ? npass + SC_RELEARN_PASSES : npass, relearn: !!relearn && r0 >= npass, quick });
     if (bad === 0) break;
     for (let i = 0; i < ns * m; i++) lprior[i] = i < nc ? (key[i] ? -1 : 1) * Math.max(-20, Math.min(20, d.app[i] - lin[i])) : 0;
-    if (it + 1 >= r0 && it + 1 < npass + SC_RELEARN_PASSES) {   // v7.2: the second try (6.); v7.18: from pass r0 on
+    if (it + 1 >= r0 && it + 1 < nmax) {   // v7.2: the second try (6.); v7.18: from pass r0 on
       const L2 = SC_RELEARN_TAPS, R2 = ntot + L2 - 1;
       const lpost = Float64Array.from({ length: ns * m }, (_, i) => (key[i] ? -1 : 1) * (i < nc ? Math.max(-30, Math.min(30, d.app[i])) : -30));
       const sm = scSoft(lpost, ax), xsoft = { r: Float64Array.from(x.r), i: Float64Array.from(x.i) }, vs = new Float64Array(ntot);
@@ -3509,12 +3538,13 @@ function scReceive(y, fs, t0, map, code, n0, nc, det = 'smap', onPass = null, nt
   for (let i = 0; i < nc; i++) chErr += (first[i] > 0 ? 1 : 0) !== (cw[i] ^ key[i]);
   const h = Float32Array.from(c0.r, (v, k) => v * v + c0.i[k] * c0.i[k]), step = Math.max(1, Math.floor(zc.r.length / 5000));
   const out = { bits: Uint8Array.from(bits), passes, codeword: hist[hist.length - 1] === 0, chErr, snr: snrMed, snrs, ppm, bend, phase, change, nseg: segs.length, taps: L, train: nt, effort, npass, est,
-           T0, sec: (now() - tStart) / 1000, det, hist, relearn, tail, snrEq, roomBend, fits, fitBest, llr: Float32Array.from(first), h, map, gaps: gaps.map(([g, sz]) => [g / SC_FS, sz]), erased: nErased, swap, rs: SC_RS, wide: scWideOf(nt),
+           T0, sec: (now() - tStart) / 1000, det, hist, relearn, tail, quick: quick ? (hist[hist.length - 1] === 0 ? 'decoded' : 'failed') : null, snrEq, roomBend, fits, fitBest, llr: Float32Array.from(first), h, map, gaps: gaps.map(([g, sz]) => [g / SC_FS, sz]), erased: nErased, swap, rs: SC_RS, wide: scWideOf(nt),
            zr: Float32Array.from({ length: Math.ceil(zc.r.length / step) }, (_, k) => zc.r[k * step]), zi: Float32Array.from({ length: Math.ceil(zc.r.length / step) }, (_, k) => zc.i[k * step]) };
-  if (gaps.length && !out.codeword && swap === null) {   // v5.1: the other size, or the runner-up place, of the least sure gap
+  if (gaps.length && !out.codeword && swap === null && !quick) {   // v5.1: the other size, or the runner-up place, of the least sure gap
     const o2 = scReceive(y, fs, t0, map, code, n0, nc, det, onPass, nt, effort, est, unsure.reduce((a, b) => b[0] > a[0] ? b : a)[1]);
     if (o2.codeword) return Object.assign(o2, { sec: (now() - tStart) / 1000 });
   }
+  if (SC_TAIL && SC_TAIL_LAZY && !quick && swap === null) out.quick = 'failed';   // v7.20: the time counts the first pass without the long echo
   return out;
 }
 
@@ -3953,7 +3983,7 @@ if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATE
   OFDM_MODES, OFDM_F0, OFDM_F1, ofdmMode, ofdmCarriers, ofdmRate, ofdmReference, ofdmSymbols, fracRead, ofdmReceive, ofdmDesc,
   C6_N, C6_CP, C6_REP, C6_LEN, C6_THR, C6_BAL, C6_K, c6Symbol, c6Index, c6Wave, c6Read, c6Filter,
   OFDM_MAPS, OFDM_MASKS, OFDM_BITS, OFDM_NAMES, OFDM_PSTEP, ofdmPoints, ofdmPilot, ofdmLayout, ofdmSmooth, levinson, ofdmCoherent,
-  SC_MAPS, SC_RMS, SC_NC, SC_TRAINS, SC_TCODE, SC_TAPS, SC_BANDS, scSetBand, scWideOf, scBand, scEdges, SC_EFFORT, SC_EST, scEcho, scTrainName, scLayout, scRate, scSeconds, scDesc, scSymbols, scPassband, scPart, scChannelBits, scTraining, scReceive, scMmseFirst, scFit, scTurboSiso, scBcjrApp, SCConv, scFFT, scPlan, scRead, scSmap, scLmmse, scSic, interleave, deinterleave, turboCheck };
+  SC_MAPS, SC_RMS, SC_NC, SC_TRAINS, SC_TCODE, SC_TAPS, SC_BANDS, BAND_IX, SC_FAST_MASK, scSetBand, scWideOf, scBandIx, scBand, scEdges, SC_EFFORT, SC_EST, scEcho, scTrainName, scLayout, scRate, scSeconds, scDesc, scSymbols, scPassband, scPart, scChannelBits, scTraining, scReceive, scMmseFirst, scFit, scTurboSiso, scBcjrApp, SCConv, scFFT, scPlan, scRead, scSmap, scLmmse, scSic, interleave, deinterleave, turboCheck };
 </script>
 
 <script>
@@ -3969,11 +3999,11 @@ const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params
               map: [...OFDM_MAPS, '1024qam'].includes(params.get('map')) ? params.get('map') : 'dqpsk',   // v7.5: 1024QAM, single carrier only
               det: params.get('det') === 'lmmse' ? 'lmmse' : 'smap',   // v5: the single carrier's detector (receiver)
               train: ['short', 'long'].includes(params.get('train')) ? params.get('train') : 'medium',   // v5: its training (sender)
-              band: params.get('band') === 'wide' ? 'wide' : 'usual',   // v7.4: its band, 3.2 to 16 or 2.3 to 20.5 kHz (sender)
+              band: ['wide', 'fast'].includes(params.get('band')) ? params.get('band') : 'usual',   // v7.4: its band, 3.2 to 16 or 2.3 to 20.5 kHz (sender; v7.19: fast, 16 000 symbols/s)
               effort: params.get('effort') === 'full' ? 'full' : 'fast',   // v5: SMAP's steps and the passes (receiver)
               est: params.get('est') === 'mmse' ? 'mmse' : 'ls',   // v5: the room's estimate, least squares or MMSE (receiver)
               control: params.get('ctl') === 'long' ? 'long' : 'short' };   // v6: the control part of OFDM and single-carrier frames (sender)
-if (cfg.mod === 'sc') { if (!SC_MAPS.includes(cfg.map)) cfg.map = '256qam'; if (!(cfg.band === 'wide' ? WIDE_CODES : SC_CODES).includes(cfg.code)) cfg.code = cfg.band === 'wide' ? 'ldpc' : 'turbo'; }   // OFDM (v4): DQPSK, or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots
+if (cfg.mod === 'sc') { if (!SC_MAPS.includes(cfg.map)) cfg.map = '256qam'; if (!(cfg.band !== 'usual' ? WIDE_CODES : SC_CODES).includes(cfg.code)) cfg.code = cfg.band !== 'usual' ? 'ldpc' : 'turbo'; }   // OFDM (v4): DQPSK, or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots
 if (cfg.mod !== 'sc' && !OFDM_MAPS.includes(cfg.map)) cfg.map = '256qam';   // v7.5: OFDM has no 1024QAM
 if (cfg.rate === RATE_WIDE) cfg.tones = 'hop';   // 6400 bit/s: one group of 4 tones over the whole band
 const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
@@ -3988,7 +4018,7 @@ function seg(el, value, onPick) {
   el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); onPick(b.dataset.v); });
 }
 function ctx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }
-function syncUrl() { const u = new URL(location.href); u.searchParams.set('mod', cfg.mod); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); if (cfg.mod === 'ofdm') u.searchParams.set('guard', cfg.guard); else u.searchParams.delete('guard'); if (cfg.mod === 'ofdm' || cfg.mod === 'sc') u.searchParams.set('map', cfg.map); else u.searchParams.delete('map'); if (cfg.mod === 'sc') u.searchParams.set('train', cfg.train); else u.searchParams.delete('train'); if (cfg.mod === 'sc' && cfg.band === 'wide') u.searchParams.set('band', 'wide'); else u.searchParams.delete('band'); if (imgScale > 1) u.searchParams.set('img', { 2: 'large', 4: 'huge', 8: 'x8', 16: 'x16' }[imgScale]); else u.searchParams.delete('img'); if (picFmt !== 'bits') { u.searchParams.set('pic', picFmt); u.searchParams.set('q', jpegQ); } else { u.searchParams.delete('pic'); u.searchParams.delete('q'); } if ((cfg.mod === 'ofdm' || cfg.mod === 'sc') && cfg.control === 'long') u.searchParams.set('ctl', 'long'); else u.searchParams.delete('ctl'); history.replaceState(null, '', u); }
+function syncUrl() { const u = new URL(location.href); u.searchParams.set('mod', cfg.mod); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); if (cfg.mod === 'ofdm') u.searchParams.set('guard', cfg.guard); else u.searchParams.delete('guard'); if (cfg.mod === 'ofdm' || cfg.mod === 'sc') u.searchParams.set('map', cfg.map); else u.searchParams.delete('map'); if (cfg.mod === 'sc') u.searchParams.set('train', cfg.train); else u.searchParams.delete('train'); if (cfg.mod === 'sc' && cfg.band !== 'usual') u.searchParams.set('band', cfg.band); else u.searchParams.delete('band'); if (imgScale > 1) u.searchParams.set('img', { 2: 'large', 4: 'huge', 8: 'x8', 16: 'x16' }[imgScale]); else u.searchParams.delete('img'); if (picFmt !== 'bits') { u.searchParams.set('pic', picFmt); u.searchParams.set('q', jpegQ); } else { u.searchParams.delete('pic'); u.searchParams.delete('q'); } if ((cfg.mod === 'ofdm' || cfg.mod === 'sc') && cfg.control === 'long') u.searchParams.set('ctl', 'long'); else u.searchParams.delete('ctl'); history.replaceState(null, '', u); }
 // QR code: the online copy of this page (also when the laptop runs it from a local file); receivers need no settings
 function phoneUrl() {   // from a local file: the online copy of the same file (the latest version if the name is not one of ours)
   if (location.protocol === 'https:') return location.origin + location.pathname;
@@ -4006,19 +4036,19 @@ const TX_HINT = {   // under the transmitter's options: what the modulation chos
   2: 'Binary FSK: one tone per bit, the low one for 0, the high one for 1. A lower rate, a longer preamble or 4 tones reach farther; in a reverberant room, beyond a few metres, use Hopping. Receivers need no settings: each frame\'s header tells them.',
   4: '4-FSK: one of four tones per symbol, 2 bits each (Gray-coded). At the same bit rate, a symbol lasts twice as long as with 2 tones and gathers twice the energy, so it reaches farther. In a reverberant room use Hopping; 6400 bit/s fills the whole band. Receivers need no settings: each frame\'s header tells them.',
   ofdm: 'OFDM: hundreds of subcarriers at once, far faster than FSK (the rates shown are before the code): use it with a code. Echo longer than the guard acts as noise, so take the long guard in a reverberant room. DQPSK needs no pilots; QPSK to 256QAM add pilots to measure the room: QPSK reaches farther than DQPSK, 16QAM is nearly twice as fast for about 3 dB more signal, 64QAM and 256QAM are 1.5 and 2 times faster again for about 5 and 11 dB more: try them close to the speaker. Receivers need no settings.',
-  sc: 'Single carrier (v5): one symbol at a time, 9600 per second (13 714 in the wide band), with no guard. Training blocks every 0.5 s let the receiver learn the room and undo its echo (soft SMAP with the decoder), which takes a few seconds. Take a training longer than the room\'s echo. 256QAM needs a still room; 16QAM or 64QAM is safer when people move. 1024QAM (v7.5) needs about 6 dB more signal than 256QAM: only for phones close together in a quiet room, with LDPC 2/3. 256QAM and 1024QAM play 1 dB quieter (v7.9), which clips less. 256QAM with LDPC 5/6 (v7.6) carries as much and stands a little more noise. Turbo or LDPC codes only (the others are greyed out): at the same rate turbo needs about 1 dB less signal here, while LDPC 2/3 and 3/4 carry more when the signal is strong. The wide band (v7.4, 2.3 to 20.5 kHz) carries 43 % more, with LDPC or polar codes only, but gives each symbol about 1.5 dB less signal: take it when the signal is strong. Receivers need no settings.'
+  sc: 'Single carrier (v5): one symbol at a time, 9600 per second (13 714 in the wide band, 16 000 in the fast one), with no guard. Training blocks every 0.5 s let the receiver learn the room and undo its echo (soft SMAP with the decoder), which takes a few seconds. Take a training longer than the room\'s echo. 256QAM needs a still room; 16QAM or 64QAM is safer when people move. 1024QAM (v7.5) needs about 6 dB more signal than 256QAM: only for phones close together in a quiet room, with LDPC 2/3. 256QAM and 1024QAM play 1 dB quieter (v7.9), which clips less. 256QAM with LDPC 5/6 (v7.6) carries as much and stands a little more noise. Turbo or LDPC codes only (the others are greyed out): at the same rate turbo needs about 1 dB less signal here, while LDPC 2/3 and 3/4 carry more when the signal is strong. The wide band (v7.4, 2.3 to 20.5 kHz) carries 43 % more, with LDPC or polar codes only, but gives each symbol about 1.5 dB less signal: take it when the signal is strong. The fast wide band (v7.19, roll-off 1/7) carries 17 % more than the wide one for about 0.6 dB less signal. Receivers need no settings.'
 };
 function showMod() {   // the rates and tone labels of binary or 4-tone FSK; OFDM has a guard interval instead of tones and a rate
   $('txHint').textContent = TX_HINT[cfg.mod];
   $('txOpts').classList.toggle('ofdm', cfg.mod === 'ofdm' || cfg.mod === 'sc'); $('txOpts').classList.toggle('sc', cfg.mod === 'sc');   // the single carrier: OFDM's options less the guard
-  $('txOpts').classList.toggle('wide', cfg.band === 'wide');   // v7.4: turbo greyed out in the wide band
+  $('txOpts').classList.toggle('wide', cfg.band !== 'usual');   // v7.4: turbo greyed out in the wide band
   $('rateSeg').querySelectorAll('button').forEach(b => b.classList.toggle('hidden', !rateList(cfg.mod).includes(+b.dataset.v)));
   $('tonesSeg').querySelectorAll('button').forEach(b => { if (b.dataset.v !== 'hop') b.textContent = cfg.mod === 4 ? `${TONES4[b.dataset.v][0] / 1000} to ${TONES4[b.dataset.v][3] / 1000} kHz` : TONES[b.dataset.v].map(f => f / 1000).join(' / ') + ' kHz'; });
 }
 seg($('modSeg'), cfg.mod, v => {
   cfg.mod = v === 'ofdm' || v === 'sc' ? v : +v;
   if (cfg.mod === 'sc') {   // turbo, LDPC or polar codes only, QPSK to 256QAM
-    if (!(cfg.band === 'wide' ? WIDE_CODES : SC_CODES).includes(cfg.code)) $('codeSeg').querySelector(`[data-v="${cfg.band === 'wide' ? 'ldpc' : 'turbo'}"]`).click();   // v7.4: the wide band, LDPC or polar
+    if (!(cfg.band !== 'usual' ? WIDE_CODES : SC_CODES).includes(cfg.code)) $('codeSeg').querySelector(`[data-v="${cfg.band !== 'usual' ? 'ldpc' : 'turbo'}"]`).click();   // v7.4: the wide band, LDPC or polar
     if (!SC_MAPS.includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();
   }
   if (cfg.mod === 'ofdm' && !OFDM_MAPS.includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();   // v7.5: 1024QAM, single carrier only
@@ -4036,12 +4066,12 @@ function guardLabels() { $('guardSeg').querySelectorAll('button').forEach(b => {
 seg($('trainSeg'), cfg.train, v => { cfg.train = v; syncUrl(); txInfo(); });
 function trainLabels() {   // v5: like the guard's; v7.4: and the bands'
   const map = SC_MAPS.includes(cfg.map) ? cfg.map : '256qam';
-  $('trainSeg').querySelectorAll('button').forEach(b => { const nt = SC_BANDS[+(cfg.band === 'wide')].trains[b.dataset.v]; b.textContent = `${scEcho(nt)} ms · ${(scRate(map, nt) / 1000).toFixed(0)} kbit/s`; });
-  $('bandSeg').querySelectorAll('button').forEach(b => { const B = SC_BANDS[+(b.dataset.v === 'wide')], [lo, hi] = scEdges(B); b.textContent = `${+(lo / 1000).toFixed(1)}–${+(hi / 1000).toFixed(1)} kHz · ${(scRate(map, B.trains[cfg.train]) / 1000).toFixed(0)} kbit/s`; });
+  $('trainSeg').querySelectorAll('button').forEach(b => { const nt = SC_BANDS[BAND_IX[cfg.band]].trains[b.dataset.v]; b.textContent = `${scEcho(nt)} ms · ${(scRate(map, nt) / 1000).toFixed(0)} kbit/s`; });
+  $('bandSeg').querySelectorAll('button').forEach(b => { const B = SC_BANDS[BAND_IX[b.dataset.v]], [lo, hi] = scEdges(B); b.textContent = `${+(lo / 1000).toFixed(1)}–${+(hi / 1000).toFixed(1)} kHz${B.ro !== '1/3' ? `, roll-off ${B.ro}` : ''} · ${(scRate(map, B.trains[cfg.train]) / 1000).toFixed(0)} kbit/s`; });
 }
 seg($('bandSeg'), cfg.band, v => {   // v7.4: the single carrier's band; the wide one takes LDPC or polar codes
   cfg.band = v; showMod();
-  if (v === 'wide' && cfg.mod === 'sc' && !WIDE_CODES.includes(cfg.code)) $('codeSeg').querySelector('[data-v="ldpc"]').click();
+  if (v !== 'usual' && cfg.mod === 'sc' && !WIDE_CODES.includes(cfg.code)) $('codeSeg').querySelector('[data-v="ldpc"]').click();
   trainLabels(); syncUrl(); txInfo();
 });
 seg($('mapSeg'), cfg.map, v => { cfg.map = v; no56(); guardLabels(); trainLabels(); syncUrl(); txInfo(); });
@@ -4157,7 +4187,7 @@ function txInfo() {
     : msg.type === 'jpeg' && f.dur > 10 ? ' · A long frame: receivers may take 2 s per second of sound to decode it, more if the room makes them try again.' : '';   // v7.7
   if (f.sc) {
     const nb = scLayout(f.ns, f.train).segs.length + 1;
-    $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, single carrier${f.wide ? ', wide band (2.3 to 20.5 kHz)' : ''}: ${f.ns} ${OFDM_NAMES[f.map]} symbols at ${Math.round(scBand(f.train).rs)} symbols/s, ${nb} ${scTrainName(f.train)} training blocks of ${f.train} symbols (every ${+(scBand(f.train).d / scBand(f.train).rs).toFixed(2)} s; echoes up to ${scEcho(f.train)} ms) = ${(scRate(f.map, f.train) / 1000).toFixed(1)} kbit/s before the code` + ctlInfo(f) + long;
+    $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, single carrier${f.wide === 2 ? ', fast wide band (2.3 to 20.5 kHz, roll-off 1/7)' : f.wide ? ', wide band (2.3 to 20.5 kHz)' : ''}: ${f.ns} ${OFDM_NAMES[f.map]} symbols at ${Math.round(scBand(f.train).rs)} symbols/s, ${nb} ${scTrainName(f.train)} training blocks of ${f.train} symbols (every ${+(scBand(f.train).d / scBand(f.train).rs).toFixed(2)} s; echoes up to ${scEcho(f.train)} ms) = ${(scRate(f.map, f.train) / 1000).toFixed(1)} kbit/s before the code` + ctlInfo(f) + long;
     return;
   }
   if (f.ofdm) {
@@ -4285,7 +4315,7 @@ $('sendBtn').onclick = () => {
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 $('wavBtn').onclick = () => {
   const m = currentMsg();
-  download(wavBlob(modulate(txFrame(m)), FS_TX), m.type === 'sound' ? `acoustic_sounding_mls${m.order}_x${m.periods}.wav` : `acoustic_${m.type}_${cfg.mod === 'sc' ? `sc_${cfg.map}_${cfg.train}${cfg.band === 'wide' ? '_wide' : ''}` : cfg.mod === 'ofdm' ? `ofdm_${cfg.map}_${cfg.guard}` : `${cfg.mod === 4 ? '4fsk_' : ''}${cfg.tones}_${cfg.rate}bps`}${(cfg.mod === 'sc' || cfg.mod === 'ofdm') && cfg.control === 'long' ? '_longctl' : ''}.wav`);
+  download(wavBlob(modulate(txFrame(m)), FS_TX), m.type === 'sound' ? `acoustic_sounding_mls${m.order}_x${m.periods}.wav` : `acoustic_${m.type}_${cfg.mod === 'sc' ? `sc_${cfg.map}_${cfg.train}${cfg.band !== 'usual' ? '_' + cfg.band : ''}` : cfg.mod === 'ofdm' ? `ofdm_${cfg.map}_${cfg.guard}` : `${cfg.mod === 4 ? '4fsk_' : ''}${cfg.tones}_${cfg.rate}bps`}${(cfg.mod === 'sc' || cfg.mod === 'ofdm') && cfg.control === 'long' ? '_longctl' : ''}.wav`);
 };
 showTx();
 
@@ -4315,7 +4345,7 @@ let shown = null, live = null, frameId = 0;   // the frame on display; the frame
 const fpill = (f, t, c = 'live') => { f.pill = [t, c]; if (f === shown) pill(t, c); };
 function frameWhat(h) {   // the message and how it was sent, in words
   if (h.type === 'sound') return `Room sounding, ${h.periods} × ${(((1 << h.order) - 1) / FS_TX).toFixed(2)} s`;
-  const how = h.sc ? `single carrier ${OFDM_NAMES[h.map]}${h.wide ? ', wide band' : ''}, ${scTrainName(h.train)} training` : h.ofdm ? `OFDM ${OFDM_NAMES[h.map]}, ${h.ofdm} guard`
+  const how = h.sc ? `single carrier ${OFDM_NAMES[h.map]}${h.wide === 2 ? ', fast wide band' : h.wide ? ', wide band' : ''}, ${scTrainName(h.train)} training` : h.ofdm ? `OFDM ${OFDM_NAMES[h.map]}, ${h.ofdm} guard`
     : `${h.M === 4 ? 4 : 2} tones, ${h.rate} bit/s${h.tones === 'hop' ? (h.rate === RATE_WIDE ? ', whole band' : ', hopping') : ''}`;
   return `${h.type === 'text' ? `Text, ${h.len} characters` : h.type === 'jpeg' ? `Picture file, ${h.len} bytes` : `Image ${h.w}×${h.h}`} · ${how} · ${h.code === 'none' ? 'no code' : TURBO_R[h.code] ? `turbo ${CODE_INFO[h.code].rate}` : LDPC_R[h.code] ? `LDPC ${CODE_INFO[h.code].rate}` : POLAR_R[h.code] ? `polar ${CODE_INFO[h.code].rate}` : CODE_INFO[h.code].short}`;
 }
@@ -4391,7 +4421,7 @@ function makeRx() {
     scDecode,
     onProgress: p => {
       const f = find(p.hdr) || live; if (!f) return;
-      if (p.pass) { f.state = `decoding, pass ${p.pass.pass}`; showLog(); fpill(f, `Decoding · ${p.pass.relearn ? 'second try, ' : ''}pass ${p.pass.pass} of at most ${p.pass.npass}`); return; }
+      if (p.pass) { f.state = `decoding, pass ${p.pass.pass}`; showLog(); fpill(f, `Decoding · ${p.pass.quick ? 'first pass without the long echo' : `${p.pass.relearn ? 'second try, ' : ''}pass ${p.pass.pass} of at most ${p.pass.npass}`}`); return; }
       if (f !== shown) return;
       if (p.sound || p.ofdm || p.sc) { $('rxProg').style.width = (100 * p.frac) + '%'; return; }
       $('rxProg').style.width = (100 * p.done / p.hdr.nc) + '%'; if (p.bits) showOut(p.hdr, p.bits, p.done);
@@ -4582,13 +4612,14 @@ function showStats(res) {
   }
   if (h.sc) {   // v5, single carrier
     const o = res.sc, dn = detName(o.det);
-    if (o.snrEq !== undefined) st.push([`${o.snrEq.toFixed(1)} dB`, 'SNR after the equalizer', `what the detector sees (v7.14): the room's uneven response and the echo it cannot learn count against it, unlike the training's SNR.${o.roomBend >= 0.05 ? ` The room's bend between training blocks, which the blend of two blocks' rooms misses, costs ${o.roomBend.toFixed(1)} dB of it (v7.17).` : ''} With ${SC_SPARE} dB to spare it fits ${o.fits.length ? o.fits.map(([mp, r]) => `${OFDM_NAMES[mp]} LDPC ${r}`).join(', ') + `; the fastest is ${OFDM_NAMES[o.fitBest[0]]} LDPC ${o.fitBest[1]}` : 'no mode'} (v7.17: 69 of 70 such recorded frames decoded)`]);
+    if (o.snrEq !== undefined) st.push([`${o.snrEq.toFixed(1)} dB`, `SNR after the equalizer${o.quick === 'decoded' ? ', no long echo' : ''}`, `what the detector sees (v7.14): the room's uneven response and the echo it cannot learn count against it, unlike the training's SNR.${o.quick === 'decoded' ? ' Measured without the long echo, which this frame did not need (v7.20): with it the SNR can be higher, so faster modes may fit than listed here.' : ''}${o.roomBend >= 0.05 ? ` The room's bend between training blocks, which the blend of two blocks' rooms misses, costs ${o.roomBend.toFixed(1)} dB of it (v7.17).` : ''} With ${SC_SPARE} dB to spare it fits ${o.fits.length ? o.fits.map(([mp, r]) => `${OFDM_NAMES[mp]} LDPC ${r}`).join(', ') + `; the fastest is ${OFDM_NAMES[o.fitBest[0]]} LDPC ${o.fitBest[1]}` : 'no mode'} (v7.17: 69 of 70 such recorded frames decoded)`]);
     st.push([`${o.snr.toFixed(1)} dB`, 'SNR of the symbols', `the median over the training blocks (${o.snrs.map(v => v.toFixed(1)).join(' / ')} dB), each with its own room: the noise, plus the echo beyond the ${o.taps} taps (${Math.round((o.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms after the first strong arrival) and the room's drift`]);
     st.push([o.taps, 'taps of the room', o.est === 'mmse' ? `by MMSE, the most the ${scTrainName(o.train)} training allows: each tap weighed by the room's power at its delay` : scBand(o.train).taps[o.train].length > 1 ? `the ${scTrainName(o.train)} training allows ${scBand(o.train).taps[o.train].join(' or ')}: the receiver keeps the one that fits better` : `what the ${scTrainName(o.train)} training allows`]);
     if (o.tail && o.tail.used) st.push([o.tail.taps, 'taps with the long echo', `the echo past the ${o.taps} taps, up to ${o.tail.taps} (${Math.round((o.tail.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms after the first strong arrival), learned from all the training blocks together and added to each block's room: the noise on the training ${(-o.tail.noiseDb).toFixed(1)} dB lower (v7.13)`]);
+    if (o.quick === 'decoded') st.push(['not needed', 'long echo', `the first pass decoded without learning the echo past the room's taps, which takes most of a one-pass decode: it is learned only if that pass fails (v7.20)`]);
     if (o.relearn) st.push([res.codeword ? '✓ decoded' : '✗ failed', o.relearn.after < o.npass ? 'room learned again' : 'second try', `${o.relearn.after < o.npass ? `after pass ${o.relearn.after} and each later one (v7.18),` : `the ${o.npass} passes ended without a codeword, so`} the room was learned again from the whole frame, its data as the decoder's soft symbols: ${o.relearn.taps} taps (${Math.round((o.relearn.taps - SC_PRE) / (o.rs || SC_BANDS[0].rs) * 1000)} ms of echo) instead of ${o.taps}${o.relearn.own ? `, ${o.relearn.own} of the ${o.nseg} data segments with their own correction of ${o.taps} taps (the room changed during the frame)` : ''}, SNR ${o.relearn.snr.toFixed(1)} dB; then ${o.relearn.passes} more pass${o.relearn.passes > 1 ? 'es' : ''} (v7.2${o.relearn.own ? ', v7.8' : ''})`]);
     st.push([o.passes, `pass${o.passes > 1 ? 'es' : ''}, ${dn} ↔ ${LDPC_R[code] ? 'LDPC' : POLAR_R[code] ? 'polar' : 'turbo'}`, `turbo equalization, ${SC_RELEARN_PASSES && SC_RELEARN_FROM !== null && SC_RELEARN_FROM < o.npass ? `at most ${o.npass + SC_RELEARN_PASSES} passes (${o.effort} effort), the room learned again after each one from pass ${SC_RELEARN_FROM} on (v7.18)` : `at most ${o.npass} passes (${o.effort} effort)${SC_RELEARN_PASSES ? `, then up to ${SC_RELEARN_PASSES} more for the second try` : ''}`}; it stops once the decisions form a codeword. Coded bits in doubt after each pass: ${o.hist.join(' → ')}`]);
-    st.push([`${o.sec.toFixed(1)} s`, 'to decode', `${dn}, ${o.effort} effort, in the background: listening went on`]);
+    st.push([`${o.sec.toFixed(1)} s`, 'to decode', `${dn}, ${o.effort} effort, in the background: listening went on${o.quick === 'failed' ? '; after a first pass without the long echo (v7.20)' : ''}`]);
     st.push([`${res.ppm >= 0 ? '+' : ''}${res.ppm.toFixed(0)} ppm`, 'clock offset', `time scale Rx vs Tx (clock offset, or a moving phone), from the ${o.nseg + 1} training blocks`]);
     if (o.change.length) st.push([`${Math.max(...o.change).toFixed(0)} dB`, 'room change', 'the largest change of the room from one training block to the next (0.5 s apart), relative to the room. In our recordings: −14 to −20 dB in a still room, −6 to −9 dB when people moved.']);
     if (o.bend > 1) st.push([o.bend.toFixed(1), 'clock wander, samples', 'samples by which the training blocks\' delays depart from a steady clock (a moving phone, or samples lost); the frame is read on the steady clock, each block\'s room takes the rest (v7.17)']);
@@ -4679,7 +4710,7 @@ function scAgain() {   // v5: decodes the single-carrier frame on display again,
   if (!res || res.sound || !res.hdr.sc || !res.job) return;
   const job = { ...res.job, det: cfg.det, effort: cfg.effort, est: cfg.est };
   pill(`Decoding again · ${detName(job.det)} (${job.effort})${job.est === 'mmse' ? ', MMSE room' : ''}`, 'live');
-  scDecode(job, p => { if (shown === f) pill(`Decoding again · ${p.relearn ? 'second try, ' : ''}pass ${p.pass} of at most ${p.npass}`, 'live'); }).then(o => {
+  scDecode(job, p => { if (shown === f) pill(`Decoding again · ${p.quick ? 'first pass without the long echo' : `${p.relearn ? 'second try, ' : ''}pass ${p.pass} of at most ${p.npass}`}`, 'live'); }).then(o => {
     res.job = job; res.sc = o; res.ppm = o.ppm; Object.assign(res, decodeFrame(res, 'cal')); checkDemo(res);
     if (shown === f) { display(f); donePill(res); } else showLog();
   }, () => { if (shown === f) pill('Decoding failed', 'bad'); });
@@ -4688,7 +4719,7 @@ function rxParam(k, v, d) { const u = new URL(location.href); if (v !== d) u.sea
 seg($('detSeg'), cfg.det, v => { cfg.det = v; if (rx) rx.cfg.det = v; rxParam('det', v, 'smap'); scAgain(); });   // v5: the single carrier's detector
 seg($('effSeg'), cfg.effort, v => { cfg.effort = v; if (rx) rx.cfg.effort = v; rxParam('effort', v, 'fast'); scAgain(); });   // v5: SMAP's steps and the passes
 seg($('estSeg'), cfg.est, v => { cfg.est = v; if (rx) rx.cfg.est = v; rxParam('est', v, 'ls'); scAgain(); });   // v5: the room's estimate
-$('recBtn').onclick = () => { if (lastRec) download(wavBlob(lastRec.recording, lastRec.fs), lastRec.sound ? `received_sounding_${Math.round(lastRec.fs)}Hz.wav` : `received_${lastRec.hdr.sc ? `sc_${lastRec.hdr.map}_${scTrainName(lastRec.hdr.train)}${lastRec.hdr.wide ? '_wide' : ''}` : lastRec.hdr.ofdm ? `ofdm_${lastRec.hdr.map}_${lastRec.hdr.ofdm}` : `${lastRec.hdr.M === 4 ? '4fsk_' : ''}${lastRec.hdr.tones}_${lastRec.hdr.rate}bps`}_${Math.round(lastRec.fs)}Hz.wav`); };
+$('recBtn').onclick = () => { if (lastRec) download(wavBlob(lastRec.recording, lastRec.fs), lastRec.sound ? `received_sounding_${Math.round(lastRec.fs)}Hz.wav` : `received_${lastRec.hdr.sc ? `sc_${lastRec.hdr.map}_${scTrainName(lastRec.hdr.train)}${lastRec.hdr.wide === 2 ? '_fast' : lastRec.hdr.wide ? '_wide' : ''}` : lastRec.hdr.ofdm ? `ofdm_${lastRec.hdr.map}_${lastRec.hdr.ofdm}` : `${lastRec.hdr.M === 4 ? '4fsk_' : ''}${lastRec.hdr.tones}_${lastRec.hdr.rate}bps`}_${Math.round(lastRec.fs)}Hz.wav`); };
 $('irBtn').onclick = () => {   // the measured response, peak at 0.9, from 5 ms before the direct sound to the end of the decay
   if (!lastRec || !lastRec.sound) return;
   const s = lastRec.sound, n = Math.min(s.N, s.iend + Math.round(0.05 * FS_TX)), pk = s.h.reduce((m, v) => Math.max(m, Math.abs(v)), 0) || 1;
