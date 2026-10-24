@@ -28,7 +28,9 @@ v7.20: the single carrier learns the long echo (v7.13) only if a first pass with
 once (close by, a long file) takes a quarter of the time. v7.21: wide OFDM, 2.3 to 20.5 kHz with symbols 4 or 8 times
 longer (N 4096 with a 5 ms guard, or 8192 with 21 ms), QPSK to 1024QAM and LDPC 5/6 at every mapping: it plays 3 dB
 quieter and cancels its peaks on subcarriers from 20.6 to 22 kHz that carry no data (tone reservation), so its clipping
-is 44 dB under the signal instead of 21; up to 131 kbit/s after the code, for phones close together.
+is 44 dB under the signal instead of 21; up to 131 kbit/s after the code, for phones close together. v7.22: when the
+code finds no codeword in a wide OFDM frame, the receiver learns the room again keeping its echo up to half a symbol
+(43 or 85 ms) instead of the guard, and decodes once more: 4 to 6 dB more SNR in rooms whose echo outlasts the guard.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -1199,6 +1201,17 @@ def encode_fec(code, d):
     return np.asarray(d, dtype=int)
 
 
+def fec_checked(code, n0, llr):
+    """v7.22: decode_fec for an LDPC or a polar code, and whether the decoder ends on a codeword (every block's parity
+    checks, or its CRC, hold)."""
+    llr = np.asarray(llr, dtype=float)
+    if code in POLAR_R:
+        r = polar_decode(deinterleave(llr), n0, POLAR_R[code])
+        return r[0], bool(np.all(r[1]))
+    r = ldpc_decode(deinterleave(llr), n0, LDPC_R[code])
+    return r[0], bool(r[3])
+
+
 def decode_fec(code, n0, llr, lim=4):
     """llr: channel LLRs after descrambling (> 0 means 1). Returns (n0 message bits, failed RS blocks)."""
     llr = np.asarray(llr, dtype=float)
@@ -1893,6 +1906,17 @@ OFDM_TR_ROUNDS, OFDM_TR_CLIP = 30, 0.765
 OFDM_WIDE_MASK = 0x1D    # header: xored onto the mask (as on the fast wide band, which has the rate field 2)
 OFDM_WMAPS = ["qpsk", "16qam", "64qam", "256qam", "1024qam"]
 OFDM_WALPHA = 1e-4       # their smoothing's alpha: OFDM_ALPHA (0.01) bent the estimate enough to cap 1024QAM at 29 dB
+# v7.22, wide OFDM's second try: the smoothing keeps what an echo within the guard makes (delays -16 .. CP), so the
+# room's estimate misses an echo that lasts longer, and the receiver counts it as noise. With an iPhone next to a Mac
+# (2026-10-24) the sound after the first 5.3 ms was 16.5 dB under the signal, after 21 ms 21 dB: the short guard saw
+# 15 dB and failed 256QAM 5/6. Long symbols suffer little from such an echo itself (most of it only shapes each
+# subcarrier's gain, which the pilots and reference symbols measure); what fails is the smoothed estimate. So when the
+# code finds no codeword, the room is estimated again keeping delays -16 .. N/2 (43 ms with N 4096, 85 ms with N 8192)
+# and the frame decoded once more. Through the recorded rooms of v7.21's test (364 frames, 13 spots) this second
+# estimate gave 0.5 to 10 dB more SNR (median 5.8; 0.5 to 2 at close range) and lost no frame the first one decoded:
+# 57 frames decoded instead of 40; through the room measured next to the Mac, the long guard decodes 1024QAM 2/3 and
+# 256QAM 5/6 (SNR 21 -> 25.5 dB), the short one 256QAM 2/3 (15.5 -> 19.4 dB).
+OFDM_LONG_KEEP = 0.5     # v7.22: the second try keeps delays up to this fraction of N
 
 
 def ofdm_mode(name):
@@ -1956,10 +1980,24 @@ def ofdm_smoother(mode):
     return _SMOOTH[mode["name"]]
 
 
-def ofdm_smooth(mode, G):
+def ofdm_smooth(mode, G, long=False):
     """ofdm_smoother(mode) @ G. v7.21, the wide modes (K up to 3106): the same form, F (F^H F + N alpha I)^-1 F^H G,
     F the K x (CP + 17) matrix from the delays kept to the subcarriers (A = F F^H / N): CP + 17 unknowns instead of K,
-    alpha OFDM_WALPHA."""
+    alpha OFDM_WALPHA. v7.22, long (the second try): delays -16 .. N OFDM_LONG_KEEP kept, more unknowns than
+    subcarriers, so A (A + alpha I)^-1 G = G - alpha (A + alpha I)^-1 G, with A + alpha I Toeplitz (toeplitz_solve, as
+    the page)."""
+    if long:
+        key = mode["name"] + "/long"
+        if key not in _SMOOTH:
+            N, K = mode["N"], len(ofdm_carriers(mode["N"]))
+            keep = np.zeros(N)
+            keep[np.arange(-16, int(N * OFDM_LONG_KEEP) + 1) % N] = 1
+            c = np.fft.fft(keep)[:K] / N
+            al = OFDM_WALPHA if mode.get("wide") else OFDM_ALPHA
+            c[0] += al
+            _SMOOTH[key] = c, al
+        c, al = _SMOOTH[key]
+        return G - al * toeplitz_solve(c, G)
     if not mode.get("wide"):
         return ofdm_smoother(mode) @ G
     if mode["name"] not in _SMOOTH:
@@ -1969,6 +2007,25 @@ def ofdm_smooth(mode, G):
         _SMOOTH[mode["name"]] = F, np.linalg.solve(F.conj().T @ F + N * OFDM_WALPHA * np.eye(len(d)), F.conj().T)
     F, B = _SMOOTH[mode["name"]]
     return F @ (B @ G)
+
+
+def toeplitz_solve(t, y):
+    """v7.22: x with T x = y, T Hermitian Toeplitz with first column t (T[j, l] = t[j - l] for j >= l, conj(t[l - j])
+    otherwise), by Levinson's recursion as the page's levinson: the solution grows one row at a time, with the forward
+    and backward vectors f, b (T f = e_first, T b = e_last), in K^2 operations instead of K^3."""
+    n = len(t)
+    f, b, x = np.zeros(n, dtype=complex), np.zeros(n, dtype=complex), np.zeros(n, dtype=complex)
+    f[0] = b[0] = 1 / t[0]
+    x[0] = y[0] / t[0]
+    tc = np.conj(t)
+    for k in range(1, n):
+        tk = t[k:0:-1]                                        # t[k - i], i = 0 .. k - 1
+        ef, eb, ex = tk @ f[:k], tc[1:k + 1] @ b[:k], tk @ x[:k]
+        u = 1 / (1 - ef * eb)
+        p, q = f[:k + 1].copy(), np.concatenate([[0], b[:k]])
+        f[:k + 1], b[:k + 1] = (p - ef * q) * u, (q - eb * p) * u
+        x[:k + 1] += (y[k] - ex) * b[:k + 1]
+    return x
 
 
 def ofdm_reserve(x, N):
@@ -2211,8 +2268,9 @@ def ofdm_receive(y, fs, t0, mode, ns, nc, omap="dqpsk"):
     inside = float(h[:CP + 1].sum() / max(h.sum(), 1e-30))
     Y = np.array([spec(r, i, w) for i in range(ns + 2)])     # the two references and the data
     gap = dict(slips=[(i, d * sc) for i, d in slips], erased=erased)   # the gaps in samples of the recording
-    if omap != "dqpsk":
-        return dict(ofdm_coherent(Y, ns, nc, mode, omap, erased), eps=eps, tau=tau, inside=inside, K=K, h=h, **gap)
+    if omap != "dqpsk":                                       # Y kept for wide OFDM's second try (v7.22)
+        return dict(ofdm_coherent(Y, ns, nc, mode, omap, erased), eps=eps, tau=tau, inside=inside, K=K, h=h,
+                    Y=Y if mode.get("wide") else None, **gap)
     z = Y[1:ns + 1] * np.conj(Y[:ns])
     dgrid = np.arange(-4, 4.001, 0.01)                        # delay change between two symbols (moving phone)
     E = np.exp(8j * np.pi * np.outer(dgrid, f) / FS_TX)
@@ -2305,16 +2363,17 @@ def gaps(r, tau, f, ref, mode, omap, ns, N, CP, pad, spec, read):
     return out
 
 
-def ofdm_coherent(Y, ns, nc, mode, omap, erased=()):
+def ofdm_coherent(Y, ns, nc, mode, omap, erased=(), long=False):
     """Step 4' of ofdm_receive: Y holds the subcarriers of the reference, the ns data symbols and the reference.
-    erased (v4.1): data symbols that hold a gap; they are left out and their LLRs are 0."""
+    erased (v4.1): data symbols that hold a gap; they are left out and their LLRs are 0. long (v7.22, wide OFDM's
+    second try): the room's estimate keeps its echo up to N OFDM_LONG_KEEP samples instead of the guard."""
     N, CP = mode["N"], mode["CP"]
     kk = ofdm_carriers(N)
     K, f = len(kk), kk * FS_TX / N
     ref = np.exp(1j * ofdm_reference(K))
     pts, lab = ofdm_points(omap)
     m = OFDM_BITS[omap]
-    smooth = lambda G: ofdm_smooth(mode, G)
+    smooth = lambda G: ofdm_smooth(mode, G, long)
     pil = [np.arange(K)] + [np.nonzero(ofdm_pilots(K, i))[0] for i in range(1, ns + 1)] + [np.arange(K)]
     for i in erased:
         pil[i] = np.zeros(0, dtype=int)
@@ -4028,7 +4087,18 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                 break
             o = ofdm_receive(y, fs, t0, mode, hdr["ns"], hdr["nc"], hdr["map"])
             llr, key = o["llr"], prbs(hdr["nc"])
-            bits, rs_fails = decode_fec(hdr["code"], hdr["n0"], np.where(key == 1, -llr, llr), np.inf)
+            if o.get("Y") is not None:                        # v7.22: wide OFDM, a second try when no codeword comes out
+                bits, ok = fec_checked(hdr["code"], hdr["n0"], np.where(key == 1, -llr, llr))
+                rs_fails = None
+                if not ok:                                    # the room again, its echo kept up to N/2 samples
+                    o2 = ofdm_coherent(o["Y"], hdr["ns"], hdr["nc"], mode, hdr["map"], o["erased"], long=True)
+                    b2, ok2 = fec_checked(hdr["code"], hdr["n0"], np.where(key == 1, -o2["llr"], o2["llr"]))
+                    o["long"] = dict(snr=o2["snr"], ok=ok2)
+                    if ok2:
+                        bits, llr = b2, o2["llr"]
+                        o.update(llr=o2["llr"], snr=o2["snr"], z=o2["z"])
+            else:
+                bits, rs_fails = decode_fec(hdr["code"], hdr["n0"], np.where(key == 1, -llr, llr), np.inf)
             sent = encode_fec(hdr["code"], bits) ^ key
             chan_errors = int(np.sum((llr > 0).astype(int) != sent))
             res = dict(hdr, pre=n_p, hop=hop, bits=bits, llr=llr, chan_errors=chan_errors, rs_fails=rs_fails, t=p1 / fs,
@@ -4043,6 +4113,11 @@ def decode(y, fs, verbose=True, soft="cal", det="smap", effort="fast", est="ls")
                 print(f"  SNR per subcarrier {np.min(o['snr']):.0f} to {np.max(o['snr']):.0f} dB (median {np.median(o['snr']):.0f}, "
                       f"groups of {OFDM_GROUP}), {100 * (1 - o['inside']):.0f}% of the received energy after the guard, "
                       f"windows {o['tau']:+d} samples from the preamble's timing")
+                if o.get("long"):
+                    lg, kp = o["long"], int(mode["N"] * OFDM_LONG_KEEP)
+                    print(f"  second try (v7.22): the room learned again with its echo up to {kp} samples ({kp / FS_TX * 1000:.0f} ms) "
+                          f"after the window's start, SNR per subcarrier median {np.median(lg['snr']):.0f} dB: "
+                          f"{'a codeword' if lg['ok'] else 'still not a codeword'}")
                 for i, d in o["slips"]:
                     print(f"  {abs(d):.0f} samples {'lost' if d < 0 else 'repeated'} by the microphone before symbol {i} of {hdr['ns']}"
                           f"{', symbol ' + ', '.join(map(str, o['erased'])) + ' erased' if o['erased'] else ''} (v4.1: read again after the gap)")
