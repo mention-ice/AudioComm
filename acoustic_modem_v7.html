@@ -51,9 +51,10 @@ header .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,
 .opts>.muted:nth-child(odd){max-width:8.5em}
 .opts>.seg{justify-self:start}
 .opts .seg button{padding:7px 10px}
-.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ldpc) .lr,.opts:not(.polar) .pr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk,.opts.sc .nsc,.opts:not(.sc) .sco,.opts.x56 .n56,#sizeSeg.nobig .big,#picSeg.nofile .pf{display:none}
+.opts:not(.sounding) .so,.opts.sounding .mo,.opts:not(.turbo) .tr,.opts:not(.ldpc) .lr,.opts:not(.polar) .pr,.opts:not(.ofdm) .of,.opts.ofdm:not(.sounding) .fk,.opts.sc .nsc,.opts:not(.sc) .sco,.opts:not(.sc):not(.ow) .q10,.opts.x56 .n56,#sizeSeg.nobig .big,#picSeg.nofile .pf{display:none}
 .opts.sc .xsc{opacity:.35;pointer-events:none}
 .opts.sc.wide .xw{opacity:.35;pointer-events:none}
+.opts.ow .xsc,.opts.ow .xw{opacity:.35;pointer-events:none}
 .opts.ofdm.short:not(.sounding) .pre{display:none}
 @media (max-width:520px){.opts{grid-template-columns:1fr;gap:4px}.opts>.seg{margin-bottom:6px}}
 .card h2{border-left:4px solid var(--accent);padding-left:8px}
@@ -177,10 +178,10 @@ details .row{margin:8px 0}
     <span class="muted mo">Modulation</span><span class="seg mo" id="modSeg"><button data-v="2">2 tones, 1 bit</button><button data-v="4">4 tones, 2 bits</button><button data-v="ofdm">OFDM</button><button data-v="sc">Single carrier</button></span>
     <span class="muted fk">Tones</span><span class="seg fk" id="tonesSeg"><button data-v="low">4 / 8 kHz</button><button data-v="high">8 / 16 kHz</button><button data-v="hop">Hopping</button></span>
     <span class="muted mo fk">Rate, bit/s</span><span class="seg mo fk" id="rateSeg"><button data-v="200">200</button><button data-v="400">400</button><button data-v="800">800</button><button data-v="1600">1600</button><button data-v="3200">3200</button><button data-v="6400">6400</button></span>
-    <span class="muted mo of">Mapping</span><span class="seg mo of" id="mapSeg"><button class="xsc" data-v="dqpsk">DQPSK</button><button data-v="qpsk">QPSK</button><button class="xsc" data-v="8psk">8PSK</button><button data-v="16qam">16QAM</button><button data-v="64qam">64QAM</button><button data-v="256qam">256QAM</button><button class="sco" data-v="1024qam">1024QAM</button></span>
+    <span class="muted mo of">Mapping</span><span class="seg mo of" id="mapSeg"><button class="xsc" data-v="dqpsk">DQPSK</button><button data-v="qpsk">QPSK</button><button class="xsc" data-v="8psk">8PSK</button><button data-v="16qam">16QAM</button><button data-v="64qam">64QAM</button><button data-v="256qam">256QAM</button><button class="q10" data-v="1024qam">1024QAM</button></span>
     <span class="muted mo of nsc">Guard interval</span><span class="seg mo of nsc" id="guardSeg"><button data-v="long">21 ms · 17 kbit/s</button><button data-v="short">5 ms · 20 kbit/s</button></span>
     <span class="muted mo sco">Training, longest echo</span><span class="seg mo sco" id="trainSeg"><button data-v="short">20 ms · 68 kbit/s</button><button data-v="medium">47 ms · 61 kbit/s</button><button data-v="long">100 ms · 50 kbit/s</button></span>
-    <span class="muted mo sco">Band</span><span class="seg mo sco" id="bandSeg"><button data-v="usual">3.2–16 kHz · 61 kbit/s</button><button data-v="wide">2.3–20.5 kHz · 87 kbit/s</button><button data-v="fast" title="v7.19: 16 000 symbols/s, roll-off 1/7">2.3–20.5 kHz, roll-off 1/7 · 101 kbit/s</button></span>
+    <span class="muted mo of">Band</span><span class="seg mo of" id="bandSeg"><button data-v="usual">3.2–16 kHz · 61 kbit/s</button><button data-v="wide">2.3–20.5 kHz · 87 kbit/s</button><button class="sco" data-v="fast" title="v7.19: 16 000 symbols/s, roll-off 1/7">2.3–20.5 kHz, roll-off 1/7 · 101 kbit/s</button></span>
     <span class="muted so">Period</span><span class="seg so" id="ordSeg"><button data-v="14">0.34 s</button><button data-v="15">0.68 s</button><button data-v="16">1.37 s</button></span>
     <span class="muted so">Periods averaged</span><span class="seg so" id="perSeg"><button data-v="1">1</button><button data-v="2">2</button><button data-v="4">4</button><button data-v="8">8</button></span>
     <span class="muted mo of">Control part</span><span class="seg mo of" id="ctlSeg"><button data-v="short">Short · 0.19 s</button><button data-v="long">Long · 0.65 s, for v5 receivers</button></span>
@@ -240,6 +241,10 @@ details .row{margin:8px 0}
     <p class="muted"><b>Wide band (v7.4).</b> The single carrier can also send 13 714 symbols per second on a carrier at 11.4 kHz, which fills 2.3 to 20.5 kHz instead of 3.2 to 16 kHz: 43 % more bits per second. Room soundings in a reverberant room heard 16 to 20.5 kHz about as clearly as the usual band (the phone's speaker gives 6 to 10 dB less there, but the room's noise is as much lower, and the echo dies out fastest at high frequencies) and 2.3 to 3.2 kHz 3 to 5 dB less clearly; above 21 kHz the iPhone's microphone hears almost nothing. The training blocks have 10/7 as many symbols, so they last as long and let the receiver learn the same echoes. The pulses are made on a 96 kHz grid, 7 samples per symbol, and every other sample is played. The same loudness spread over a wider band gives each symbol about 1.5 dB less signal: in simulation through the rooms measured, it decoded wherever the usual band did up to 6 dB more noise than the room had, and failed more often beyond. LDPC or polar codes only. The header marks it as type 2 on the single carrier, which receivers older than v7.4 ignore.</p>
     <p class="muted"><b>Fast wide band (v7.19).</b> The pulses' roll-off sets how much band each symbol takes beyond the symbol rate: 1/3 in the usual and wide bands, so 13 714 symbols per second fill 2.3 to 20.5 kHz. With a roll-off of 1/7 the same band carries 16 000 symbols per second, 17 % more. The price: the pulses ring longer (24 symbols on each side instead of 12) and their peaks are higher, so the speaker clips a little more, and the receiver sees about 0.6 dB less SNR after the equalizer. Replayed through 13 rooms recorded in two classrooms and with phones close together, the fastest mode that decoded was 10 % faster in all; close together, 1024QAM 5/6 failed where the wide band decodes it (3/4 still decoded). The training blocks have 7/6 as many symbols as the wide band's, so they last as long. LDPC or polar codes only. The header's check bits are flipped in a new pattern, which receivers older than v7.19 do not accept, so they ignore these frames.</p>
     <p class="muted"><b>The long echo only when needed (v7.20).</b> Learning the long echo (v7.13) from all the training blocks takes most of the time of a frame that decodes in one pass: for a 100 kB file sent close by, about three quarters of this page's decoding time. Since v7.20 the receiver first tries one pass without it, and without learning the room again; only if that pass fails does it decode the frame as before. Of our 190 recorded single-carrier frames the same 109 decode, with the same passes. A frame that decodes in that first pass takes about 0.9 of the time, and a 100 kB file sent close by about a quarter; a frame that needs more passes takes up to 1.16 times as long, for the extra pass. The fast wide band (v7.19) needs the long echo more often: replayed through 13 recorded rooms, the same 27 of 38 frames decode, 10 of them in the first pass, the others about 1.2 times as long; a 100 kB file sent close by decodes in a sixth of the time. When the first pass decodes, the tile of the SNR after the equalizer says so: measured without the long echo, it can be lower than with it. Only the receiver changed: the frames are the same.</p>
+    <p class="muted"><b>Wide OFDM (v7.21).</b> OFDM can also take the single carrier's wide band, 2.3 to 20.5 kHz, with symbols 4 times longer (N = 4096: 85 ms, guard 5.3 ms) or 8 times (N = 8192: 171 ms, guard 21 ms), so that the guard costs 6 % or 11 % of the time, and QPSK to 1024QAM, with LDPC 5/6 at every mapping (LDPC or polar codes only): up to 157 kbit/s on the air, 131 kbit/s after the code.
+    What held OFDM at 256QAM was its own clipping: hundreds of subcarriers add up to tall peaks, and cutting them at 0.9 left a distortion 21 dB under the signal, where 1024QAM with 5/6 needs 27.5 dB. Wide OFDM plays 3 dB quieter and cancels its peaks by <i>tone reservation</i>: the subcarriers from 20.6 to 22 kHz carry no data, only what lowers the peaks (30 rounds: clip the symbol at 0.765, keep the error on those subcarriers, add it), which leaves the distortion 44 dB under the signal.
+    The receiver smooths its estimate of the room less across the band (at the band's edges the usual smoothing capped 1024QAM near 29 dB), weighs each symbol's noise from its own pilots (the clipping differs from one symbol to the next), and gets each axis's bits from that axis alone (32 levels instead of 1024 points, the same LLRs).
+    OFDM needs no equalizer passes, so it decodes in a fraction of the single carrier's time: for files sent close by. Through the recorded rooms of v7.19's test it decoded 1024QAM 2/3 there (105 kbit/s, the single carrier's rate), while a metre or more away, in a room with echo, the single carrier stays far ahead. Receivers older than v7.21 ignore these frames.</p>
     <p class="muted"><b>1024QAM (v7.5).</b> The single carrier can put 10 bits on each symbol, 32 levels on each axis, instead of 256QAM's 8: 25 % more bits per second before the code. The levels are half as far apart, so it needs about 6 dB more signal than 256QAM at the same code rate; at the same information rate, 1024QAM with LDPC 2/3 carries 11 % more than 256QAM with LDPC 3/4 for about 3 dB more signal, and 1024QAM with LDPC 1/2 is no better than 256QAM with LDPC 2/3. Replaying the room and noise of one of the best recordings (phones close together and still, 29 dB on this page) with 1024QAM frames put LDPC 2/3 at the edge, and 3/4 needed about 2 dB more signal. Take it with LDPC 2/3, for phones close together in a quiet room. The header marks it with the mask of 8PSK, which the single carrier never used, so receivers older than v7.5 ignore it.</p>
     <p class="muted"><b>LDPC 5/6 (v7.6).</b> The highest rate: 5 message bits in every 6 sent, 11 % more than 3/4, for 1.5 to 2.5 dB more signal (in plain noise: 64QAM 15.5 dB with 3/4, 17 dB with 5/6; 256QAM 20 and 22.5 dB; 1024QAM 25 and 27.5 dB). 256QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 2/3 for a little less signal (22.5 against 22.9 dB in plain noise), and replaying the room and noise of one of the best recordings, it still decoded with the noise 2 dB louder than 1024QAM 2/3 could take: take it rather than 1024QAM 2/3. 64QAM with LDPC 5/6 carries as much as 1024QAM with LDPC 1/2, for 1 dB less. 1024QAM with LDPC 5/6 failed in that replay even with the noise 8 dB quieter. It works with every modulation except OFDM with 64QAM or 256QAM: OFDM's own noise (its clipping, about 21 dB below the signal) leaves 64QAM 3 to 5 % of wrong bits on a short message even in a quiet room, more than 5/6 can correct, and 256QAM with 5/6 needs 22.5 dB. The header marks it as a text or an image with code 7, which receivers older than v7.6 ignore.</p>
   </details>
@@ -1371,13 +1376,13 @@ function crc8(bits) {   // CRC-8, generator x^8 + x^2 + x + 1
 }
 let lastHb = null;   // telemetry: the 40 header bits of the last frame built
 function headerBits(h) {   // 6400 bit/s: tone set 3, rate field 3; OFDM: tone set 3, rate field = its mode; single carrier (v5): tone set 3, rate field 2
-  const ld = TYPE3_CODES.indexOf(h.code), c = ld >= 0 ? ld : h.code === LDPC56 ? (h.sc && h.wide ? 2 : 7) : CODES.indexOf(h.code), type = ld >= 0 ? (h.sc && h.wide ? 2 : 3) : h.type, om = h.ofdm ? OFDM_MODES.findIndex(m => m.name === h.ofdm) : -1, wide = h.rate === RATE_WIDE, coh = om >= 0 || !!h.sc;
+  const ld = TYPE3_CODES.indexOf(h.code), c = ld >= 0 ? ld : h.code === LDPC56 ? (h.sc && h.wide ? 2 : 7) : CODES.indexOf(h.code), type = ld >= 0 ? (h.sc && h.wide ? 2 : 3) : h.type, wm = h.ofdm ? OFDM_WMODES.findIndex(m => m.name === h.ofdm) : -1, om = h.ofdm ? (wm >= 0 ? wm : OFDM_MODES.findIndex(m => m.name === h.ofdm)) : -1, wide = h.rate === RATE_WIDE, coh = om >= 0 || !!h.sc;
   const t = wide || coh ? 3 : TONE_SETS.indexOf(h.tones), four = h.mod === 4 || coh;
   if (h.sc && h.wide && ld < 0 && h.code !== LDPC56) throw new Error('the wide band takes an LDPC or a polar code');   // v7.4
   const B = SC_BANDS[h.sc ? scBandIx(h.wide) : 0], T = h.sc ? B.tcode[h.train || B.nc] : 0;   // v5, single carrier: the training length, 0 medium, 1 short, 2 long
   const v = [...msb(type, 2), ...msb(h.a | (T >> 1) << 10, 11), ...msb(h.b | (T & 1) << 10, 11), ...msb(c & 3, 2),
              ...msb(h.sc ? SC_FIELD : om >= 0 ? om : wide ? 3 : (four ? RATES4 : RATES).indexOf(h.rate), 2), ...msb(four ? 3 : t, 2), ...msb(four ? t : 0, 2)];
-  const mask = (c >> 2 ? 0xff : 0) ^ (coh ? OFDM_MASKS[Math.max(0, OFDM_MAPS.indexOf(h.sc ? SC_SLOT[h.map] || h.map : h.map))] : 0) ^ (h.sc && h.wide === 2 ? SC_FAST_MASK : 0);   // v7.19: the fast wide band   // v4: the mapping's mask (OFDM, and the single carrier in v5; v7.5: 1024QAM in 8PSK's place)
+  const mask = (c >> 2 ? 0xff : 0) ^ (coh ? OFDM_MASKS[Math.max(0, OFDM_MAPS.indexOf(h.sc || wm >= 0 ? SC_SLOT[h.map] || h.map : h.map))] : 0) ^ (h.sc && h.wide === 2 ? SC_FAST_MASK : 0) ^ (wm >= 0 ? OFDM_WIDE_MASK : 0);   // v7.21: wide OFDM   // v7.19: the fast wide band   // v4: the mapping's mask (OFDM, and the single carrier in v5; v7.5: 1024QAM in 8PSK's place)
   return encodeFEC('conv', lastHb = [...v, ...crc8(v).map((b, i) => b ^ ((mask >> (7 - i)) & 1))]);
 }
 // ---- v7.1: JPEG pictures ----
@@ -1529,14 +1534,16 @@ function buildFrame(msg, cfg) {   // cfg.control (v6), OFDM and single carrier: 
              M: 0, sc: true, map, train, code: sc, ns, wide, dur: ctrl.length / CTRL.rate + wave.length / FS_TX };
   }
   if (cfg.mod === 'ofdm') {   // OFDM: a hopping control part, then the OFDM symbols
-    const m = ofdmMode(cfg.guard), map = OFDM_MAPS.includes(cfg.map) ? cfg.map : 'dqpsk', hdr = headerBits({ type, a, b, code, ofdm: m.name, map }), ch = encodeFEC(code, data);
+    const ow = cfg.band === 'wide' || cfg.band === 'fast', m = ofdmMode((ow ? 'w' : '') + cfg.guard);   // v7.21: cfg.band 'wide', wide OFDM: QPSK to 1024QAM, LDPC or polar codes
+    const map = ow ? (OFDM_WMAPS.includes(cfg.map) ? cfg.map : '256qam') : OFDM_MAPS.includes(cfg.map) ? cfg.map : 'dqpsk', oc = ow && !WIDE_CODES.includes(code) ? 'ldpc' : code;
+    const hdr = headerBits({ type, a, b, code: oc, ofdm: m.name, map }), ch = encodeFEC(oc, data);
     const [ns, cap] = ofdmLayout(m, map, ch.length), n = map === 'dqpsk' ? ch.length : cap, key = prbs(n);   // coherent: the last symbol filled up with scrambled zeros
     const warm = Array.from({ length: Math.round(0.1 * CTRL.rate) }, (_, i) => (i + 1) % 2), ctrl = [...warm, ...PILOTS[pre], ...Array(HREPS[pre]).fill(hdr).flat()];
     const wave = ofdmSymbols(Array.from({ length: n }, (_, i) => (ch[i] || 0) ^ key[i]), m, map);   // (plain zeros, the same point on many subcarriers, would add up to a peak)
     if (cfg.control !== 'long') return { segs: [{ wave: c6Wave(hdr) }, { wave }], bits: [], data, n0: data.length, nc: ch.length, warm: 0, ctl: 'short',   // v6: the short control part
-                                          M: 0, ofdm: m.name, map, ns, dur: (C6_LEN + wave.length) / FS_TX };
+                                          M: 0, ofdm: m.name, map, ns, code: oc, dur: (C6_LEN + wave.length) / FS_TX };
     return { segs: [{ bits: ctrl, tones: 'hop', rate: CTRL.rate, k0: -warm.length }, { wave }], bits: ctrl, data, n0: data.length, nc: ch.length, warm: warm.length,
-             M: 0, ofdm: m.name, map, ns, dur: ctrl.length / CTRL.rate + wave.length / FS_TX };
+             M: 0, ofdm: m.name, map, ns, code: oc, dur: ctrl.length / CTRL.rate + wave.length / FS_TX };
   }
   const P = PILOTS[pre], hdr = headerBits({ type, a, b, code, rate, tones, mod: M });
   const ch = encodeFEC(code, data), key = prbs(ch.length);
@@ -1578,22 +1585,23 @@ function parseHeader(hb) {   // hb: the 40 decoded header bits; null unless the 
   const val = (s, n) => hb.slice(s, s + n).reduce((v, x) => 2 * v + x, 0);
   const tf = val(28, 2), four = tf === 3, M = four ? 4 : 2;   // tones 3: 4-FSK, its tone set in the last two bits
   // tone set 3: 6400 bit/s, one hopping group over the whole band (rate field 3), or OFDM (v3, rate field 0 or 1)
-  const set3 = four && val(30, 2) === 3, ofdm = set3 ? OFDM_MODES[val(26, 2)] : null, sc = set3 && val(26, 2) === SC_FIELD;   // v5: rate field 2, the single carrier
+  const set3 = four && val(30, 2) === 3, ofdm = set3 ? (fast ? OFDM_WMODES : OFDM_MODES)[val(26, 2)] : null, sc = set3 && val(26, 2) === SC_FIELD;   // v5: rate field 2, the single carrier
   const c = val(24, 2) + 4 * ext, l56 = val(0, 2) < 2 && (c === 7 || sc && c === 2);   // v7.6: LDPC 5/6, type 0 or 1 with the code 7 (the single carrier's wide band: 2)
   const t3 = val(0, 2) === 3 || sc && val(0, 2) === 2, scw = sc && (val(0, 2) === 2 || l56 && c === 2) && (fast ? 2 : true), T = sc ? 2 * val(2, 1) + val(13, 1) : 0, a = sc ? val(3, 10) : val(2, 11), b = sc ? val(14, 10) : val(13, 11), code = l56 ? LDPC56 : (t3 ? TYPE3_CODES : CODES)[c];   // v5: T, the single carrier's training
   const type = t3 ? (b === 0 ? 0 : 1) : val(0, 2);   // v7: type 3, an LDPC (v7.3: or polar) code; a text if b = 0, else an image
   const rate = ofdm ? ofdmRate(ofdm) : sc ? 1 : set3 ? (val(26, 2) === 3 ? RATE_WIDE : 0) : (four ? RATES4 : RATES)[val(26, 2)];
   const tones = ofdm ? 'ofdm' : sc ? 'sc' : set3 ? 'hop' : TONE_SETS[four ? val(30, 2) : tf];
-  if (!tones || !rate || !code || (!four && val(30, 2)) || (mi && !ofdm && !sc) || (fast && !scw)) return null;   // a mapping mask on anything but OFDM or the single carrier: not ours
+  if (!tones || !rate || !code || (!four && val(30, 2)) || (mi && !ofdm && !sc) || (fast && !scw && !ofdm)) return null;   // a mapping mask on anything but OFDM or the single carrier: not ours
   const scMap = Object.keys(SC_SLOT).find(k => SC_SLOT[k] === OFDM_MAPS[mi]) || OFDM_MAPS[mi];   // v7.5: on the single carrier, 8PSK's mask = 1024QAM
   if (sc && (T === 3 || !SC_MAPS.includes(scMap) || !SC_CODES.includes(code))) return null;   // the single carrier: QPSK to 1024QAM, turbo, LDPC or polar codes
+  if (ofdm && ofdm.wide && (!OFDM_WMAPS.includes(scMap) || !WIDE_CODES.includes(code))) return null;   // v7.21: wide OFDM (the fast masks on OFDM's rate fields), QPSK to 1024QAM, LDPC or polar codes
   let h = null;
   if (type === 0 && a >= 1 && b === 0) h = { type: 'text', len: a, n0: 8 * a };
   if (type === 1 && a >= 1 && b >= 1 && a <= 512 && b <= 512 && a * b <= 70000) h = { type: 'image', h: a, w: b, n0: a * b };
   if (type === 1 && a >= 513 && b >= 1 && b <= 512 && jpegBytes(a, b) <= JPEG_MAX) h = { type: 'jpeg', len: jpegBytes(a, b), n0: 8 * (jpegBytes(a, b) + 4) };   // v7.1: a JPEG file   // v4: up to 4x images (the demos: 216 x 320 and 296 x 228; before: 20000 pixels)
   if (type === 2 && !four && SOUND_TAPS[a] && b >= 1 && b <= 8) h = { type: 'sound', order: a, periods: b, n0: 0 };
   if (h && sc) { const nc = codedLength(code, h.n0), map = scMap, tcode = SC_BANDS[+scw].tcode, train = +Object.keys(tcode).find(k => tcode[k] === T); Object.assign(h, { code, nc, rate: scRate(map, train, scw), tones, M: 0, sc: true, map, train, ns: Math.ceil(nc / OFDM_BITS[map]), wide: scw }); }   // ns: data symbols; v7.4: wide, the band
-  else if (h && ofdm) { const nc = codedLength(code, h.n0), map = OFDM_MAPS[mi]; Object.assign(h, { code, nc, rate: ofdmRate(ofdm, map), tones, M: 0, ofdm: ofdm.name, map, ns: ofdmLayout(ofdm, map, nc)[0] }); }   // ns: data symbols
+  else if (h && ofdm) { const nc = codedLength(code, h.n0), map = ofdm.wide ? scMap : OFDM_MAPS[mi]; Object.assign(h, { code, nc, rate: ofdmRate(ofdm, map), tones, M: 0, ofdm: ofdm.name, map, ns: ofdmLayout(ofdm, map, nc)[0] }); }   // ns: data symbols
   else if (h) { const nc = codedLength(code, h.n0), K = Math.log2(M); Object.assign(h, { code, nc, rate, tones, M, baud: rate / K, ns: Math.ceil(nc / K) }); }   // ns: message symbols
   return h;
 }
@@ -1902,8 +1910,18 @@ const OFDM_RMS = 0.45;        // half the 0.9 peak of FSK (6 dB below it); highe
 const OFDM_GROUP = 32;        // subcarriers per noise estimate
 const OFDM_BACK = 8;          // FFT windows this many samples early: the direct sound must not fall outside the guard
 const OFDM_MAX_PPM = 500;     // time-scale search: clock offset plus the motion of the phone (0.1 m/s is 290 ppm)
-const ofdmMode = name => OFDM_MODES.find(m => m.name === name) || OFDM_MODES[0];
-function ofdmCarriers(N) { const k = []; for (let i = 0; i <= N / 2; i++) if (i * FS_TX >= OFDM_F0 * N && i * FS_TX < OFDM_F1 * N) k.push(i); return k; }
+// v7.21, wide OFDM: the single carrier's wide band (2.3 to 20.5 kHz) with symbols 4 or 8 times longer, so that the guard
+// costs little (6 % and 11 %), and QPSK to 1024QAM. It plays 3 dB quieter and cancels its peaks by tone reservation on
+// subcarriers from 20.6 to 22 kHz that carry no data (ofdmReserve): its clipping 44 dB under the signal instead of 21.
+//   wshort: N 4096, CP 256 (5.3 ms), 1553 subcarriers 11.7 Hz apart, a symbol every 90.7 ms: 157 kbit/s at 1024QAM before the code
+//   wlong:  N 8192, CP 1024 (21.3 ms), 3106 subcarriers 5.9 Hz apart, a symbol every 192 ms: 148 kbit/s
+const OFDM_WMODES = [{ name: 'wlong', N: 8192, CP: 1024, wide: true }, { name: 'wshort', N: 4096, CP: 256, wide: true }];   // rate field 0, 1
+const OFDM_WF0 = 2300, OFDM_WF1 = 20500, OFDM_WRMS = 0.45 * 10 ** (-3 / 20), OFDM_TR_F0 = 20600, OFDM_TR_F1 = 22000, OFDM_TR_ROUNDS = 30, OFDM_TR_CLIP = 0.765;
+const OFDM_WIDE_MASK = 0x1D;  // header: xored onto the mask (as on the fast wide band, which has the rate field 2)
+const OFDM_WMAPS = ['qpsk', '16qam', '64qam', '256qam', '1024qam'];
+const OFDM_WALPHA = 1e-4;     // their smoothing's alpha: OFDM_ALPHA (0.01) bent the estimate enough to cap 1024QAM at 29 dB
+const ofdmMode = name => [...OFDM_MODES, ...OFDM_WMODES].find(m => m.name === name) || OFDM_MODES[0];
+function ofdmCarriers(N) { const [f0, f1] = N > 2048 ? [OFDM_WF0, OFDM_WF1] : [OFDM_F0, OFDM_F1], k = []; for (let i = 0; i <= N / 2; i++) if (i * FS_TX >= f0 * N && i * FS_TX < f1 * N) k.push(i); return k; }   // v7.21: the wide modes' longer symbols (N 4096, 8192)
 const ofdmRate = (m, map = 'dqpsk') => { const K = ofdmCarriers(m.N).length; return OFDM_BITS[map] * (map === 'dqpsk' ? K : K * (1 - 1 / OFDM_PSTEP)) * FS_TX / (m.N + m.CP); };   // channel bits per second
 function ofdmReference(K) { return Array.from({ length: K }, (_, j) => Math.PI * ((j * j) % (2 * K)) / K); }   // Newman phases: low peaks
 
@@ -1947,15 +1965,15 @@ function ofdmLayout(m, map, nc) {   // [data symbols for nc channel bits, the ch
 // half the noise goes.
 const _smooth = {};
 function ofdmSmooth(m, gr, gi) {   // G = gr + j gi on the K subcarriers -> the smoothed [re, im]
-  const { N, CP } = m, K = gr.length;
+  const { N, CP } = m, K = gr.length, al = m.wide ? OFDM_WALPHA : OFDM_ALPHA;   // v7.21
   if (!_smooth[m.name]) {
     const re = new Float64Array(N), im = new Float64Array(N);
     for (let n = -16; n <= CP; n++) re[(n + N) % N] = 1;
     fft(re, im);
-    _smooth[m.name] = [Float64Array.from({ length: K }, (_, k) => re[k] / N + (k === 0 ? OFDM_ALPHA : 0)), Float64Array.from({ length: K }, (_, k) => im[k] / N)];   // first column of A + alpha I
+    _smooth[m.name] = [Float64Array.from({ length: K }, (_, k) => re[k] / N + (k === 0 ? al : 0)), Float64Array.from({ length: K }, (_, k) => im[k] / N)];   // first column of A + alpha I
   }
   const [tr, ti] = _smooth[m.name], [xr, xi] = levinson(tr, ti, gr, gi);
-  return [Float64Array.from(gr, (v, j) => v - OFDM_ALPHA * xr[j]), Float64Array.from(gi, (v, j) => v - OFDM_ALPHA * xi[j])];
+  return [Float64Array.from(gr, (v, j) => v - al * xr[j]), Float64Array.from(gi, (v, j) => v - al * xi[j])];
 }
 // Solves T x = y for a Hermitian Toeplitz T, T[j][l] = t[j - l] for j >= l, conj(t[l - j]) otherwise (t = tr + j ti):
 // Levinson's recursion grows the solution one row at a time, with the forward and backward vectors f, b (T f = e_first,
@@ -1994,7 +2012,7 @@ function ofdmSymbols(bits, m, map = 'dqpsk') {
   const ns = coh ? ofdmLayout(m, map, bits.length)[0] : Math.ceil(bits.length / (2 * K));
   const [pr, pim, lab] = coh ? ofdmPoints(map) : [], nb = OFDM_BITS[map], inv = []; if (coh) lab.forEach((l, p) => { inv[l] = p; });
   let q = 0;
-  const g = N / 2 * (OFDM_RMS * Math.sqrt(2 / K));   // each subcarrier a cosine of amplitude OFDM_RMS sqrt(2 / K)
+  const g = N / 2 * ((m.wide ? OFDM_WRMS : OFDM_RMS) * Math.sqrt(2 / K));   // each subcarrier a cosine of amplitude OFDM_RMS sqrt(2 / K) (v7.21: wide OFDM 3 dB quieter)
   const x = new Float32Array((ns + 2) * L), P = new Int32Array(K), re = new Float64Array(N), im = new Float64Array(N);
   for (let i = 0; i < ns + 2; i++) {
     if (!coh && i > 0 && i <= ns) for (let j = 0; j < K; j++) { const q = 2 * (K * (i - 1) + j), b0 = bits[q] || 0, b1 = bits[q + 1] || 0; P[j] = (P[j] + 1 + 2 * ((b0 ^ b1) + 2 * b1)) % 8; }
@@ -2007,9 +2025,47 @@ function ofdmSymbols(bits, m, map = 'dqpsk') {
       re[k] = c; im[k] = s; re[N - k] = c; im[N - k] = -s;
     });
     fft(re, im, true);
-    for (let n = 0; n < N; n++) { const v = Math.max(-0.9, Math.min(0.9, re[n] * g)); x[i * L + CP + n] = v; if (n >= N - CP) x[i * L + n - N + CP] = v; }
+    if (m.wide) ofdmReserve(re, g);   // v7.21: tone reservation (re scaled by g)
+    for (let n = 0; n < N; n++) { const v = Math.max(-0.9, Math.min(0.9, m.wide ? re[n] : re[n] * g)); x[i * L + CP + n] = v; if (n >= N - CP) x[i * L + n - N + CP] = v; }
   }
   return x;
+}
+// v7.21: tone reservation (wide OFDM) on one symbol's samples s, scaled by g first: OFDM_TR_ROUNDS rounds of clipping at
+// OFDM_TR_CLIP and adding the error, kept on the reserved subcarriers (OFDM_TR_F0 to OFDM_TR_F1, which carry no data)
+function ofdmReserve(s, g) {
+  const N = s.length, cr = new Float64Array(N), ci = new Float64Array(N), keep = new Uint8Array(N);
+  for (let k = 1; k < N / 2; k++) if (k * FS_TX >= OFDM_TR_F0 * N && k * FS_TX < OFDM_TR_F1 * N) keep[k] = keep[N - k] = 1;
+  for (let n = 0; n < N; n++) s[n] *= g;
+  for (let r = 0; r < OFDM_TR_ROUNDS; r++) {
+    for (let n = 0; n < N; n++) { cr[n] = Math.max(-OFDM_TR_CLIP, Math.min(OFDM_TR_CLIP, s[n])) - s[n]; ci[n] = 0; }
+    fft(cr, ci);
+    for (let k = 0; k < N; k++) if (!keep[k]) cr[k] = ci[k] = 0;
+    fft(cr, ci, true);
+    for (let n = 0; n < N; n++) s[n] += cr[n];
+  }
+  return s;
+}
+// v7.21: a square mapping's levels on each axis and their Gray bits (the real axis: the top half of each point's bits)
+function qamAxes(map) {
+  const [pr, pim, lab] = ofdmPoints(map), h = OFDM_BITS[map] >> 1, out = [];
+  for (const [v, b] of [[pr, l => l >> h], [pim, l => l & ((1 << h) - 1)]]) {
+    const seen = new Map(); v.forEach((x, p) => { const k = Math.round(x * 1e9); if (!seen.has(k)) seen.set(k, [x, b(lab[p])]); });
+    const e = [...seen.values()]; out.push({ lev: e.map(t => t[0]), lab: e.map(t => t[1]) });
+  }
+  return out;
+}
+// v7.21: the h LLRs of one axis (z: the received point over its channel, g = |H|^2 / N0) from that axis alone, the
+// same as over all the points; written to llr from q on (up to nc), returns the next q
+function qamAxisLlr(ax, h, z, g, llr, q, nc) {
+  const { lev, lab } = ax, L = lev.length, d = new Float64Array(L);
+  for (let l = 0; l < L; l++) d[l] = -g * (z - lev[l]) ** 2;
+  for (let k = 0; k < h; k++, q++) {
+    let m1 = -Infinity, m0 = -Infinity, s1 = 0, s0 = 0;
+    for (let l = 0; l < L; l++) { if ((lab[l] >> (h - 1 - k)) & 1) m1 = Math.max(m1, d[l]); else m0 = Math.max(m0, d[l]); }
+    for (let l = 0; l < L; l++) { if ((lab[l] >> (h - 1 - k)) & 1) s1 += Math.exp(d[l] - m1); else s0 += Math.exp(d[l] - m0); }
+    if (q < nc) llr[q] = m1 + Math.log(s1) - m0 - Math.log(s0);
+  }
+  return q;
 }
 // y at the positions t0 + (m0 + i) step, i = 0 .. n - 1 (sample t is y[t - off], valid for t - off < len): band-limited
 // interpolation, a sinc with a Hann window, A samples each side
@@ -2312,6 +2368,16 @@ function ofdmCoherent(Y, ns, nc, m, map, erased = []) {   // erased (v4.1): data
     const n0 = Math.max(1e-30, 1.25 * a / Math.max(b, 1));
     N0.fill(n0, g, g1); snr.push(10 * Math.log10(Math.max(1e-3, h2 / (g1 - g) / n0)));
   }
+  const w = new Float64Array(ns + 2).fill(1);   // v7.21: each data symbol's noise from its own pilots: the clipping of the wide
+  if (m.wide && ns) {                           // modes differs from symbol to symbol, and the reference symbols (never clipped) weigh most in N0
+    let ws = 0;
+    for (let i = 1; i <= ns; i++) {
+      if (pil[i].length) { let a = 0; for (const j of pil[i]) { const [hr, hi] = HC(i, j), er = rr[j] * hr - ri[j] * hi, ei = rr[j] * hi + ri[j] * hr; a += ((Y[i][0][j] - er) ** 2 + (Y[i][1][j] - ei) ** 2) / N0[j]; } w[i] = 1.25 * a / pil[i].length; }
+      ws += w[i];
+    }
+    const d = 10 * Math.log10(Math.max(ws / ns, 1e-30)); for (let g = 0; g < snr.length; g++) snr[g] -= d;
+  }
+  const ax = m.wide ? qamAxes(map) : null, hb = nb >> 1;   // v7.21: wide OFDM's LLRs axis by axis
   const one = Array.from({ length: nb }, (_, k) => lab.map(l => (l >> (nb - 1 - k)) & 1)), d2 = new Float64Array(M), lse = (k, bit) => {
     let mx = -Infinity, s = 0;
     for (let p = 0; p < M; p++) if (one[k][p] === bit && d2[p] > mx) mx = d2[p];
@@ -2324,6 +2390,7 @@ function ofdmCoherent(Y, ns, nc, m, map, erased = []) {   // erased (v4.1): data
     if (ofdmPilot(j, i)) continue;
     const [hr, hi] = HC(i, j), yr = Y[i][0][j], yi = Y[i][1][j], h2 = Math.max(hr * hr + hi * hi, 1e-30);
     if (erased.includes(i)) q += nb;   // its LLRs stay 0
+    else if (ax) { const gg = h2 / (N0[j] * w[i]); q = qamAxisLlr(ax[1], hb, (yi * hr - yr * hi) / h2, gg, llr, qamAxisLlr(ax[0], hb, (yr * hr + yi * hi) / h2, gg, llr, q, nc), nc); }   // v7.21
     else {
       for (let p = 0; p < M; p++) { const er = yr - (hr * pr[p] - hi * pim[p]), ei = yi - (hr * pim[p] + hi * pr[p]); d2[p] = -(er * er + ei * ei) / N0[j]; }
       for (let k = 0; k < nb; k++, q++) if (q < nc) llr[q] = lse(k, 1) - lse(k, 0);
@@ -2332,7 +2399,7 @@ function ofdmCoherent(Y, ns, nc, m, map, erased = []) {   // erased (v4.1): data
   }
   return { llr, snr, zr: Float32Array.from(zr), zi: Float32Array.from(zi) };
 }
-const ofdmDesc = (m, map = 'dqpsk') => { const K = ofdmCarriers(m.N).length; return `OFDM: ${K} subcarriers from ${OFDM_F0 / 1000} to ${OFDM_F1 / 1000} kHz, ${(FS_TX / m.N).toFixed(1)} Hz apart, ${OFDM_NAMES[map]}${map === 'dqpsk' ? '' : ` with pilots (1 subcarrier in ${OFDM_PSTEP})`}; symbol ${(1000 * m.N / FS_TX).toFixed(1)} ms + guard ${(1000 * m.CP / FS_TX).toFixed(1)} ms`; };
+const ofdmDesc = (m, map = 'dqpsk') => { const K = ofdmCarriers(m.N).length; return `${m.wide ? 'Wide OFDM (v7.21)' : 'OFDM'}: ${K} subcarriers from ${(m.wide ? OFDM_WF0 : OFDM_F0) / 1000} to ${(m.wide ? OFDM_WF1 : OFDM_F1) / 1000} kHz, ${(FS_TX / m.N).toFixed(1)} Hz apart, ${OFDM_NAMES[map]}${map === 'dqpsk' ? '' : ` with pilots (1 subcarrier in ${OFDM_PSTEP})`}; symbol ${(1000 * m.N / FS_TX).toFixed(1)} ms + guard ${(1000 * m.CP / FS_TX).toFixed(1)} ms${m.wide ? `; tone reservation ${OFDM_TR_F0 / 1000} to ${OFDM_TR_F1 / 1000} kHz, 3 dB quieter` : ''}`; };
 
 // ---- the short control part (v6) ----
 // OFDM and single-carrier frames start, by default, with P P P | H (9216 samples at 48 kHz, 0.192 s) instead of the
@@ -3980,7 +4047,7 @@ function demoJpeg(s = 1, q = 50) { const k = `${s}_${q}`; return demoJpegs[k] ||
 if (typeof module !== 'undefined') module.exports = { PILOT, NP, NHC, CTRL, RATES, RATES4, RATE_WIDE, TONES4, toneSet, symbolBits, toSymbols, bitSets, symbolMetrics, postErrors, contrast, knownContrast, TONE_SETS, crc8, headerBits, ToneEnergies, TONES, prbs, buildFrame, modulate, Receiver, decodeText, demoPixels, parseHeader, JPEG_MAX, jpegFields, jpegBytes, crc32, jpegPayload, jpegUnpack, jpegResync, fileKind, jpegEncode, DEMO_JPEG, demoJpeg, CODES, codedLength, encodeFEC, decodeFEC, rsEncodeBlock, rsDecodeBlock, qrMatrix, PILOTS, HREPS, mls, calibrate, softLLR, levelTrack, decodeFrame, lnI0, calibrateBlind, fineTiming, sharper, fitScale,
   SOUND_TAPS, SOUND_AMP, buildSounding, analyseSounding, fft, welch, HOP_F0, hopSet, toneDesc, toneTab, energyAt, hopNormalize,
   turboPerm, turboEncode, turboDecode, bcjr, TURBO_R, LDPC_R, LDPC_CODES, LDPC56, SC_CODES, WIDE_CODES, ldpcParams, ldpcEncode, ldpcDecode, fecSiso, POLAR_R, POLAR_CODES, TYPE3_CODES, polarParams, polarBlock, polarEncode, polarDecode, polarScl, polarScan,
-  OFDM_MODES, OFDM_F0, OFDM_F1, ofdmMode, ofdmCarriers, ofdmRate, ofdmReference, ofdmSymbols, fracRead, ofdmReceive, ofdmDesc,
+  OFDM_MODES, OFDM_F0, OFDM_F1, OFDM_WMODES, OFDM_WMAPS, OFDM_WIDE_MASK, OFDM_WRMS, ofdmReserve, qamAxes, qamAxisLlr, ofdmMode, ofdmCarriers, ofdmRate, ofdmReference, ofdmSymbols, fracRead, ofdmReceive, ofdmDesc,
   C6_N, C6_CP, C6_REP, C6_LEN, C6_THR, C6_BAL, C6_K, c6Symbol, c6Index, c6Wave, c6Read, c6Filter,
   OFDM_MAPS, OFDM_MASKS, OFDM_BITS, OFDM_NAMES, OFDM_PSTEP, ofdmPoints, ofdmPilot, ofdmLayout, ofdmSmooth, levinson, ofdmCoherent,
   SC_MAPS, SC_RMS, SC_NC, SC_TRAINS, SC_TCODE, SC_TAPS, SC_BANDS, BAND_IX, SC_FAST_MASK, scSetBand, scWideOf, scBandIx, scBand, scEdges, SC_EFFORT, SC_EST, scEcho, scTrainName, scLayout, scRate, scSeconds, scDesc, scSymbols, scPassband, scPart, scChannelBits, scTraining, scReceive, scMmseFirst, scFit, scTurboSiso, scBcjrApp, SCConv, scFFT, scPlan, scRead, scSmap, scLmmse, scSic, interleave, deinterleave, turboCheck };
@@ -4004,7 +4071,10 @@ const cfg = { mod: MOD0, tones: TONE_SETS.includes(params.get('tones')) ? params
               est: params.get('est') === 'mmse' ? 'mmse' : 'ls',   // v5: the room's estimate, least squares or MMSE (receiver)
               control: params.get('ctl') === 'long' ? 'long' : 'short' };   // v6: the control part of OFDM and single-carrier frames (sender)
 if (cfg.mod === 'sc') { if (!SC_MAPS.includes(cfg.map)) cfg.map = '256qam'; if (!(cfg.band !== 'usual' ? WIDE_CODES : SC_CODES).includes(cfg.code)) cfg.code = cfg.band !== 'usual' ? 'ldpc' : 'turbo'; }   // OFDM (v4): DQPSK, or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots
-if (cfg.mod !== 'sc' && !OFDM_MAPS.includes(cfg.map)) cfg.map = '256qam';   // v7.5: OFDM has no 1024QAM
+if (cfg.mod === 'ofdm' && cfg.band === 'fast') cfg.band = 'wide';   // v7.21: OFDM's bands, the usual one and the wide one
+const ofdmWide = () => cfg.mod === 'ofdm' && cfg.band !== 'usual';   // v7.21: wide OFDM
+if (cfg.mod !== 'sc' && !(ofdmWide() ? OFDM_WMAPS : OFDM_MAPS).includes(cfg.map)) cfg.map = '256qam';   // v7.5: OFDM has no 1024QAM (v7.21: wide OFDM has, but no DQPSK or 8PSK)
+if (ofdmWide() && !WIDE_CODES.includes(cfg.code)) cfg.code = 'ldpc';   // v7.21: LDPC or polar codes
 if (cfg.rate === RATE_WIDE) cfg.tones = 'hop';   // 6400 bit/s: one group of 4 tones over the whole band
 const PAGE_SITE = 'https://mention-ice.github.io/AudioComm/';   // where the pages are published (GitHub Pages)
 let msgMode = 'text', pen = 0, actx = null, imgScale = { large: 2, huge: 4, x8: 8, x16: 16 }[params.get('img')] || 1;   // image size: 1 normal, 2 large, 4 huge (2 or 4 times the width and height); v7.7: 8, 16 (sc4)
@@ -4018,7 +4088,7 @@ function seg(el, value, onPick) {
   el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); onPick(b.dataset.v); });
 }
 function ctx() { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); return actx; }
-function syncUrl() { const u = new URL(location.href); u.searchParams.set('mod', cfg.mod); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); if (cfg.mod === 'ofdm') u.searchParams.set('guard', cfg.guard); else u.searchParams.delete('guard'); if (cfg.mod === 'ofdm' || cfg.mod === 'sc') u.searchParams.set('map', cfg.map); else u.searchParams.delete('map'); if (cfg.mod === 'sc') u.searchParams.set('train', cfg.train); else u.searchParams.delete('train'); if (cfg.mod === 'sc' && cfg.band !== 'usual') u.searchParams.set('band', cfg.band); else u.searchParams.delete('band'); if (imgScale > 1) u.searchParams.set('img', { 2: 'large', 4: 'huge', 8: 'x8', 16: 'x16' }[imgScale]); else u.searchParams.delete('img'); if (picFmt !== 'bits') { u.searchParams.set('pic', picFmt); u.searchParams.set('q', jpegQ); } else { u.searchParams.delete('pic'); u.searchParams.delete('q'); } if ((cfg.mod === 'ofdm' || cfg.mod === 'sc') && cfg.control === 'long') u.searchParams.set('ctl', 'long'); else u.searchParams.delete('ctl'); history.replaceState(null, '', u); }
+function syncUrl() { const u = new URL(location.href); u.searchParams.set('mod', cfg.mod); u.searchParams.set('tones', cfg.tones); u.searchParams.set('rate', cfg.rate); u.searchParams.set('pre', cfg.pre); u.searchParams.set('code', cfg.code); if (cfg.mod === 'ofdm') u.searchParams.set('guard', cfg.guard); else u.searchParams.delete('guard'); if (cfg.mod === 'ofdm' || cfg.mod === 'sc') u.searchParams.set('map', cfg.map); else u.searchParams.delete('map'); if (cfg.mod === 'sc') u.searchParams.set('train', cfg.train); else u.searchParams.delete('train'); if ((cfg.mod === 'sc' || cfg.mod === 'ofdm') && cfg.band !== 'usual') u.searchParams.set('band', cfg.band); else u.searchParams.delete('band'); if (imgScale > 1) u.searchParams.set('img', { 2: 'large', 4: 'huge', 8: 'x8', 16: 'x16' }[imgScale]); else u.searchParams.delete('img'); if (picFmt !== 'bits') { u.searchParams.set('pic', picFmt); u.searchParams.set('q', jpegQ); } else { u.searchParams.delete('pic'); u.searchParams.delete('q'); } if ((cfg.mod === 'ofdm' || cfg.mod === 'sc') && cfg.control === 'long') u.searchParams.set('ctl', 'long'); else u.searchParams.delete('ctl'); history.replaceState(null, '', u); }
 // QR code: the online copy of this page (also when the laptop runs it from a local file); receivers need no settings
 function phoneUrl() {   // from a local file: the online copy of the same file (the latest version if the name is not one of ours)
   if (location.protocol === 'https:') return location.origin + location.pathname;
@@ -4035,13 +4105,14 @@ seg($('rateSeg'), cfg.rate, v => { cfg.rate = +v; if (cfg.rate === RATE_WIDE && 
 const TX_HINT = {   // under the transmitter's options: what the modulation chosen is for
   2: 'Binary FSK: one tone per bit, the low one for 0, the high one for 1. A lower rate, a longer preamble or 4 tones reach farther; in a reverberant room, beyond a few metres, use Hopping. Receivers need no settings: each frame\'s header tells them.',
   4: '4-FSK: one of four tones per symbol, 2 bits each (Gray-coded). At the same bit rate, a symbol lasts twice as long as with 2 tones and gathers twice the energy, so it reaches farther. In a reverberant room use Hopping; 6400 bit/s fills the whole band. Receivers need no settings: each frame\'s header tells them.',
-  ofdm: 'OFDM: hundreds of subcarriers at once, far faster than FSK (the rates shown are before the code): use it with a code. Echo longer than the guard acts as noise, so take the long guard in a reverberant room. DQPSK needs no pilots; QPSK to 256QAM add pilots to measure the room: QPSK reaches farther than DQPSK, 16QAM is nearly twice as fast for about 3 dB more signal, 64QAM and 256QAM are 1.5 and 2 times faster again for about 5 and 11 dB more: try them close to the speaker. Receivers need no settings.',
+  ofdm: 'OFDM: hundreds of subcarriers at once, far faster than FSK (the rates shown are before the code): use it with a code. Echo longer than the guard acts as noise, so take the long guard in a reverberant room. DQPSK needs no pilots; QPSK to 256QAM add pilots to measure the room: QPSK reaches farther than DQPSK, 16QAM is nearly twice as fast for about 3 dB more signal, 64QAM and 256QAM are 1.5 and 2 times faster again for about 5 and 11 dB more: try them close to the speaker. The wide band (v7.21, 2.3–20.5 kHz) takes QPSK to 1024QAM and LDPC 5/6 at every mapping, with LDPC or polar codes: up to 131 kbit/s after the code (about 105 in a room) for phones close together, and it decodes far faster than the single carrier. Receivers need no settings.',
   sc: 'Single carrier (v5): one symbol at a time, 9600 per second (13 714 in the wide band, 16 000 in the fast one), with no guard. Training blocks every 0.5 s let the receiver learn the room and undo its echo (soft SMAP with the decoder), which takes a few seconds. Take a training longer than the room\'s echo. 256QAM needs a still room; 16QAM or 64QAM is safer when people move. 1024QAM (v7.5) needs about 6 dB more signal than 256QAM: only for phones close together in a quiet room, with LDPC 2/3. 256QAM and 1024QAM play 1 dB quieter (v7.9), which clips less. 256QAM with LDPC 5/6 (v7.6) carries as much and stands a little more noise. Turbo or LDPC codes only (the others are greyed out): at the same rate turbo needs about 1 dB less signal here, while LDPC 2/3 and 3/4 carry more when the signal is strong. The wide band (v7.4, 2.3 to 20.5 kHz) carries 43 % more, with LDPC or polar codes only, but gives each symbol about 1.5 dB less signal: take it when the signal is strong. The fast wide band (v7.19, roll-off 1/7) carries 17 % more than the wide one for about 0.6 dB less signal. Receivers need no settings.'
 };
 function showMod() {   // the rates and tone labels of binary or 4-tone FSK; OFDM has a guard interval instead of tones and a rate
   $('txHint').textContent = TX_HINT[cfg.mod];
   $('txOpts').classList.toggle('ofdm', cfg.mod === 'ofdm' || cfg.mod === 'sc'); $('txOpts').classList.toggle('sc', cfg.mod === 'sc');   // the single carrier: OFDM's options less the guard
   $('txOpts').classList.toggle('wide', cfg.band !== 'usual');   // v7.4: turbo greyed out in the wide band
+  $('txOpts').classList.toggle('ow', ofdmWide());   // v7.21: wide OFDM, 1024QAM shown, DQPSK, 8PSK and the codes but LDPC and polar greyed out
   $('rateSeg').querySelectorAll('button').forEach(b => b.classList.toggle('hidden', !rateList(cfg.mod).includes(+b.dataset.v)));
   $('tonesSeg').querySelectorAll('button').forEach(b => { if (b.dataset.v !== 'hop') b.textContent = cfg.mod === 4 ? `${TONES4[b.dataset.v][0] / 1000} to ${TONES4[b.dataset.v][3] / 1000} kHz` : TONES[b.dataset.v].map(f => f / 1000).join(' / ') + ' kHz'; });
 }
@@ -4051,28 +4122,33 @@ seg($('modSeg'), cfg.mod, v => {
     if (!(cfg.band !== 'usual' ? WIDE_CODES : SC_CODES).includes(cfg.code)) $('codeSeg').querySelector(`[data-v="${cfg.band !== 'usual' ? 'ldpc' : 'turbo'}"]`).click();   // v7.4: the wide band, LDPC or polar
     if (!SC_MAPS.includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();
   }
-  if (cfg.mod === 'ofdm' && !OFDM_MAPS.includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();   // v7.5: 1024QAM, single carrier only
+  if (cfg.mod === 'ofdm' && cfg.band === 'fast') $('bandSeg').querySelector('[data-v="wide"]').click();   // v7.21: OFDM's wide band (the fast one is the single carrier's)
+  if (cfg.mod === 'ofdm' && !(ofdmWide() ? OFDM_WMAPS : OFDM_MAPS).includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();   // v7.5: 1024QAM, single carrier only (v7.21: and wide OFDM)
+  if (ofdmWide() && !WIDE_CODES.includes(cfg.code)) $('codeSeg').querySelector('[data-v="ldpc"]').click();   // v7.21: LDPC or polar codes
   no56();   // v7.6: OFDM with 64QAM or 256QAM, LDPC 3/4 at most
   if (cfg.mod !== 'ofdm' && cfg.mod !== 'sc' && !rateList(cfg.mod).includes(cfg.rate)) { cfg.rate = cfg.mod === 4 ? 400 : 1600; $('rateSeg').querySelector(`[data-v="${cfg.rate}"]`).click(); }   // 200 is binary only, 3200 and 6400 4 tones only
-  showMod(); syncUrl(); txInfo();
+  showMod(); guardLabels(); trainLabels(); syncUrl(); txInfo();
 });
 showMod();
 seg($('preSeg'), cfg.pre, v => { cfg.pre = +v; syncUrl(); txInfo(); });
 const showCtl = () => $('txOpts').classList.toggle('short', cfg.control === 'short');   // v6: the preamble's length is for the 400 bit/s control part
 seg($('ctlSeg'), cfg.control, v => { cfg.control = v; showCtl(); syncUrl(); txInfo(); });
 showCtl();
-seg($('guardSeg'), cfg.guard, v => { cfg.guard = v; syncUrl(); txInfo(); });
-function guardLabels() { $('guardSeg').querySelectorAll('button').forEach(b => { const m = ofdmMode(b.dataset.v); b.textContent = `${(1000 * m.CP / FS_TX).toFixed(0)} ms · ${(ofdmRate(m, cfg.map) / 1000).toFixed(0)} kbit/s`; }); }   // the rate depends on the mapping
+seg($('guardSeg'), cfg.guard, v => { cfg.guard = v; trainLabels(); syncUrl(); txInfo(); });
+function guardLabels() { $('guardSeg').querySelectorAll('button').forEach(b => { const m = ofdmMode((ofdmWide() ? 'w' : '') + b.dataset.v); b.textContent = `${(1000 * m.CP / FS_TX).toFixed(0)} ms · ${(ofdmRate(m, cfg.map) / 1000).toFixed(0)} kbit/s`; }); }   // the rate depends on the mapping
 seg($('trainSeg'), cfg.train, v => { cfg.train = v; syncUrl(); txInfo(); });
 function trainLabels() {   // v5: like the guard's; v7.4: and the bands'
   const map = SC_MAPS.includes(cfg.map) ? cfg.map : '256qam';
   $('trainSeg').querySelectorAll('button').forEach(b => { const nt = SC_BANDS[BAND_IX[cfg.band]].trains[b.dataset.v]; b.textContent = `${scEcho(nt)} ms · ${(scRate(map, nt) / 1000).toFixed(0)} kbit/s`; });
-  $('bandSeg').querySelectorAll('button').forEach(b => { const B = SC_BANDS[BAND_IX[b.dataset.v]], [lo, hi] = scEdges(B); b.textContent = `${+(lo / 1000).toFixed(1)}–${+(hi / 1000).toFixed(1)} kHz${B.ro !== '1/3' ? `, roll-off ${B.ro}` : ''} · ${(scRate(map, B.trains[cfg.train]) / 1000).toFixed(0)} kbit/s`; });
+  $('bandSeg').querySelectorAll('button').forEach(b => {
+    if (cfg.mod === 'ofdm') { const w = b.dataset.v !== 'usual', om = ofdmMode((w ? 'w' : '') + cfg.guard), mp = (w ? OFDM_WMAPS : OFDM_MAPS).includes(cfg.map) ? cfg.map : '256qam'; b.textContent = `${w ? '2.3–20.5' : '3.2–16'} kHz · ${(ofdmRate(om, mp) / 1000).toFixed(0)} kbit/s`; return; }   // v7.21: OFDM's bands
+    const B = SC_BANDS[BAND_IX[b.dataset.v]], [lo, hi] = scEdges(B); b.textContent = `${+(lo / 1000).toFixed(1)}–${+(hi / 1000).toFixed(1)} kHz${B.ro !== '1/3' ? `, roll-off ${B.ro}` : ''} · ${(scRate(map, B.trains[cfg.train]) / 1000).toFixed(0)} kbit/s`; });
 }
 seg($('bandSeg'), cfg.band, v => {   // v7.4: the single carrier's band; the wide one takes LDPC or polar codes
   cfg.band = v; showMod();
-  if (v !== 'usual' && cfg.mod === 'sc' && !WIDE_CODES.includes(cfg.code)) $('codeSeg').querySelector('[data-v="ldpc"]').click();
-  trainLabels(); syncUrl(); txInfo();
+  if (v !== 'usual' && (cfg.mod === 'sc' || cfg.mod === 'ofdm') && !WIDE_CODES.includes(cfg.code)) $('codeSeg').querySelector('[data-v="ldpc"]').click();
+  if (cfg.mod === 'ofdm' && !(ofdmWide() ? OFDM_WMAPS : OFDM_MAPS).includes(cfg.map)) $('mapSeg').querySelector('[data-v="256qam"]').click();   // v7.21
+  no56(); guardLabels(); trainLabels(); syncUrl(); txInfo();
 });
 seg($('mapSeg'), cfg.map, v => { cfg.map = v; no56(); guardLabels(); trainLabels(); syncUrl(); txInfo(); });
 guardLabels(); trainLabels();
@@ -4156,7 +4232,7 @@ const ctlInfo = f => f.ctl === 'short' ? ' · short control part (0.19 s, v6): r
 function fmtRate(r) { return r >= 1e4 ? `${(r / 1000).toFixed(1)} kbit/s` : r >= 1000 ? `${(r / 1000).toFixed(2)} kbit/s` : `${Math.round(r)} bit/s`; }
 function txRateLine(f) {   // v7: the information rate, the message part's bit rate on the air times the code rate, and over the whole sound
   const el = $('txRate'); el.classList.toggle('hidden', !!f.sound); if (f.sound) return;
-  const code = f.sc ? f.code : cfg.code, T = f.dur + 0.4;
+  const code = f.sc || f.ofdm ? f.code : cfg.code, T = f.dur + 0.4;
   const air = f.sc ? scRate(f.map, f.train) : f.ofdm ? ofdmRate(ofdmMode(f.ofdm), f.map) : f.rate || cfg.rate;
   const how = code === 'none' ? 'no code' : `${TURBO_R[code] ? 'turbo' : LDPC_R[code] ? 'LDPC' : POLAR_R[code] ? 'polar' : 'convolutional'} code of rate ${CODE_INFO[code].rate}`;
   el.innerHTML = `<span class="muted">Information rate</span> <b>${fmtRate(air * f.n0 / (f.nc || f.n0))}</b> <span class="muted">= ${fmtRate(air)} on the air × ${how}</span>`
@@ -4192,7 +4268,7 @@ function txInfo() {
   }
   if (f.ofdm) {
     const m = ofdmMode(f.ofdm), K = ofdmCarriers(m.N).length, what = f.map === 'dqpsk' ? `${K} subcarriers × 2 bits (DQPSK)` : `${K} subcarriers, 1 in ${OFDM_PSTEP} a pilot, the others × ${OFDM_BITS[f.map]} bits (${OFDM_NAMES[f.map]})`;
-    $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, OFDM: ${what} every ${(1000 * (m.N + m.CP) / FS_TX).toFixed(1)} ms = ${(ofdmRate(m, f.map) / 1000).toFixed(1)} kbit/s before the code, ${f.ns} data symbol${f.ns > 1 ? 's' : ''} between two reference symbols` + ctlInfo(f) + long;
+    $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, OFDM${m.wide ? ', wide band (2.3 to 20.5 kHz, v7.21)' : ''}: ${what} every ${(1000 * (m.N + m.CP) / FS_TX).toFixed(1)} ms = ${(ofdmRate(m, f.map) / 1000).toFixed(1)} kbit/s before the code, ${f.ns} data symbol${f.ns > 1 ? 's' : ''} between two reference symbols` + ctlInfo(f) + long;
     return;
   }
   $('txInfo').textContent = `${desc} · ${f.n0} message bits${coded} · ${(f.dur + 0.4).toFixed(1)} s of sound, message at ${cfg.rate} bit/s` + (cfg.mod === 4 ? `, 4 tones (${cfg.rate / 2} symbols/s)` : '') + (cfg.tones === 'hop' ? `, ${toneDesc('hop', cfg.rate, cfg.mod)}` : '') + long;
@@ -4204,7 +4280,7 @@ seg($('codeSeg'), TURBO_R[cfg.code] ? 'turbo' : LDPC_R[cfg.code] ? 'ldpc' : POLA
 seg($('trSeg'), turboCode, v => { cfg.code = turboCode = v; syncUrl(); txInfo(); });
 seg($('lrSeg'), ldpcCode, v => { cfg.code = ldpcCode = v; syncUrl(); txInfo(); });   // v7
 function no56() {   // v7.6: OFDM with 64QAM or 256QAM, LDPC 3/4 at most (OFDM_NO56)
-  const x56 = cfg.mod === 'ofdm' && OFDM_NO56.includes(cfg.map);
+  const x56 = cfg.mod === 'ofdm' && !ofdmWide() && OFDM_NO56.includes(cfg.map);   // v7.21: wide OFDM takes 5/6 at every mapping
   $('txOpts').classList.toggle('x56', x56);   // hides the 5/6 button
   if (!x56 || ldpcCode !== LDPC56) return;
   ldpcCode = 'ldpc34'; $('lrSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === ldpcCode)));
@@ -4315,7 +4391,7 @@ $('sendBtn').onclick = () => {
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 $('wavBtn').onclick = () => {
   const m = currentMsg();
-  download(wavBlob(modulate(txFrame(m)), FS_TX), m.type === 'sound' ? `acoustic_sounding_mls${m.order}_x${m.periods}.wav` : `acoustic_${m.type}_${cfg.mod === 'sc' ? `sc_${cfg.map}_${cfg.train}${cfg.band !== 'usual' ? '_' + cfg.band : ''}` : cfg.mod === 'ofdm' ? `ofdm_${cfg.map}_${cfg.guard}` : `${cfg.mod === 4 ? '4fsk_' : ''}${cfg.tones}_${cfg.rate}bps`}${(cfg.mod === 'sc' || cfg.mod === 'ofdm') && cfg.control === 'long' ? '_longctl' : ''}.wav`);
+  download(wavBlob(modulate(txFrame(m)), FS_TX), m.type === 'sound' ? `acoustic_sounding_mls${m.order}_x${m.periods}.wav` : `acoustic_${m.type}_${cfg.mod === 'sc' ? `sc_${cfg.map}_${cfg.train}${cfg.band !== 'usual' ? '_' + cfg.band : ''}` : cfg.mod === 'ofdm' ? `ofdm_${cfg.map}_${cfg.guard}${ofdmWide() ? '_wide' : ''}` : `${cfg.mod === 4 ? '4fsk_' : ''}${cfg.tones}_${cfg.rate}bps`}${(cfg.mod === 'sc' || cfg.mod === 'ofdm') && cfg.control === 'long' ? '_longctl' : ''}.wav`);
 };
 showTx();
 
@@ -4345,7 +4421,7 @@ let shown = null, live = null, frameId = 0;   // the frame on display; the frame
 const fpill = (f, t, c = 'live') => { f.pill = [t, c]; if (f === shown) pill(t, c); };
 function frameWhat(h) {   // the message and how it was sent, in words
   if (h.type === 'sound') return `Room sounding, ${h.periods} × ${(((1 << h.order) - 1) / FS_TX).toFixed(2)} s`;
-  const how = h.sc ? `single carrier ${OFDM_NAMES[h.map]}${h.wide === 2 ? ', fast wide band' : h.wide ? ', wide band' : ''}, ${scTrainName(h.train)} training` : h.ofdm ? `OFDM ${OFDM_NAMES[h.map]}, ${h.ofdm} guard`
+  const how = h.sc ? `single carrier ${OFDM_NAMES[h.map]}${h.wide === 2 ? ', fast wide band' : h.wide ? ', wide band' : ''}, ${scTrainName(h.train)} training` : h.ofdm ? `OFDM ${OFDM_NAMES[h.map]}${h.ofdm[0] === 'w' ? ', wide band' : ''}, ${h.ofdm.replace(/^w/, '')} guard`
     : `${h.M === 4 ? 4 : 2} tones, ${h.rate} bit/s${h.tones === 'hop' ? (h.rate === RATE_WIDE ? ', whole band' : ', hopping') : ''}`;
   return `${h.type === 'text' ? `Text, ${h.len} characters` : h.type === 'jpeg' ? `Picture file, ${h.len} bytes` : `Image ${h.w}×${h.h}`} · ${how} · ${h.code === 'none' ? 'no code' : TURBO_R[h.code] ? `turbo ${CODE_INFO[h.code].rate}` : LDPC_R[h.code] ? `LDPC ${CODE_INFO[h.code].rate}` : POLAR_R[h.code] ? `polar ${CODE_INFO[h.code].rate}` : CODE_INFO[h.code].short}`;
 }
@@ -4405,7 +4481,7 @@ function makeRx() {
         frames.unshift(f); frames.splice(LOG_MAX);
         live = shown = f; lastRec = null; clearOut(); showLog();
         fpill(f, info.type === 'sound' ? `Measuring the room · ${info.periods} × ${(((1 << info.order) - 1) / FS_TX).toFixed(2)} s`
-          : (info.type === 'text' ? `Receiving ${info.len} characters` : info.type === 'jpeg' ? `Receiving a picture file of ${info.len} bytes` : `Receiving ${info.w}×${info.h} image`) + (info.sc ? ` · single carrier ${OFDM_NAMES[info.map]}` : info.ofdm ? ` · OFDM ${OFDM_NAMES[info.map]}, ${info.ofdm} guard` : ` · ${info.rate} bit/s` + (info.M === 4 ? ' · 4 tones' : '') + (info.tones === 'hop' ? (info.rate === RATE_WIDE ? ' · whole band' : ' · hopping') : '')) + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`));
+          : (info.type === 'text' ? `Receiving ${info.len} characters` : info.type === 'jpeg' ? `Receiving a picture file of ${info.len} bytes` : `Receiving ${info.w}×${info.h} image`) + (info.sc ? ` · single carrier ${OFDM_NAMES[info.map]}` : info.ofdm ? ` · OFDM ${OFDM_NAMES[info.map]}${info.ofdm[0] === 'w' ? ', wide band' : ''}, ${info.ofdm.replace(/^w/, '')} guard` : ` · ${info.rate} bit/s` + (info.M === 4 ? ' · 4 tones' : '') + (info.tones === 'hop' ? (info.rate === RATE_WIDE ? ' · whole band' : ' · hopping') : '')) + (info.code === 'none' ? '' : ` · ${CODE_INFO[info.code].short}, decoded at the end`));
       }
       if (s === 'decoding') {   // v5: the single carrier is decoded in the background, listening goes on
         const f = find(info); if (live === f) live = null;

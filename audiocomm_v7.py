@@ -25,7 +25,10 @@ second try once the usual passes have failed (the same passes at most). v7.19: a
 fast wide band: 16 000 symbols/s in the wide band's 2.3 to 20.5 kHz (roll-off 1/7 instead of 1/3), 17 % more symbols
 for about 0.6 dB less SNR after the equalizer; on 13 recorded rooms the fastest mode that decodes is 10 % faster in all.
 v7.20: the single carrier learns the long echo (v7.13) only if a first pass without it fails, so a frame that decodes at
-once (close by, a long file) takes a quarter of the time.
+once (close by, a long file) takes a quarter of the time. v7.21: wide OFDM, 2.3 to 20.5 kHz with symbols 4 or 8 times
+longer (N 4096 with a 5 ms guard, or 8192 with 21 ms), QPSK to 1024QAM and LDPC 5/6 at every mapping: it plays 3 dB
+quieter and cancels its peaks on subcarriers from 20.6 to 22 kHz that carry no data (tone reservation), so its clipping
+is 44 dB under the signal instead of 21; up to 131 kbit/s after the code, for phones close together.
 
 © 2026 Sheng Yang. All rights reserved.
 
@@ -85,6 +88,10 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            v7.19: on the single carrier's wide band (type 2, or LDPC 5/6 with the code field 2), the mask xor SC_FAST_MASK
            (0x1D) = the fast wide band, 16 000 symbols/s (SC_BANDS[2]); its 10 masks are 2 bits or more from the 12
            others; receivers older than v7.19 ignore it
+           v7.21: on OFDM (tone set 3, rate field 0 or 1), the mask xor OFDM_WIDE_MASK (0x1D, as the fast wide band's,
+           which has the rate field 2) = wide OFDM (OFDM_WMODES: rate field 0 N 8192 and CP 1024, 1 N 4096 and CP 256),
+           QPSK to 1024QAM (1024QAM in 8PSK's mask, as on the single carrier), LDPC or polar codes; receivers older than
+           v7.21 ignore it
   code   : 0 none, 1 Hamming (7,4) + interleaver (until v6; v7 neither sends nor reads it), 2 convolutional (171,133) K = 7 + interleaver,
            3 Reed-Solomon (255,223) over bytes (received only: v1 no longer sends it), 4 turbo (13, 15 octal,
            rate 1/2, as in 4G) + interleaver, 5 and 6 the same turbo code at rates 1/3 and 1/4 (1/4 adds cdma2000's second parity);
@@ -123,6 +130,10 @@ decoded by the other. The receiver needs no settings: they travel in the header.
            5 Gray bits per axis, divided by sqrt 682. The last data symbol is filled up with scrambled zeros (the scrambling
            sequence goes on), then the reference symbol ends the part. The receiver estimates each subcarrier's gain
            and phase from the reference symbols and the pilots (see ofdm_receive).
+  wide OFDM (v7.21): subcarriers from 2.3 to 20.5 kHz, N 4096 and CP 256 or N 8192 and CP 1024, pilots as in v4, QPSK
+           to 1024QAM, rms 0.319 (3 dB under 0.45); the peaks of each symbol are cancelled by tone reservation (30
+           rounds: clip at 0.765, keep the error on the subcarriers from 20.6 to 22 kHz, which carry no data, and add
+           it), then clipped at 0.9.
   single carrier (v5): 9600 symbols/s at 9.6 kHz, root-raised-cosine pulses of roll-off 1/3 (3.2 to 16 kHz), rms 0.45;
            v7.4, the wide band: 96000 / 7 = 13 714 symbols/s at 11.4 kHz (2.3 to 20.5 kHz), 7 samples per symbol at 96 kHz,
            sent as every other sample (3.5 samples per symbol at 48 kHz); training 10/7 longer in symbols;
@@ -163,6 +174,7 @@ Usage
   python audiocomm_v7.py tx --text "Hello" --mod ofdm --guard short --code turbo -o ofdm5.wav   # OFDM, 5 ms guard
   python audiocomm_v7.py tx --image greatwave_160x108.png --mod ofdm --map 16qam --code turbo -o qam.wav   # 16QAM with pilots, 31 kbit/s
   python audiocomm_v7.py tx --image greatwave_160x108.png --mod ofdm --map 256qam --code turbo -o qam256.wav   # 256QAM, 63 kbit/s
+  python audiocomm_v7.py tx --image greatwave_320x216.png --mod ofdm --wide --guard short --map 1024qam --code ldpc56 -o ow.wav   # v7.21, 157 kbit/s
   python audiocomm_v7.py tx --image greatwave_160x108.png --mod sc --map 256qam --code turbo -o sc256.wav   # single carrier (v5)
   python audiocomm_v7.py tx --text "Hello" --mod ofdm --map qpsk --code turbo --control long -o v5ctrl.wav   # v5's control part
   python audiocomm_v7.py rx sc256.wav --det lmmse            # the same with the linear MMSE detector instead of SMAP
@@ -1385,7 +1397,7 @@ def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=F
                 raise ValueError(f"the wide band takes an LDPC or a polar code: one of {WIDE_CODES}")
             typ = 2
     elif ofdm is not None:                         # OFDM: tones 3, tone set 3, rate field = the mode (0 long guard, 1 short)
-        t, four, r = 3, True, OFDM_MODES.index(ofdm)
+        t, four, r = 3, True, (OFDM_WMODES if ofdm.get("wide") else OFDM_MODES).index(ofdm)   # v7.21: wide OFDM
     else:
         t, four = TONE_SETS.index(tones), M == 4
         r = 3 if rate == RATE_WIDE else (RATES4 if four else RATES).index(rate)
@@ -1393,9 +1405,10 @@ def header_bits(typ, a, b, code, rate, tones, M=2, ofdm=None, omap="dqpsk", sc=F
         t = 3                                    # 6400 bit/s: tone set 3, rate field 3
     v = (msb(typ, 2) + msb(a, 11) + msb(b, 11) + msb(c & 3, 2) + msb(r, 2)
          + msb(3 if four else t, 2) + msb(t if four else 0, 2))   # 4 tones: tones 3, the tone set in the last two bits
-    slot = SC_SLOT.get(omap, omap) if sc else omap   # v7.5: 1024QAM in 8PSK's place
+    ow = ofdm is not None and bool(ofdm.get("wide"))   # v7.21: wide OFDM
+    slot = SC_SLOT.get(omap, omap) if sc or ow else omap   # v7.5: 1024QAM in 8PSK's place
     mask = msb((0xFF if c >> 2 else 0) ^ (OFDM_MASKS[OFDM_MAPS.index(slot)] if ofdm is not None or sc else 0)
-               ^ (SC_FAST_MASK if sc and wide == 2 else 0), 8)   # v7.19: the fast wide band
+               ^ (SC_FAST_MASK if sc and wide == 2 else 0) ^ (OFDM_WIDE_MASK if ow else 0), 8)   # v7.19: the fast wide band
     return encode_fec("conv", np.array(v + [x ^ k for x, k in zip(crc8(v), mask)]))
 
 
@@ -1569,7 +1582,7 @@ def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127
     with 4 tones (mod=4) the message segment holds tones 0..3 instead of bits, and M = 4. With mod="ofdm" the message
     segment is the OFDM part (samples at 48 kHz, None, None), guard "long" or "short" (see OFDM_MODES), omap one of OFDM_MAPS.
     With mod="sc" (v5) it is the single-carrier part, omap one of SC_MAPS, code one of SC_CODES, train one of SC_TRAIN;
-    wide (v7.4): in the wide band, 2.3 to 20.5 kHz (an LDPC or a polar code).
+    wide (v7.4): in the wide band, 2.3 to 20.5 kHz (an LDPC or a polar code; v7.21: OFDM too, see OFDM_WMODES).
     img: 2-D boolean array (True = white). jpeg (v7.1): the bytes of a JPEG file, sent as they are. code: none, conv, turbo, turbo3, turbo4, an LDPC code (LDPC_R) or a polar code (POLAR_R).
     sound = (order, periods): room sounding frame; its MLS segment is (samples at 48 kHz, None, None).
     control (v6), OFDM and single carrier only: "short" (the short control part, c6_wave; receivers older than v6 do
@@ -1607,12 +1620,15 @@ def build_frame(text=None, img=None, code="none", rate=400, tones="low", pre=127
         ctrl = np.concatenate([warm, PILOTS[pre], np.tile(hdr, HREPS[pre])]).astype(int)
         return [(ctrl, "hop", CTRL["rate"], -len(warm)), part], data
     if mod == "ofdm":                                      # OFDM: a hopping control part, then the OFDM symbols
-        if omap not in OFDM_MAPS:
-            raise ValueError(f"OFDM: mapping one of {OFDM_MAPS}")
-        if omap in OFDM_NO56 and code == LDPC56:         # v7.6: OFDM's own noise (its clipping, about 21 dB below the signal) is too loud
+        maps = OFDM_WMAPS if wide else OFDM_MAPS             # v7.21: wide OFDM
+        if omap not in maps:
+            raise ValueError(f"{'wide ' if wide else ''}OFDM: mapping one of {maps}")
+        if wide and code not in WIDE_CODES:
+            raise ValueError(f"wide OFDM takes an LDPC or a polar code: one of {WIDE_CODES}")
+        if not wide and omap in OFDM_NO56 and code == LDPC56:         # v7.6: OFDM's own noise (its clipping, about 21 dB below the signal) is too loud
             raise ValueError("OFDM with 64QAM or 256QAM: LDPC 3/4 at most (OFDM's clipping leaves 64QAM 3 to 5 % of wrong bits on a short "
                              "message, more than LDPC 5/6 corrects, and 256QAM with LDPC 5/6 needs 22.5 dB)")
-        mode = ofdm_mode(guard)
+        mode = ofdm_wmode(guard) if wide else ofdm_mode(guard)
         hdr = header_bits(typ, a, b, code, None, None, ofdm=mode, omap=omap)
         ch = encode_fec(code, data)
         ctrl = np.concatenate([warm, PILOTS[pre], np.tile(hdr, HREPS[pre])]).astype(int)
@@ -1858,15 +1874,40 @@ OFDM_RMS = 0.45          # half the 0.9 peak of FSK (6 dB below it); higher peak
 OFDM_GROUP = 32          # subcarriers per noise estimate
 OFDM_BACK = 8            # FFT windows this many samples early: the direct sound must not fall outside the guard
 OFDM_MAX_PPM = 500       # time-scale search: clock offset plus the motion of the phone (0.1 m/s is 290 ppm)
+# v7.21, wide OFDM: the single carrier's wide band, 2.3 to 20.5 kHz, with symbols 4 or 8 times longer than the usual
+# OFDM's, so that the guard costs little (6 % and 11 %), and mappings up to 1024QAM. Clipping kept OFDM below 256QAM and
+# LDPC 5/6 (21 dB under the signal at rms 0.45, where 1024QAM 5/6 needs 27.5 dB): the wide modes play 3 dB quieter and
+# cancel their peaks by tone reservation, on subcarriers from 20.6 to 22 kHz that carry no data (the iPhone's microphone
+# stops at 21 kHz; 22 kHz stays under half of 44.1 kHz): 30 rounds of clipping the symbol at 0.765, keeping the error on
+# those subcarriers and adding it, leave the clipping 45 dB under the signal, 36 dB in the worst symbol in 100 (in
+# simulation, 1024QAM; 32 dB without the reserved subcarriers, 36 dB 2 dB quieter). Through the recorded rooms of the
+# fast band's test, close by: 1024QAM 2/3 at 105 kbit/s with the short guard (the fast single carrier: 106), and a 99 kB
+# file decoded 3.4 times faster; a metre or more away the echo past the guard keeps OFDM far below the single carrier.
+#   wshort: N 4096, CP 256 (5.3 ms), 1553 subcarriers 11.7 Hz apart, a symbol every 90.7 ms: 157 kbit/s at 1024QAM before the code
+#   wlong:  N 8192, CP 1024 (21.3 ms), 3106 subcarriers 5.9 Hz apart, a symbol every 192 ms: 148 kbit/s
+OFDM_WMODES = [dict(name="wlong", N=8192, CP=1024, wide=True), dict(name="wshort", N=4096, CP=256, wide=True)]   # rate field 0, 1
+OFDM_WF0, OFDM_WF1 = 2300, 20500
+OFDM_WRMS = 0.45 * 10 ** (-3 / 20)        # 0.319
+OFDM_TR_F0, OFDM_TR_F1 = 20600, 22000     # the reserved subcarriers
+OFDM_TR_ROUNDS, OFDM_TR_CLIP = 30, 0.765
+OFDM_WIDE_MASK = 0x1D    # header: xored onto the mask (as on the fast wide band, which has the rate field 2)
+OFDM_WMAPS = ["qpsk", "16qam", "64qam", "256qam", "1024qam"]
+OFDM_WALPHA = 1e-4       # their smoothing's alpha: OFDM_ALPHA (0.01) bent the estimate enough to cap 1024QAM at 29 dB
 
 
 def ofdm_mode(name):
-    return next(m for m in OFDM_MODES if m["name"] == name)
+    return next(m for m in OFDM_MODES + OFDM_WMODES if m["name"] == name)
+
+
+def ofdm_wmode(guard):
+    """v7.21: the wide OFDM mode with the guard "long" or "short"."""
+    return ofdm_mode("w" + guard)
 
 
 def ofdm_carriers(N):
     k = np.arange(N // 2 + 1)
-    return k[(k * FS_TX >= OFDM_F0 * N) & (k * FS_TX < OFDM_F1 * N)]
+    f0, f1 = (OFDM_WF0, OFDM_WF1) if N > 2048 else (OFDM_F0, OFDM_F1)   # v7.21: the wide modes' longer symbols (N 4096, 8192)
+    return k[(k * FS_TX >= f0 * N) & (k * FS_TX < f1 * N)]
 
 
 def ofdm_rate(mode, omap="dqpsk"):
@@ -1913,6 +1954,52 @@ def ofdm_smoother(mode):
         A = np.where(d >= 0, a[np.abs(d)], np.conj(a[np.abs(d)]))
         _SMOOTH[mode["name"]] = A @ np.linalg.inv(A + OFDM_ALPHA * np.eye(K))
     return _SMOOTH[mode["name"]]
+
+
+def ofdm_smooth(mode, G):
+    """ofdm_smoother(mode) @ G. v7.21, the wide modes (K up to 3106): the same form, F (F^H F + N alpha I)^-1 F^H G,
+    F the K x (CP + 17) matrix from the delays kept to the subcarriers (A = F F^H / N): CP + 17 unknowns instead of K,
+    alpha OFDM_WALPHA."""
+    if not mode.get("wide"):
+        return ofdm_smoother(mode) @ G
+    if mode["name"] not in _SMOOTH:
+        N, CP = mode["N"], mode["CP"]
+        kk, d = ofdm_carriers(N), np.arange(-16, CP + 1)
+        F = np.exp(-2j * np.pi * np.outer(kk - kk[0], d) / N)
+        _SMOOTH[mode["name"]] = F, np.linalg.solve(F.conj().T @ F + N * OFDM_WALPHA * np.eye(len(d)), F.conj().T)
+    F, B = _SMOOTH[mode["name"]]
+    return F @ (B @ G)
+
+
+def ofdm_reserve(x, N):
+    """v7.21: tone reservation on the symbols x (rows of N samples): OFDM_TR_ROUNDS rounds of clipping at OFDM_TR_CLIP
+    and adding the error, kept on the reserved subcarriers (OFDM_TR_F0 to OFDM_TR_F1, which carry no data)."""
+    k = np.arange(N // 2 + 1)
+    res = (k * FS_TX >= OFDM_TR_F0 * N) & (k * FS_TX < OFDM_TR_F1 * N)
+    for _ in range(OFDM_TR_ROUNDS):
+        C = np.fft.rfft(np.clip(x, -OFDM_TR_CLIP, OFDM_TR_CLIP) - x, axis=1)
+        C[:, ~res] = 0
+        x = x + np.fft.irfft(C, N, axis=1)
+    return x
+
+
+def qam_axis_llr(z, g, omap):
+    """v7.21: the LLRs of z, received points divided by their channel (gain g = |H|^2 / N0), of a square mapping
+    (QPSK to 1024QAM) whose Gray bits split into those of the real axis and those of the imaginary one: each axis's
+    bits from that axis alone, the same LLRs as over all the points (32 levels instead of 1024)."""
+    pts, lab = ofdm_points(omap)
+    m = OFDM_BITS[omap]
+    h = m // 2
+    out = np.empty((len(z), m))
+    for part, v, bits in ((0, z.real, lab >> h), (h, z.imag, lab & ((1 << h) - 1))):
+        c = pts.real if part == 0 else pts.imag
+        ix = np.unique(np.round(c * 1e9), return_index=True)[1]
+        A, B = c[ix], bits[ix]
+        d2 = -g[:, None] * (v[:, None] - A[None, :]) ** 2
+        for k in range(h):
+            one = (B >> (h - 1 - k)) & 1
+            out[:, part + k] = np.logaddexp.reduce(d2[:, one == 1], axis=1) - np.logaddexp.reduce(d2[:, one == 0], axis=1)
+    return out
 
 
 def ofdm_points(omap):
@@ -1962,7 +2049,7 @@ def ofdm_symbols(bits, mode, omap="dqpsk"):
     N, CP = mode["N"], mode["CP"]
     kk = ofdm_carriers(N)
     K = len(kk)
-    a = OFDM_RMS * math.sqrt(2 / K)
+    a = (OFDM_WRMS if mode.get("wide") else OFDM_RMS) * math.sqrt(2 / K)   # v7.21: wide OFDM 3 dB quieter
     if omap != "dqpsk":
         pts, lab = ofdm_points(omap)
         m, inv = OFDM_BITS[omap], np.argsort(lab)              # inv[bits] = the point
@@ -1982,6 +2069,8 @@ def ofdm_symbols(bits, mode, omap="dqpsk"):
             X[i, kk] = row
             q += m * len(dsc)
         x = np.fft.irfft(X, N, axis=1) * (N / 2 * a)
+        if mode.get("wide"):                                # v7.21: tone reservation
+            x = ofdm_reserve(x, N)
         return np.clip(np.hstack([x[:, N - CP:], x]).ravel(), -0.9, 0.9)
     ns = -(-len(bits) // (2 * K))
     b = np.zeros(ns * 2 * K, dtype=int)
@@ -2196,7 +2285,7 @@ def gaps(r, tau, f, ref, mode, omap, ns, N, CP, pad, spec, read):
     E = np.exp(2j * np.pi * np.outer(dgrid, f) / FS_TX)
     K = len(f)
     if omap != "dqpsk":
-        H0 = ofdm_smoother(mode) @ (spec(rr, 0, st) / ref)
+        H0 = ofdm_smooth(mode, spec(rr, 0, st) / ref)
 
         def delay(k):                                         # of symbol k against the first reference: its pilots, or all of a reference
             p = np.arange(K) if k in (0, ns + 1) else np.nonzero(ofdm_pilots(K, k))[0]
@@ -2225,8 +2314,7 @@ def ofdm_coherent(Y, ns, nc, mode, omap, erased=()):
     ref = np.exp(1j * ofdm_reference(K))
     pts, lab = ofdm_points(omap)
     m = OFDM_BITS[omap]
-    W = ofdm_smoother(mode)
-    smooth = lambda G: W @ G
+    smooth = lambda G: ofdm_smooth(mode, G)
     pil = [np.arange(K)] + [np.nonzero(ofdm_pilots(K, i))[0] for i in range(1, ns + 1)] + [np.arange(K)]
     for i in erased:
         pil[i] = np.zeros(0, dtype=int)
@@ -2261,15 +2349,25 @@ def ofdm_coherent(Y, ns, nc, mode, omap, erased=()):
         sl = slice(g, g + OFDM_GROUP)
         N0[sl] = max(1e-30, 1.25 * num[sl].sum() / max(den[sl].sum(), 1))
         snr.append(10 * math.log10(max(1e-3, np.mean(np.abs(H[sl]) ** 2) / N0[g])))
+    w = np.ones(ns + 2)                                       # v7.21: each data symbol's noise from its own pilots: the
+    if mode.get("wide") and ns:                               # clipping of the wide modes differs from symbol to symbol,
+        for i in range(1, ns + 1):                            # and the reference symbols (never clipped) weigh most in N0
+            p = pil[i]
+            if len(p):
+                w[i] = 1.25 * np.mean(np.abs(Y[i, p] - ref[p] * H[p] * C[i][p]) ** 2 / N0[p])
+        snr = list(np.array(snr) - 10 * np.log10(max(np.mean(w[1:ns + 1]), 1e-30)))
     llr, zs = [], []
     for i in range(1, ns + 1):
         dsc = np.nonzero(~ofdm_pilots(K, i))[0]
         Hd = H[dsc] * C[i][dsc]
-        d2 = -np.abs(Y[i, dsc][:, None] - Hd[:, None] * pts[None, :]) ** 2 / N0[dsc][:, None]
-        out = np.empty((len(dsc), m))
-        for k in range(m):
-            bit = (lab >> (m - 1 - k)) & 1
-            out[:, k] = np.logaddexp.reduce(d2[:, bit == 1], axis=1) - np.logaddexp.reduce(d2[:, bit == 0], axis=1)
+        if mode.get("wide"):                                # v7.21: axis by axis (qam_axis_llr), the same LLRs
+            out = qam_axis_llr(Y[i, dsc] / Hd, np.abs(Hd) ** 2 / (N0[dsc] * w[i]), omap)
+        else:
+            d2 = -np.abs(Y[i, dsc][:, None] - Hd[:, None] * pts[None, :]) ** 2 / N0[dsc][:, None]
+            out = np.empty((len(dsc), m))
+            for k in range(m):
+                bit = (lab >> (m - 1 - k)) & 1
+                out[:, k] = np.logaddexp.reduce(d2[:, bit == 1], axis=1) - np.logaddexp.reduce(d2[:, bit == 0], axis=1)
         if i in erased:
             out[:] = 0.0
         llr.append(out.ravel())
@@ -2281,7 +2379,10 @@ def ofdm_desc(mode, omap="dqpsk"):
     N, CP = mode["N"], mode["CP"]
     K = len(ofdm_carriers(N))
     how = OFDM_NAMES[omap] + ("" if omap == "dqpsk" else f" with pilots (1 subcarrier in {OFDM_PSTEP})")
-    return (f"OFDM, {K} subcarriers from {OFDM_F0 / 1000:g} to {OFDM_F1 / 1000:g} kHz {FS_TX / N:.1f} Hz apart, {how}, "
+    w = mode.get("wide")                                    # v7.21
+    f0, f1 = (OFDM_WF0, OFDM_WF1) if w else (OFDM_F0, OFDM_F1)
+    how += f", tone reservation {OFDM_TR_F0 / 1000:g} to {OFDM_TR_F1 / 1000:g} kHz, 3 dB quieter" if w else ""
+    return (f"{'wide OFDM (v7.21)' if w else 'OFDM'}, {K} subcarriers from {f0 / 1000:g} to {f1 / 1000:g} kHz {FS_TX / N:.1f} Hz apart, {how}, "
             f"symbol {1000 * N / FS_TX:.1f} ms + guard {1000 * CP / FS_TX:.1f} ms, {ofdm_rate(mode, omap):.0f} bit/s before the code")
 
 
@@ -3720,14 +3821,18 @@ def parse_header(hb):
     code = codes[c] if c < len(codes) else None
     if typ < 2 and (c == 7 or sc and c == 2):    # v7.6: LDPC 5/6, type 0 or 1 with the code 7 (the single carrier's wide band: 2)
         code, wide = LDPC56, sc and c == 2
-    if fast:                                     # v7.19: only on the single carrier's wide band
+    if fast and ofdm:                            # v7.21: wide OFDM (the fast wide band's masks on OFDM's rate fields)
+        ofdm = OFDM_WMODES[OFDM_MODES.index(ofdm)]
+        if code not in WIDE_CODES:
+            return None
+    elif fast:                                   # v7.19: only on the single carrier's wide band
         if not wide:
             return None
         wide = 2
     omap = OFDM_MAPS[mi]
-    if sc:                                       # v7.5: 8PSK's mask = 1024QAM
+    if sc or fast and ofdm:                      # v7.5: 8PSK's mask = 1024QAM (v7.21: on wide OFDM too)
         omap = next((k for k, v in SC_SLOT.items() if v == omap), omap)
-    if code is None or (sc and (omap not in SC_MAPS or code not in SC_CODES)):
+    if code is None or (sc and (omap not in SC_MAPS or code not in SC_CODES)) or (fast and ofdm and omap not in OFDM_WMAPS):
         return None
     if tones >= len(TONE_SETS) or (not four and val(30, 2)):
         return None
@@ -3755,7 +3860,7 @@ def parse_header(hb):
         h.update(code=code, nc=nc, rate=sc_rate(omap, nt, wide), tones="sc", M=None, sc=True, map=omap, ns=-(-nc // OFDM_BITS[omap]), train=nt,
                  wide=wide)
     elif h and ofdm:                             # ns: data symbols after the reference symbol
-        nc, omap = coded_length(code, h["n0"]), OFDM_MAPS[mi]
+        nc = coded_length(code, h["n0"])
         h.update(code=code, nc=nc, rate=ofdm_rate(ofdm, omap), tones="ofdm", M=None, ofdm=ofdm["name"], map=omap,
                  ns=ofdm_layout(ofdm, omap, nc)[0])
     elif h:
@@ -4293,15 +4398,17 @@ def main():
             p.add_argument("--mod", choices=("2", "4", "ofdm", "sc"), default="2",
                            help="FSK with 2 tones (1 bit per symbol) or 4 (2 bits), OFDM, or a single carrier (v5)")
             p.add_argument("--guard", choices=[m["name"] for m in OFDM_MODES], default="long",
-                           help="OFDM: long (N 2048, guard 21 ms) or short (N 1024, guard 5 ms)")
+                           help="OFDM: long (N 2048, guard 21 ms) or short (N 1024, guard 5 ms); wide OFDM (v7.21): N 8192 or 4096")
             p.add_argument("--map", choices=OFDM_MAPS + ["1024qam"],
                            help="OFDM: DQPSK (no pilots, the default), or QPSK, 8PSK, 16QAM, 64QAM, 256QAM with pilots (2, 3, 4, 6, 8 bits per subcarrier); "
-                                "single carrier: QPSK, 16QAM, 64QAM, 256QAM (the default) or 1024QAM (v7.5, phones close together in a quiet room)")
+                                "single carrier: QPSK, 16QAM, 64QAM, 256QAM (the default) or 1024QAM (v7.5, phones close together in a quiet room); "
+                                "wide OFDM (v7.21): QPSK to 1024QAM (256QAM the default)")
             p.add_argument("--tones", choices=TONE_SETS, default="low", help="hop: tone hopping, for reverberant rooms")
             p.add_argument("--train", choices=list(SC_TRAIN), default="medium",
                            help="single carrier: training of 640, 1280 or 2560 symbols (wide band: 896, 1792, 3584; fast: 1056, 2080, 4192), echoes up to 20, 47 or 100 ms (as OFDM's guard)")
             p.add_argument("--wide", action="store_true",
-                           help="v7.4, single carrier: the wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (an LDPC or a polar code; receivers before v7.4 ignore it)")
+                           help="v7.4, single carrier: the wide band, 13 714 symbols/s from 2.3 to 20.5 kHz (an LDPC or a polar code; receivers before v7.4 ignore it); "
+                                "v7.21, OFDM: wide OFDM, 2.3 to 20.5 kHz, N 8192 or 4096, QPSK to 1024QAM (an LDPC or a polar code; receivers before v7.21 ignore it)")
             p.add_argument("--fast", action="store_true",
                            help="v7.19, single carrier: the fast wide band, 16 000 symbols/s from 2.3 to 20.5 kHz (roll-off 1/7: 17 %% more symbols "
                                 "than --wide for about 0.6 dB less SNR; an LDPC or a polar code; receivers before v7.19 ignore it)")
@@ -4378,9 +4485,9 @@ def main():
         img = load_image(a.image, a.step, a.up) if a.image and jpeg is None else None
         sound = (a.order, a.periods) if a.sound else None
         mod = a.mod if a.mod in ("ofdm", "sc") else int(a.mod)
-        omap = a.map or ("256qam" if mod == "sc" else "dqpsk")
-        wide = (2 if a.fast else a.wide) if mod == "sc" else False   # v7.19: 2, the fast wide band
-        code = ("ldpc" if wide else "turbo") if mod == "sc" and a.code == "none" else a.code   # single carrier: turbo, LDPC or polar codes (wide: LDPC or polar)
+        omap = a.map or ("256qam" if mod == "sc" or mod == "ofdm" and a.wide else "dqpsk")
+        wide = (2 if a.fast else a.wide) if mod == "sc" else a.wide if mod == "ofdm" else False   # v7.19: 2, the fast wide band; v7.21: wide OFDM
+        code = ("ldpc" if wide else "turbo") if mod == "sc" and a.code == "none" else "ldpc" if mod == "ofdm" and wide and a.code == "none" else a.code   # single carrier: turbo, LDPC or polar codes (wide: LDPC or polar)
         segs, data = build_frame(text=a.text if img is None and jpeg is None else None, img=img, code=code, rate=a.rate, tones=a.tones, pre=a.pre, sound=sound,
                                  mod=mod, guard=a.guard, omap=omap, train=a.train, control=a.control, jpeg=jpeg, wide=wide)
         x = modulate(segs)
@@ -4388,7 +4495,7 @@ def main():
         if sound:
             print(f"room sounding: MLS of {2 ** a.order - 1} samples x {a.periods + 1}, preamble {a.pre}, {len(x) / FS_TX:.1f} s -> {a.out}")
         else:
-            how = ofdm_desc(ofdm_mode(a.guard), omap) if mod == "ofdm" else sc_desc(omap, SC_SIZES[wide][2][a.train], wide) if mod == "sc" else f"{mod} tones"
+            how = ofdm_desc(ofdm_wmode(a.guard) if wide else ofdm_mode(a.guard), omap) if mod == "ofdm" else sc_desc(omap, SC_SIZES[wide][2][a.train], wide) if mod == "sc" else f"{mod} tones"
             if mod in ("ofdm", "sc"):
                 how += ", the short control part (v6)" if a.control == "short" else f", preamble {a.pre}"
             what = (f"a JPEG file of {len(jpeg)} bytes ({os.path.splitext(a.out)[0]}.jpg) and its CRC-32: " if not a.jpeg else
